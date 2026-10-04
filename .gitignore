@@ -1,0 +1,12 @@
+# Personal reference photos stay on this computer.
+/pic/
+/node_modules/
+/dist/
+/artifacts/
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+vendor/package/

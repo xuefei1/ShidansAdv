@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#ecebdc">
+  <meta name="description" content="A little rabbit. A very big adventure. Explore Shidan's cozy two-story home.">
+  <title>Shidan's Adventure</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <canvas id="game" tabindex="0" aria-label="Shidan's Adventure 3D game. WASD to move, Shift to run, Space to jump. Press Escape for the menu."></canvas>
+  <div class="vignette"></div>
+  <header class="topbar">
+    <div class="wordmark"><img src="./favicon.svg" alt=""><span>SHIDAN’S <b>ADVENTURE</b></span></div>
+    <div class="build-label"><span></span> THE FIRST LITTLE ADVENTURE <i>v0.1</i></div>
+    <div class="toolbar"><button id="sound" aria-label="Enable sound" title="Sound">Sound off</button><button id="menu-button" hidden>Pause <kbd>Esc</kbd></button></div>
+  </header>
+
+  <main id="welcome" class="welcome">
+    <div class="eyebrow"><span class="tiny-star">✦</span> HOME IS JUST THE BEGINNING</div>
+    <h1>A little rabbit.<br>A <em>very big</em><br>adventure.</h1>
+    <p>Meet Shidan. Professional loaf.<br>Amateur escape artist. Your next adventure.</p>
+    <div class="welcome-actions"><button id="play" class="primary">Let’s explore <span>↗</span></button><button id="tour" class="text-button">Take a house tour <span>→</span></button></div>
+    <div class="milestone-note"><span>01</span><div><b>A home to explore</b><small>Two floors. Four little white paws. Endless curiosity.</small></div></div>
+  </main>
+
+  <div id="intro-caption" class="intro-caption"><span>MEET YOUR LITTLE EXPLORER</span><b>Shidan</b><small>Black coat. White nose. Big plans.</small></div>
+  <div id="intro-footer" class="intro-footer"><span>AN EXPLORATION PROTOTYPE</span><span>Made for one very loved rabbit <i>♡</i></span><span>KEYBOARD + MOUSE</span></div>
+
+  <section id="hud" hidden>
+    <div class="location panel"><span id="floor-label" class="eyebrow">GROUND FLOOR</span><h2 id="location">Shidan’s den</h2><div class="surface-line"><span id="surface-dot"></span><span id="surface">Soft bedding · good grip</span></div></div>
+    <div class="quest panel"><span class="eyebrow">A LITTLE CURIOSITY</span><h3 id="quest-title">The world beyond the fence</h3><p id="quest-text">Hold Space to charge, then release while moving to leap out of your den.</p><div id="quest-steps"><span id="step-den">01 Escape the den</span><span id="step-upstairs">02 Find the upstairs</span><span id="step-window">03 Visit the reading nook</span></div></div>
+    <div class="minimap panel"><canvas id="map" width="170" height="154" aria-label="House minimap"></canvas><div><span>YOUR LITTLE WORLD</span><b id="map-floor">1F</b></div></div>
+    <div id="charge" class="charge" hidden><div><span id="charge-label">Crouch & spring</span><b id="charge-percent">0%</b></div><div class="charge-track"><i id="charge-fill"></i></div></div>
+    <div id="toast" role="status" class="toast" hidden></div>
+    <div class="controls panel"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move</span><span><kbd>Mouse</kbd> Look</span><span><kbd>Shift</kbd> Run</span><span><kbd>Space</kbd> Tap / hold to jump</span><button id="home" title="Return to the den"><kbd>R</kbd> Home</button><button id="view"><kbd>V</kbd> House view</button></div>
+    <div id="camera-hint">Click the world to look around · drag to look if pointer lock is unavailable</div>
+  </section>
+
+  <section id="pause" class="modal-backdrop" hidden>
+    <div class="modal"><span class="eyebrow">TAKE A LITTLE BREATHER</span><h2>Paused, little one.</h2><p>Your cozy home will be right here.</p><button id="resume" class="primary">Back to exploring <span>↗</span></button><button id="reset" class="secondary">Return to the den</button><button id="back-title" class="text-button">Back to title</button><div class="menu-notes"><b>Your first adventure</b><p>Explore the house and get to know Shidan. Food, the mistress, happiness scores, and bedtime are coming in later milestones.</p><p>Hold Space for a longer leap on bedding or carpet. Wooden floors are slippery, so only a small hop is possible there.</p></div></div>
+  </section>
+  <div id="fatal" class="modal-backdrop" hidden><div class="modal"><h2>A small hiccup.</h2><p id="fatal-text"></p><p>Open this game through Start-Game.cmd in a browser with WebGL 2 enabled.</p><button onclick="location.reload()" class="primary">Try again</button></div></div>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
