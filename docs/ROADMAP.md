@@ -13,6 +13,14 @@
 
 Acceptance: a player can start in the den, long-jump out, explore the ground floor, climb the stairs, visit the reading nook, and return. Reference photos and secrets are excluded from source-control publication.
 
+### Milestone 1 revision (0.1.1)
+
+- [x] Enlarge house, furniture and den by 50%, keeping Shidan's size unchanged.
+- [x] Remove unsafe mouse capture and recover cleanly from denied pointer lock.
+- [x] One collidable poop ball per right click, with bounce, rolling and rabbit nudging.
+- [x] Persistent 10,000-ball pool with oldest-first replacement and no timeout.
+- [x] Regression tests for revised traversal, mouse errors, ball collisions and capacity.
+
 ## Milestone 2 — little joys
 
 - Context-sensitive eating, drinking and chewing prompts.

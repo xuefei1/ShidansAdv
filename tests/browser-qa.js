@@ -1,6 +1,7 @@
 // Browser integration checks use the actual game DOM and keyboard handlers.
 // Open /tests/browser.html and click Run. No debug teleport or private game API.
 const frame = document.getElementById('app'), results = document.getElementById('results');
+import { DEN } from '../src/layout.js';
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const check = (label, passed, detail = '') => {
   const li = document.createElement('li'); li.className = passed ? 'pass' : 'fail'; li.textContent = `${passed ? 'PASS' : 'FAIL'}: ${label}${detail ? ` (${detail})` : ''}`; results.append(li);
@@ -19,25 +20,45 @@ document.getElementById('run').addEventListener('click', async () => {
     const start = pos(); key('keydown', 'KeyD'); await wait(350); key('keyup', 'KeyD'); await wait(100);
     check('Held WASD moves Shidan', pos()[0] > start[0] + .2, pos().join(', '));
     key('keydown', 'KeyR'); key('keyup', 'KeyR'); await wait(100);
-    check('R returns to the den', Math.abs(pos()[0] + 4.5) < .02 && Math.abs(pos()[2] - 3.1) < .02);
+    check('R returns to the enlarged den', Math.abs(pos()[0] - DEN.x) < .02 && Math.abs(pos()[2] - DEN.z) < .02);
+    const mouse = (type, button, x = 300, y = 400) => canvas.dispatchEvent(new w.MouseEvent(type, { button, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+    const originalLock = canvas.requestPointerLock;
+    try {
+      canvas.requestPointerLock = () => { throw new w.DOMException('Denied in this browser', 'SecurityError'); };
+      for (let i = 0; i < 3; i++) { mouse('mousedown', 0); mouse('mouseup', 0); }
+      await wait(80);
+      check('Left clicks survive a throwing capture API', d.getElementById('fatal').hidden && d.getElementById('pause').hidden);
+      canvas.requestPointerLock = () => Promise.reject(new w.DOMException('Denied', 'NotAllowedError'));
+      mouse('mousedown', 0); mouse('mouseup', 0); await wait(80);
+      check('Rejected pointer lock is handled without a crash', d.getElementById('fatal').hidden);
+    } finally { canvas.requestPointerLock = originalLock; }
+    const initialCount = Number(canvas.dataset.poopCount);
+    for (let i = 0; i < 3; i++) { mouse('mousedown', 2); mouse('mouseup', 2); mouse('contextmenu', 2); }
+    await wait(150);
+    check('Every right click produces exactly one ball', Number(canvas.dataset.poopCount) === initialCount + 3);
+    await wait(1700);
+    check('Poop balls settle on the floor and remain', Number(canvas.dataset.poopCount) === initialCount + 3 && Number(canvas.dataset.lastPoopPosition.split(',')[1]) >= .06);
     key('keydown', 'Space'); key('keyup', 'Space'); await wait(150);
     check('A very quick Space tap is not lost between frames', pos()[1] > .1, `height ${pos()[1]}`);
     await wait(550);
     key('keydown', 'Space'); await wait(750);
     check('Holding Space charges the jump', !d.getElementById('charge').hidden && d.getElementById('charge-percent').textContent === '100%');
     key('keydown', 'KeyD'); key('keyup', 'Space'); await wait(500);
-    check('Charged jump clears fence height', pos()[1] > 1.1, `height ${pos()[1]}`);
+    check('Charged jump clears the taller fence', pos()[1] > DEN.fenceHeight, `height ${pos()[1]}`);
     await wait(650); key('keyup', 'KeyD'); await wait(450);
     check('Escaping updates the wood surface and objective', canvas.dataset.surface === 'wood' && d.getElementById('step-den').classList.contains('done'), pos().join(', '));
     d.getElementById('menu-button').click(); await wait(80);
     const paused = pos(); key('keydown', 'KeyW'); await wait(250); key('keyup', 'KeyW');
     check('Pause opens menu and freezes movement', !d.getElementById('pause').hidden && JSON.stringify(paused) === JSON.stringify(pos()));
+    mouse('mousedown', 2); mouse('mouseup', 2); await wait(50);
+    check('Pause does not spawn or remove balls', Number(canvas.dataset.poopCount) === initialCount + 3);
     d.getElementById('resume').click(); await wait(150);
     check('Resume closes menu', d.getElementById('pause').hidden);
     d.getElementById('view').click(); await wait(200);
     check('House view toggle works', d.getElementById('view').textContent.includes('Follow Shidan'));
     d.getElementById('view').click(); d.getElementById('home').click(); await wait(150);
     check('Return from overview restores controls', canvas.dataset.surface === 'bedding');
+    check('Return home preserves poop balls', Number(canvas.dataset.poopCount) === initialCount + 3);
     d.getElementById('menu-button').click(); d.getElementById('back-title').click();
     check('Back to title restores the title screen', !d.getElementById('welcome').hidden && d.getElementById('hud').hidden);
     check('No fatal browser error', d.getElementById('fatal').hidden);

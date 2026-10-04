@@ -25,6 +25,7 @@ No package installation, account, build step, or internet connection is required
 | Tap Space | Small hop, triggered on release |
 | Hold Space, then release | Charged long jump on bedding and carpet; hold a movement key to travel |
 | Scroll wheel | Camera distance |
+| Right mouse click | Drop one poop ball behind Shidan |
 | C | Center camera behind Shidan |
 | V | Toggle an overview of the house |
 | R | Return to the den |
@@ -35,11 +36,13 @@ No package installation, account, build step, or internet connection is required
 ## Included in milestone 1
 
 - Original pastel, cartoon-style house with an open front for visibility: living room, kitchen, dining area, staircase, upstairs bedroom, study and reading nook.
-- Circular den, 3 metres across, with a 1.1-metre white wire fence, bedding, hay, food and water bowls; folded cotton cover nearby.
+- House, furniture and den enlarged by 50% after the first playtest, with Shidan kept at her original size. The den is now 4.5 metres across with a 1.65-metre white wire fence.
 - Original procedural Shidan model based on the three local reference photos, with black fur, white nose marking, white toes, ears, whiskers and a fluffy tail.
 - Breathing, blinking, ear movement, running gait, crouch and airborne poses.
 - Third-person orbit camera, running, tap jumps, charged jumps, furniture/ceiling collision, stair traversal and floor-dependent traction.
 - Pause/resume, reset, minimap, house tour, three exploration objectives and optional synthesized sound effects.
+- Right-click poop balls with gravity, rolling, bounce and collisions against the house, fence, stairs, Shidan and one another. Resting balls can be nudged awake by Shidan.
+- Up to **10,000 balls** persist for the loaded session, including through pause, return-home and title navigation. There is no timed despawn. Each additional ball replaces only the oldest; reloading the page starts a fresh session.
 - Local source control, automated physics checks, browser integration checks, and a static distribution build.
 
 **Later milestones:** edible/chewable interactions and happiness points; the mistress, her phone/laughter, noise and line-of-sight detection, pursuit and capture; a day/bedtime timer and cotton cover; player names and a persistent leaderboard. These are planned, not implemented in this build. No player name is collected yet.
@@ -65,6 +68,10 @@ The build writes `dist/`, which can be served by any static HTTP host. It has no
 | --- | --- |
 | `src/main.js` | Scene, input, orbit camera, game state and tutorial UI |
 | `src/physics.js` | Independent character controller, collision, stairs and traction |
+| `src/layout.js` | Environment scale, den/stair dimensions and room bounds |
+| `src/mouse.js` | Mouse actions and safe pointer-lock/drag fallback |
+| `src/poop-physics.js` | Sphere collision, sleep/wake, spatial indexing and 10k pool |
+| `src/poop.js` | Instanced poop-ball rendering |
 | `src/model.js` | Procedural rabbit model, animation and geometry helpers |
 | `src/house.js` | Furnished house, den, level collision and static mesh batching |
 | `src/audio.js` | Original Web Audio effects |

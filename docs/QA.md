@@ -2,6 +2,18 @@
 
 Verified on 2026-10-04 with Node.js 24.19.0 and the Codex in-app browser at 1280 × 720.
 
+## Revision 0.1.1 — scale, mouse input and poop
+
+Final verification: 37 automated tests, 20 browser integration checks, and the static distribution smoke test pass. The built game also received a real left click, eight right clicks (eight visible balls), and a camera drag without game errors.
+
+The environment is 50% larger on each axis, with visual meshes, colliders, den, stairs, bounds, overview, shadows and minimap updated together. The rabbit remains unscaled. Charged escapes are tested from both the center of the den and its fence.
+
+Mouse handling no longer calls `setPointerCapture`. Synchronous pointer-lock exceptions and rejected promises both fall back to dragging. Only the transition from an actual active lock to an unlocked state pauses the game. Left/right actions are separate; context menus do not duplicate poop spawns. Fatal UI is limited to errors from the game's own modules, preventing unrelated host/extension errors from replacing the game screen.
+
+Additional automated coverage: throwing/rejecting/pending pointer-lock requests, right-click counts, inactive menus, lock-loss transitions, sphere gravity/sleep/persistence, upper and lower floors, walls, ceilings, den fence, sphere-sphere momentum transfer, rabbit push/wake, coincident spawns, stairs, and oldest-first eviction at exactly 10,000 balls. `node scripts/benchmark-poop.mjs` exercises 10,000 balls in the actual house and reports simulation cost and finite state.
+
+The 10,000-ball run retained all balls with finite positions/velocities after three simulated seconds; the final-second physics median was 14.33 ms and p95 was 16.81 ms on this machine (rendering excluded). These are local measurements, not a cross-device frame-rate guarantee. A spawn sweep also prevents dropping through a fence or wall when Shidan stands right beside it.
+
 ## Automated physics tests
 
 Run `node --test`. The tests instantiate the **actual furnished house's collision world**, without a renderer.
@@ -27,7 +39,8 @@ Inspect title screen, Shidan's nose/paws/ears, open-topped den, the house-tour o
 - Original short sound effects only; no background music.
 - No enemy, happiness scoring, interaction system, player names, leaderboard, round timer or bedtime behavior in milestone 1.
 - The open front/right and missing roof are deliberate cutaway presentation choices; collision bounds still enclose the play space.
-- The current kinematic controller does not simulate pushing objects or dynamic rigid bodies.
+- Shidan can push dynamic poop spheres. Furniture is still static; there is no general-purpose rigid-body furniture simulation.
+- Poop persistence is scoped to the loaded page session, not a saved game across browser reloads.
 - Decorative food and books are not collectible yet; the UI describes this as exploration.
 
 ## Release checks

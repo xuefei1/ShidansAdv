@@ -1,6 +1,6 @@
 // Engine-independent, metre-based character physics. Render code never owns movement.
-export const DEN = Object.freeze({ x: -4.5, z: 3.1, radius: 1.5, fenceHeight: 1.1 });
-export const STAIRS = Object.freeze({ minX: 5.15, maxX: 7.45, startZ: 4.7, endZ: -2.7, height: 3.4 });
+import { DEN, STAIRS, BOUNDS } from './layout.js';
+export { DEN, STAIRS } from './layout.js';
 export const SURFACES = Object.freeze({
   bedding: { acceleration: 19, drag: 15, walk: 2.1, run: 4.3, longJump: true },
   carpet: { acceleration: 18, drag: 14, walk: 2.35, run: 4.8, longJump: true },
@@ -35,7 +35,7 @@ export class RabbitController {
   reset() {
     this.x = DEN.x; this.y = 0; this.z = DEN.z; this.vx = 0; this.vy = 0; this.vz = 0;
     this.facing = Math.PI; this.grounded = true; this.surface = 'bedding'; this.charge = 0;
-    this.charging = false; this.jumpHeld = false; this.lastJump = null; this.lastLanding = false;
+    this.charging = false; this.jumpHeld = false; this.lastJump = null; this.lastLanding = false; this.longJumping = false;
   }
   releaseInput() { this.jumpHeld = false; this.charging = false; this.charge = 0; }
   update(dt, input = {}) {
@@ -64,7 +64,8 @@ export class RabbitController {
       if (this.grounded) {
         const long = this.charge >= .22 && tuning.longJump;
         const power = clamp(this.charge / .65, 0, 1);
-        this.vy = long ? 5.8 + power * 1.9 : 4.2;
+        this.vy = long ? 6 + power * 2.25 : 4.2;
+        this.longJumping = long;
         if (long && moving) { this.vx = dx * (3.8 + power * 2); this.vz = dz * (3.8 + power * 2); }
         this.grounded = false; this.lastJump = long ? 'long' : 'hop';
       }
@@ -82,13 +83,16 @@ export class RabbitController {
       }
     } else if (moving) {
       // Limited air steering preserves the long jump's forward momentum.
-      this.vx += dx * 1.8 * dt; this.vz += dz * 1.8 * dt;
+      if (this.longJumping) {
+        // Recover forward momentum once above a fence brushed during takeoff.
+        this.vx = approach(this.vx, dx * 6.4, 12 * dt); this.vz = approach(this.vz, dz * 6.4, 12 * dt);
+      } else { this.vx += dx * 1.8 * dt; this.vz += dz * 1.8 * dt; }
       const airSpeed = Math.hypot(this.vx, this.vz);
       if (airSpeed > 6.4) { this.vx *= 6.4 / airSpeed; this.vz *= 6.4 / airSpeed; }
     }
     this.x += this.vx * dt; this.z += this.vz * dt;
-    this.x = clamp(this.x, -7.7 + this.radius, 7.7 - this.radius);
-    this.z = clamp(this.z, -6.7 + this.radius, 6.7 - this.radius);
+    this.x = clamp(this.x, BOUNDS.minX + this.radius, BOUNDS.maxX - this.radius);
+    this.z = clamp(this.z, BOUNDS.minZ + this.radius, BOUNDS.maxZ - this.radius);
     // The fence has a continuous collision ring, independently of its thin visual wires.
     if (this.y < DEN.fenceHeight && this.y + this.height > 0) {
       const wasInside = Math.hypot(oldX - DEN.x, oldZ - DEN.z) < DEN.radius;
@@ -128,7 +132,7 @@ export class RabbitController {
     const below = this.world.support(this.x, this.z, Math.max(oldY, this.y) + (this.grounded ? .25 : .01));
     if (this.vy <= 0 && this.y <= below.y + .001) {
       this.lastLanding ||= !this.grounded;
-      this.y = below.y; this.vy = 0; this.grounded = true; this.surface = below.surface;
+      this.y = below.y; this.vy = 0; this.grounded = true; this.surface = below.surface; this.longJumping = false;
     } else this.grounded = false;
     if (this.y < -4 || !Number.isFinite(this.x + this.y + this.z)) this.reset();
   }

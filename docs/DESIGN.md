@@ -12,10 +12,10 @@ Establish the home, Shidan and movement before adding pressure or punishment. Th
 
 ### House layout
 
-- Footprint: approximately 16 × 14 m, Y-up and metre-based coordinates.
+- Footprint: approximately 24 × 21 m, Y-up and metre-based coordinates. The entire environment is 1.5× the original authored layout after the user's scale feedback; Shidan remains unchanged.
 - Ground floor: wood throughout except the den bedding; living room in front, kitchen and dining underneath the rear upper floor.
-- Den: center (-4.5, 0, 3.1), 1.5 m radius, 1.1 m white fence. No daytime lid. A folded cotton cover is nearby as a future bedtime cue.
-- Stairs: right-hand side, approximately 2.3 m wide, from z=4.7 to z=-2.7, reaching y=3.4. Individually modeled steps use a continuous collision ramp for smooth movement.
+- Den: center (-6.75, 0, 4.65), 2.25 m radius, 1.65 m white fence. No daytime lid. A folded cotton cover is nearby as a future bedtime cue.
+- Stairs: right-hand side, approximately 3.45 m wide, from z=7.05 to z=-4.05, reaching y=5.1. Individually modeled steps use a continuous collision ramp for smooth movement.
 - Upstairs: carpeted bedroom, study and reading nook, open balcony, connected landing. The double-height front room keeps the space readable and offers later stealth sightlines.
 - Open front/right cutaway and no roof make the house tour legible. Invisible outer bounds prevent falling out of the house. Interior furniture remains solid.
 - Tabletop and leg colliders permit under-table routes. Couch, bed, cabinets, plants and railings provide future visual cover. Noise/visibility occlusion is not implemented yet.
@@ -39,7 +39,13 @@ Current tuning, intended for playtesting:
 | Wood | 2.1 | 4.5 | 3.2 | No |
 | Stairs | 2.2 | 3.5 | 13 | No |
 
-Gravity is 16 m/s², normal jump impulse 4.2 m/s, fully charged impulse 7.7 m/s. These exaggerated arcade values prioritize reliable den escape. No stamina limitation in milestone 1. A small step allowance makes the stair-to-landing transition reliable. Simulation substeps prevent tunnelling at low frame rates.
+Gravity is 16 m/s², normal jump impulse 4.2 m/s, fully charged impulse 8.25 m/s. Charged jumps recover forward momentum after brushing the fence, making escape work both from the center and beside the taller fence. These exaggerated arcade values prioritize reliable den escape. No stamina limitation in milestone 1. A small step allowance makes the stair-to-landing transition reliable. Simulation substeps prevent tunnelling at low frame rates.
+
+### Poop balls (milestone 1 revision)
+
+Right-click the game to drop one 0.065 m radius brown ball behind Shidan. There is no cooldown or timed disappearance. Balls collide with the room, furniture, ceilings, den fence, stairs, other balls and Shidan's heavier capsule; Shidan can push them. They remain through pause, return-home and title navigation. The current page session holds 10,000 balls, replacing only the oldest when a new ball would exceed the cap. Reloading starts a new session; disk persistence is not part of this prototype.
+
+The balls use a fixed-capacity instance pool, spatial collision grids, and sleeping bodies that wake on contact. Sleeping preserves collision and rendering. They are rendered in one instanced draw instead of creating 10,000 independent meshes. The sphere solver is intentionally separate from the rabbit's kinematic controller.
 
 ## Planned stealth and happiness systems
 
@@ -55,7 +61,7 @@ Bedtime ends the round, places the cotton cover over the den and records the fin
 
 - Three.js 0.180.0, pinned locally: instant browser play, low setup overhead, no proprietary editor or asset pipeline.
 - Plain ES modules and Node built-ins: no package-install step or runtime CDN dependence.
-- Custom kinematic controller: simple, testable collision appropriate for one rabbit in a static furnished house. Dynamic rigid bodies are a later engine decision.
+- Custom kinematic rabbit controller plus a sphere-only dynamic solver for poop balls. General-purpose dynamic furniture remains a later engine decision.
 - Static mesh batching groups house geometry by material, reducing draw calls. Rabbit parts stay separate for animation.
 - A local Node server binds only to 127.0.0.1 and serves an explicit allowlist. Personal reference photos never enter the web build.
 - Camera casts against collision boxes to shorten its orbit near furniture and floors. The wire den is excluded from camera collision so the rabbit remains visible from outside the fence.

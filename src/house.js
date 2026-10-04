@@ -1,5 +1,6 @@
 import * as THREE from '../vendor/three.module.js';
-import { World, DEN, STAIRS } from './physics.js';
+import { World } from './physics.js';
+import { BASE_DEN as DEN, BASE_STAIRS as STAIRS, ENVIRONMENT_SCALE } from './layout.js';
 import { palette as P, mat, cube, cylinder, ellipsoid, beam } from './model.js';
 
 // All environment art is original geometry. Metres, Y-up; the open front is a
@@ -267,7 +268,9 @@ export function createHouse(scene) {
     const x = .4 + i * .53, z = 4.85 + Math.sin(i * .7) * .18;
     const footprint = ellipsoid(group, 0xc69d6e, x, .007, z, .041, .002, .07); footprint.rotation.y = .9;
   }
-  return { group, world, readingNook: { x: -5.4, z: -3.7 } };
+  group.scale.setScalar(ENVIRONMENT_SCALE);
+  for (const b of world.solids) for (const key of ['minX', 'maxX', 'minY', 'maxY', 'minZ', 'maxZ']) b[key] *= ENVIRONMENT_SCALE;
+  return { group, world, readingNook: { x: -5.4 * ENVIRONMENT_SCALE, z: -3.7 * ENVIRONMENT_SCALE } };
 }
 
 function label(parent, text, x, y, z, w, h, background, foreground) {
@@ -283,11 +286,12 @@ function label(parent, text, x, y, z, w, h, background, foreground) {
 // Non-opaque labels and sun patches retain their original render ordering.
 export function batchStaticGeometry(group) {
   group.updateMatrixWorld(true);
+  const worldToLocal = group.matrixWorld.clone().invert();
   const batches = new Map(), sources = [];
   group.traverse(object => {
     if (!object.isMesh || !object.visible || object.material.transparent) return;
     const geometry = object.geometry.index ? object.geometry.toNonIndexed() : object.geometry.clone();
-    geometry.applyMatrix4(object.matrixWorld);
+    geometry.applyMatrix4(worldToLocal.clone().multiply(object.matrixWorld));
     if (!batches.has(object.material)) batches.set(object.material, []);
     batches.get(object.material).push(geometry); sources.push(object);
   });
