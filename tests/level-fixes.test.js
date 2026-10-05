@@ -74,7 +74,7 @@ test('outdoor floors and furniture stop without sliding and allow charged leaps'
 });
 
 test('the front entrance opens onto an unobstructed lawn', () => {
-  const r = rabbit(0, 0, 18); advance(r, 1.6, { z: 1, run: true });
+  const r = rabbit(0, 0, 18); advance(r, 1.8, { z: 1, run: true });
   assert.ok(r.z > 29 && r.z < 32); assert.equal(r.surface, 'grass');
   assert.equal(world.solids.some(b => b.minZ > 20 && b.maxZ < 32 && b.minX < 1 && b.maxX > -1 && b.maxY > .24), false);
 });

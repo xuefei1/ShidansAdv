@@ -8,8 +8,9 @@ const check = (label, passed, detail = '') => {
   const li = document.createElement('li'); li.className = passed ? 'pass' : 'fail'; li.textContent = `${passed ? 'PASS' : 'FAIL'}: ${label}${detail ? ` (${detail})` : ''}`; results.append(li);
   if (!passed) throw new Error(label);
 };
+const disableRunners = disabled => ['run', 'route', 'stairs'].forEach(id => { document.getElementById(id).disabled = disabled; });
 document.getElementById('run').addEventListener('click', async () => {
-  results.replaceChildren(); document.getElementById('run').disabled = true;
+  results.replaceChildren(); disableRunners(true);
   const w = frame.contentWindow, d = frame.contentDocument, canvas = d.getElementById('game');
   const key = (type, code) => canvas.dispatchEvent(new w.KeyboardEvent(type, { code, key: code === 'Space' ? ' ' : code.replace('Key', '').toLowerCase(), bubbles: true }));
   const pos = () => canvas.dataset.position.split(',').map(Number);
@@ -18,6 +19,7 @@ document.getElementById('run').addEventListener('click', async () => {
     d.getElementById('play').click(); await wait(150);
     if (!d.getElementById('pause').hidden) d.getElementById('resume').click();
     check('Play enters game', !d.getElementById('hud').hidden && d.getElementById('welcome').hidden);
+    check('The ceiling slab is visible during downstairs play', canvas.dataset.ceilingVisible === 'true');
     const start = pos(); key('keydown', 'KeyD'); await wait(350); key('keyup', 'KeyD'); await wait(100);
     check('Held WASD moves Shidan', pos()[0] > start[0] + .2, pos().join(', '));
     key('keydown', 'KeyR'); key('keyup', 'KeyR'); await wait(100);
@@ -74,6 +76,7 @@ document.getElementById('run').addEventListener('click', async () => {
     check('The cutaway reveals the upper floor on demand', canvas.dataset.visibleFloor === '1');
     d.querySelector('#survey [data-floor="0"]').click(); await wait(100);
     check('Ground-floor cutaway exposes the rooms below', canvas.dataset.visibleFloor === '0');
+    check('The house tour can still cut away the ceiling', canvas.dataset.ceilingVisible === 'false');
     d.getElementById('garden-view').click(); await wait(100);
     check('Garden tour can be selected', d.getElementById('garden-view').textContent === 'Front view');
     d.getElementById('view').click();
@@ -81,13 +84,13 @@ document.getElementById('run').addEventListener('click', async () => {
     check('Back to title restores the title screen', !d.getElementById('welcome').hidden && d.getElementById('hud').hidden);
     check('No fatal browser error', d.getElementById('fatal').hidden);
   } catch (error) { console.error(error); }
-  finally { document.getElementById('run').disabled = false; }
+  finally { disableRunners(false); }
 });
 
 // Real held-key traversal of both flights and the garden loop, using only DOM
 // telemetry for steering. No position mutation, debug teleport or alternate physics.
-document.getElementById('route').addEventListener('click', async () => {
-  results.replaceChildren(); document.getElementById('run').disabled = document.getElementById('route').disabled = true;
+async function walkRoute(stairOnly = false) {
+  results.replaceChildren(); disableRunners(true);
   const w = frame.contentWindow, d = frame.contentDocument, canvas = d.getElementById('game'), status = document.getElementById('route-status');
   const held = new Set(), key = (type, code) => canvas.dispatchEvent(new w.KeyboardEvent(type, { code, bubbles: true }));
   const keys = codes => {
@@ -123,6 +126,19 @@ document.getElementById('route').addEventListener('click', async () => {
     w.dispatchEvent(new w.MouseEvent('mouseup', { button: 0 }));
     keys(['Space']); await wait(750); keys(['KeyD']); await wait(1300); keys([]); await wait(1000);
     check('Escape starts the level route', canvas.dataset.surface === 'wood');
+    if (stairOnly) {
+      status.textContent = 'Walking to the stairs';
+      for (const point of [[-7,17,0], [2.5,17,0], [2.5,15.8,0]]) await walk(...point);
+      check('Upper rooms appear before the first stair', canvas.dataset.visibleFloor === '1');
+      check('The ceiling remains visible at the stair approach', canvas.dataset.ceilingVisible === 'true');
+      const revision = canvas.dataset.shadowRevision;
+      status.textContent = 'Climbing to the middle landing';
+      await walk(2.5, 8.5, 2.1);
+      check('Upper rooms and ceiling remain visible halfway up', canvas.dataset.visibleFloor === '1' && canvas.dataset.ceilingVisible === 'true');
+      check('The climb reuses its cached sunlight shadow', canvas.dataset.shadowRevision === revision);
+      status.textContent = 'Complete: stopped halfway up the stairs for visual review.';
+      return;
+    }
     const legs = [
       ['Entrance hall', [[-7,17,0],[2.5,17,0]]],
       ['Indoor staircase', [[2.5,1,4.2],[1,0,4.2]]],
@@ -135,5 +151,7 @@ document.getElementById('route').addEventListener('click', async () => {
     check('Full route finishes without fatal error', d.getElementById('fatal').hidden);
     status.textContent = 'Complete: den escape, entrance, upstairs, balcony, garden stairs, backyard, and back inside.';
   } catch (error) { status.textContent = error.message; console.error(error); }
-  finally { keys([]); canvas.requestPointerLock = originalLock; document.getElementById('run').disabled = document.getElementById('route').disabled = false; }
-});
+  finally { keys([]); canvas.requestPointerLock = originalLock; disableRunners(false); }
+}
+document.getElementById('route').addEventListener('click', () => walkRoute());
+document.getElementById('stairs').addEventListener('click', () => walkRoute(true));

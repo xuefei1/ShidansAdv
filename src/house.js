@@ -8,9 +8,9 @@ import { furnishHouse } from './furnishings.js';
 // upper art are batched separately for a readable floor-by-floor cutaway.
 export function createHouse(scene) {
   const group = new THREE.Group(); group.name = 'Clover House'; scene.add(group);
-  const ground = new THREE.Group(), upper = new THREE.Group(), outside = new THREE.Group();
+  const ground = new THREE.Group(), upper = new THREE.Group(), outside = new THREE.Group(), ceiling = new THREE.Group();
   ground.name = 'Ground floor'; upper.name = 'Upper floor'; outside.name = 'Garden and stairs';
-  group.add(ground, upper, outside);
+  ceiling.name = 'Permanent floor and ceiling'; group.add(ground, upper, outside, ceiling);
   const world = new World(); world.fixtures = new Map();
   const solid = (parent, color, x, y, z, w, h, d, surface = 'wood', id) => {
     const b = world.addBox(x, y, z, w, h, d, surface);
@@ -29,7 +29,8 @@ export function createHouse(scene) {
     detail(ground, planks[(row * 3 + col) % 5], (left + right) / 2, -.025, -19.6 + row * .8, right - left - .012, .05, .787);
   }
   // Upper floor and balcony have matching visible/collision tops at y=4.2.
-  solid(upper, 0xbccda9, 0, H - .14, -9, 48, .28, 22, 'carpet', 'upper-floor');
+  // Keep this 12-triangle slab independent of the upstairs decoration cutaway.
+  solid(ceiling, 0xbccda9, 0, H - .14, -9, 48, .28, 22, 'carpet', 'upper-floor');
   solid(outside, 0xdac49e, 2, H - .14, -22.5, 44, .28, 5, 'deck', 'balcony-floor');
   for (const r of ROOMS.filter(r => r.floor === 1 && r.id !== 'balcony')) {
     detail(upper, Number(r.color.replace('#', '0x')), (r.minX + r.maxX) / 2, H + .001, (r.minZ + r.maxZ) / 2, r.maxX - r.minX - .3, .002, r.maxZ - r.minZ - .3);
@@ -56,6 +57,9 @@ export function createHouse(scene) {
     if (low === 0) detail(parent, 0xf9f0dc, w.axis === 'x' ? (a + b) / 2 : w.fixed, y + .1,
       w.axis === 'x' ? w.fixed : (a + b) / 2, w.axis === 'x' ? b - a : .255, .2, w.axis === 'x' ? .255 : b - a);
   }
+  // Uniform, unlit tint is cheap and blends consistently even when panes share
+  // one batch. No refraction pass or shadow casting for transparent glass.
+  const glassMaterial = new THREE.MeshBasicMaterial({ color: 0xa7d4df, transparent: true, opacity: .18, depthWrite: false });
   for (const w of WALLS) {
     let cursor = w.start;
     for (const o of [...w.openings].sort((a, b) => a.at - b.at)) {
@@ -67,6 +71,15 @@ export function createHouse(scene) {
         w.axis === 'x' ? w.fixed : at, w.axis === 'x' ? .09 : .28, o.top - o.bottom + .07, w.axis === 'x' ? .28 : .09);
       if (o.bottom) detail(p, 0xc49d72, w.axis === 'x' ? o.at : w.fixed, y + o.bottom - .025,
         w.axis === 'x' ? w.fixed : o.at, w.axis === 'x' ? o.width : .27, .05, w.axis === 'x' ? .27 : o.width);
+      if (o.kind === 'glazed-window') {
+        const x = w.axis === 'x' ? o.at : w.fixed, z = w.axis === 'x' ? w.fixed : o.at, midY = y + (o.bottom + o.top) / 2;
+        const pane = solid(p, 0xa7d4df, x, midY, z, w.axis === 'x' ? o.width : .06, o.top - o.bottom, w.axis === 'x' ? .06 : o.width, 'wood', `glass:${w.id}:${o.at}`);
+        pane.material = glassMaterial; pane.castShadow = pane.receiveShadow = false; pane.userData.batchTransparent = true;
+        // White crossbars distinguish closed glass from blue-framed jump windows.
+        detail(p, 0xfdf3df, x, midY, z, w.axis === 'x' ? .065 : .10, o.top - o.bottom, w.axis === 'x' ? .10 : .065);
+        for (const height of [o.bottom, (o.top + o.bottom) / 2, o.top]) detail(p, 0xfdf3df, x, y + height, z,
+          w.axis === 'x' ? o.width : .10, .065, w.axis === 'x' ? .10 : o.width);
+      }
       cursor = b;
     }
     wallSegment(w, cursor, w.end, 0, 3.9);
@@ -113,7 +126,7 @@ export function createHouse(scene) {
   label(ground, 'SHIDAN', DEN.x, .65, DEN.z + DEN.radius + .023, 1.25, .35, '#f7edcb', '#71825e');
   const art = { group, ground, upper, outside, solid, detail, world, label };
   furnishHouse(art);
-  return { group, world, layers: [ground, upper, outside], upper };
+  return { group, world, layers: [ground, upper, outside], upper, ceiling };
 }
 
 export function label(parent, text, x, y, z, w, h, background = '#f8efda', foreground = '#6b7b5c') {
@@ -129,7 +142,7 @@ export function batchStaticGeometry(group) {
   group.updateWorldMatrix(true, true);
   const worldToLocal = group.matrixWorld.clone().invert(), batches = new Map(), sources = [];
   group.traverse(object => {
-    if (!object.isMesh || !object.visible || object.material.transparent) return;
+    if (!object.isMesh || !object.visible || (object.material.transparent && !object.userData.batchTransparent)) return;
     const geometry = object.geometry.index ? object.geometry.toNonIndexed() : object.geometry.clone();
     geometry.applyMatrix4(worldToLocal.clone().multiply(object.matrixWorld));
     const key = `${object.material.uuid}:${object.castShadow}`;
@@ -146,7 +159,7 @@ export function batchStaticGeometry(group) {
       merged.setAttribute(attribute, new THREE.BufferAttribute(data, arrays[0].itemSize));
     }
     merged.computeBoundingSphere();
-    const mesh = new THREE.Mesh(merged, material); mesh.castShadow = castShadow; mesh.receiveShadow = true; mesh.name = 'Batched level'; group.add(mesh);
+    const mesh = new THREE.Mesh(merged, material); mesh.castShadow = castShadow; mesh.receiveShadow = !material.transparent; mesh.name = material.transparent ? 'Batched window glass' : 'Batched level'; group.add(mesh);
     for (const geometry of geometries) geometry.dispose();
   }
   sources.forEach(source => source.removeFromParent());

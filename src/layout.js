@@ -36,20 +36,22 @@ export const LANDMARKS = Object.freeze([
 
 const door = (at, width = 3) => ({ at, width, bottom: 0, top: 2.9, kind: 'door' });
 const window = (at, width = 2.4) => ({ at, width, bottom: .42, top: 2.65, kind: 'window' });
+const glazed = (at, width = 2.8) => ({ at, width, bottom: .85, top: 3.15, kind: 'glazed-window' });
 const tunnel = at => ({ at, width: 1.8, bottom: 0, top: 1.6, kind: 'tunnel' });
 // One source for real wall openings, collision and the floor plan. Portal sizes
 // also describe constraints for the future pursuer; no enemy AI is enabled yet.
 export const WALLS = [];
 const wall = (id, axis, fixed, start, end, floor, openings = [], color = 0xf2e7cc) => WALLS.push({ id, axis, fixed, start, end, floor, openings, color });
 for (const floor of [0, 1]) {
-  wall(`rear-${floor}`, 'x', -20, -24, 24, floor, [window(-15, 3), door(0, 3.5), door(16, 3.5)]);
-  wall(`west-${floor}`, 'z', -24, -20, floor ? 2 : 20, floor, [], 0xe5dabe);
-  wall(`east-${floor}`, 'z', 24, -20, floor ? 2 : 20, floor, [], 0xe8d8c7);
+  wall(`rear-${floor}`, 'x', -20, -24, 24, floor, [glazed(-21, 2.6), window(-15, 3), glazed(-8, 2.6), door(0, 3.5), glazed(6, 2.6), glazed(11, 2.6), door(16, 3.5), glazed(21, 2.6)]);
+  const sideWindows = (floor ? [-17, -11, -6] : [-17, -11, -6, 6, 12, 17]).map(at => glazed(at));
+  wall(`west-${floor}`, 'z', -24, -20, floor ? 2 : 20, floor, sideWindows, 0xe5dabe);
+  wall(`east-${floor}`, 'z', 24, -20, floor ? 2 : 20, floor, sideWindows, 0xe8d8c7);
   wall(`rear-hall-${floor}`, 'x', -3, -24, 24, floor, [door(-14, 3.5), door(1, 3.5), door(17, 3.5)]);
   wall(`west-rooms-${floor}`, 'z', -5, -20, -3, floor, [door(-17), window(-12), door(-6)], floor ? 0xe8cfc5 : 0xe2d5bd);
   wall(`east-rooms-${floor}`, 'z', 8, -20, -3, floor, [door(-17), window(-12), door(-6)], floor ? 0xcddfe0 : 0xd3dfc6);
 }
-wall('front', 'x', 20, -24, 24, 0, [door(0, 4)], 0xe9dac0);
+wall('front', 'x', 20, -24, 24, 0, [glazed(-19, 4), glazed(-11, 4), door(0, 4), glazed(10, 4), glazed(18, 4)], 0xe9dac0);
 wall('lounge-hall', 'z', -5, 2, 20, 0, [door(6), window(11), door(17)], 0xeee2c9);
 wall('kitchen-hall', 'z', 5, 2, 20, 0, [door(7), window(11), door(17)], 0xdce3c8);
 wall('front-hall', 'x', 2, -24, 24, 0, [door(-14, 3.5), door(0, 8.5), door(17, 3.5)]);
@@ -60,7 +62,7 @@ export const PORTALS = Object.freeze(WALLS.flatMap(w => w.openings.map((o, i) =>
   id: `${w.id}-${i}`, kind: o.kind, floor: w.floor, width: o.width, clearance: o.top - o.bottom,
   x: w.axis === 'x' ? o.at : w.fixed, z: w.axis === 'x' ? w.fixed : o.at,
   y: w.floor * FLOOR_HEIGHT + o.bottom,
-}))));
+})).filter(p => p.kind !== 'glazed-window')));
 export function roomAt(x, y, z) {
   const floor = y >= FLOOR_HEIGHT - .25 ? 1 : 0;
   return ROOMS.find(r => r.floor === floor && x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ);

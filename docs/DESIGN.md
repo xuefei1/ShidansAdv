@@ -10,7 +10,7 @@ The full game is a score chase before the masters go to sleep. Shidan begins in 
 
 Establish the home, Shidan and movement before adding pressure or punishment. There is no timer, enemy, feeding system or final score yet. Decorative food and books communicate future interaction locations. Three initial prompts introduce escape, stairs and the balcony; seven optional discoveries encourage furniture climbing and route exploration without a timer.
 
-### House layout — Clover House (0.2.1)
+### House layout — Clover House (0.2.2)
 
 The compact prototype has been replaced with a full connected level, authored directly in metres. See [LEVEL.md](LEVEL.md) for routes and future chase constraints.
 
@@ -23,7 +23,8 @@ The compact prototype has been replaced with a full connected level, authored di
 - Front yard: 52 × 12 m of open lawn, with a central entry path, benches and flower beds. The lot has an invisible boundary instead of enclosing walls.
 - Furniture uses deliberately staged rises under 0.42 m. Solid mesh dimensions are also collision dimensions, including cushions, blankets and the quilt.
 - Eight open windows have 0.42 m sills; doors are generally 3–3.5 m wide. Two low passages run behind the library shelves and studio linen cupboards. Openings are modeled as actual gaps in walls.
-- An automatic upper-floor cutaway reveals the floor Shidan is exploring. V opens the house tour with floor selection and a garden angle. M opens the paused floor plan. These change visibility only; physical floors and ceilings stay solid.
+- The ceiling remains visible during play; upstairs rooms appear before reaching either staircase. V opens the house tour with floor selection and a garden angle, including a downstairs ceiling cutaway. M opens the paused floor plan. These change visibility only; physical floors and ceilings stay solid.
+- 32 glazed exterior windows provide views through all four elevations. White crossbars and pale glass distinguish them from the eight blue-framed open jump windows. The panes collide with Shidan and poop balls and are excluded from navigation portals.
 
 ### Shidan’s model
 
@@ -41,13 +42,13 @@ Current tuning, intended for playtesting:
 | --- | ---: | ---: | ---: | --- |
 | Bedding | 2.1 | 7.8 | 26 | Yes |
 | Carpet | 2.35 | 8.5 | 28 | Yes |
-| Indoor wood | 2.3 | 8.2 | 16 | No |
+| Indoor wood | 2.3 | 8.2 | 9 | No |
 | Stairs | 2.2 | 7 | 24 | No |
 | Grass / outdoor deck | 2.35 | 8.8 | Immediate grip | Yes |
 
-Indoor wood retains a small amount of slide; its drag increased from 1.9 to 9 s⁻¹, and acceleration from 3.2 to 16 m/s². From full sprint, releasing movement stops within one metre. Outdoor ground and balcony surfaces stop immediately, including benches and stepping stones. Airborne steering preserves sprint speed through a normal hop.
+Indoor wood retains a moderate slide; its drag is 4.5 s⁻¹, and acceleration is 9 m/s². Releasing movement slides about 0.5 m from walking speed or 1.8 m from full sprint, between the original and the very grippy revision. Outdoor ground and balcony surfaces stop immediately, including benches and stepping stones. Airborne steering preserves sprint speed through a normal hop.
 
-Gravity is 16 m/s², normal jump impulse 4.2 m/s, fully charged impulse 8.25 m/s. Charged jumps recover forward momentum after brushing the fence, making escape work both from the center and beside the fence. These exaggerated arcade values prioritize reliable den escape. Small hops recover forward movement after brushing a ledge during takeoff, so the rabbit can clear a 0.42 m sill even from a stop. Their jump height remains unchanged; indoor wood keeps mild sliding with much faster acceleration. No stamina limitation in milestone 1. A small step allowance makes the stair-to-landing transition reliable. Simulation substeps prevent tunnelling at low frame rates.
+Gravity is 16 m/s², normal jump impulse 4.2 m/s, fully charged impulse 8.25 m/s. Charged jumps recover forward momentum after brushing the fence, making escape work both from the center and beside the fence. These exaggerated arcade values prioritize reliable den escape. Small hops recover forward movement after brushing a ledge during takeoff, so the rabbit can clear a 0.42 m sill even from a stop. Their jump height remains unchanged; indoor wood keeps moderate sliding with much faster acceleration. No stamina limitation in milestone 1. A small step allowance makes the stair-to-landing transition reliable. Simulation substeps prevent tunnelling at low frame rates.
 
 ### Poop balls (milestone 1 revision)
 

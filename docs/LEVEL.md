@@ -1,6 +1,6 @@
 # Clover House — playable level design
 
-Revision 0.2.1 refines milestone 1 with a front yard, firm outdoor grip, faster sprinting, aligned den wires, clean wall junctions, and lower rendering/collision cost. The layout prioritizes escape choices for a future pursuit game: broad circulation loops, corners that break sightlines, short rabbit-only alternatives, and elevated routes. Food, happiness, the mistress and noise/visibility AI are still future work.
+Revision 0.2.2 adds 32 solid glazed exterior windows, restores a moderate wood slide, and preserves the ceiling during play while revealing upstairs before a stair climb. The layout prioritizes escape choices for a future pursuit game: broad circulation loops, corners that break sightlines, short rabbit-only alternatives, and elevated routes. Food, happiness, the mistress and noise/visibility AI are still future work.
 
 ## Scale and spaces
 
@@ -25,6 +25,10 @@ Coordinates are metres, X east/west, Z north/south, Y up. The garden is north (n
 The lot is 52 × 70 m, bounded by an invisible full-height fence at x ±26 and z −38/32. Both Shidan and poop balls collide with this boundary, including while airborne. The old visible perimeter walls have been removed.
 
 The M map is generated from the same room and opening data as the level. V offers floor cutaways and a rear garden angle. The minimap follows the current floor. These are presentation features; hidden upper geometry retains its collision.
+
+During normal play the upper-floor slab stays visible as the downstairs ceiling. Upstairs rooms appear one metre before either stair flight and stay visible through ascent and descent. A wider exit band avoids rapid toggling near the approach. The ground-floor house tour still removes the slab for inspection. The permanent slab is one draw / 12 triangles, and sunlight shadows refresh only when visibility actually changes.
+
+All exterior elevations now have glazed windows: four broad front windows, six per downstairs side wall, three per upstairs side wall, and five extra rear windows per floor. These 32 panes are lightly tinted, transparent and solid to Shidan and poop balls. White crossbars identify closed windows; the eight existing blue-framed jump windows remain open. Closed panes are excluded from navigation portals and appear pale blue on the map. Glass uses one simple rendering batch per floor, with no refraction pass or shadow casting.
 
 ## Playable circuits
 
@@ -57,7 +61,7 @@ Climbable routes use books, stools, poufs, trunks, and stacked crates. Each succ
 | Bedroom | pouf 0.30 → trunk 0.61 → mattress 0.88 → quilt 0.96 |
 | Studio desk | books 0.29 → stool 0.65 → trunk 1.06 → desk 1.46 |
 
-Normal hops recover forward motion after an initial contact with a ledge. Indoor wood has mild slip and still permits only short hops. The garden, front yard, side paths and balcony have firm grip, stop immediately on input release, and support long jumps. Sprint speed is 8.2 m/s on indoor wood and 8.8 m/s outdoors, versus 2.3–2.35 m/s walking; stairs use 7 m/s sprinting.
+Normal hops recover forward motion after an initial contact with a ledge. Indoor wood has moderate slip and still permits only short hops. The garden, front yard, side paths and balcony have firm grip, stop immediately on input release, and support long jumps. Sprint speed is 8.2 m/s on indoor wood and 8.8 m/s outdoors, versus 2.3–2.35 m/s walking; stairs use 7 m/s sprinting.
 
 ## Collision and future AI foundation
 

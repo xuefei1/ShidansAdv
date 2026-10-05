@@ -2,6 +2,15 @@
 
 Verified on 2026-10-04 with Node.js 24.19.0 and the Codex in-app browser at 1280 × 720.
 
+## Clover House revision 0.2.2
+
+- **72 Node tests pass.** New checks cover all 32 transparent glass panes blocking an airborne rabbit and poop from both sides, preservation of the eight open jump windows, glass batching, the independent ceiling slab, both stair reveals and visibility stability near their boundaries.
+- Wood acceleration is 9 m/s² and release drag is 4.5 s⁻¹. Measured slide is approximately 0.5 m from walking or 1.8 m from sprinting, between the original tuning and revision 0.2.1. All existing traversal, climbing and outdoor grip regressions still pass.
+- **30 browser input/menu checks pass**, including an always-visible ceiling during downstairs play and the optional ceiling cutaway in the house tour.
+- **Nine live stair checks pass.** Actual held-key events drive Shidan out of the den, through the entrance and halfway up the indoor stairs. The upper rooms are visible before the first step, both slab and rooms remain visible on the flight, and the shadow revision stays unchanged throughout the climb. The runner stops halfway up for visual inspection.
+- The ceiling costs one draw / 12 triangles. All 32 glass boxes merge into two floor-specific batches / 384 triangles total; white frames share existing opaque material batches. Glass uses an unlit tint with no refraction render pass or shadow casting. This retains the existing static-shadow and spatial-index optimizations without rendering all upper furnishings from distant ground rooms.
+- The same 3,600-update character benchmark measured **4.72 ms indexed vs 83.07 ms full scan**, with an average of 6.5 candidate solids out of 652. This is a CPU simulation comparison, not an FPS guarantee. Browser background throttling makes its idle frame interval unsuitable for comparing performance.
+
 ## Clover House revision 0.2.1
 
 - Den rings now include their missing Z coordinate. Geometry checks compare all eight rings and 112 posts with the collision fence centre/radius. Static batching retains their bounds.

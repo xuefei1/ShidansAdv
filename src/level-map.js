@@ -22,7 +22,7 @@ export function drawLevelMap(ctx, width, height, player, floor, discovered, larg
     let cursor = w.start;
     for (const o of w.openings) {
       segment(w, cursor, o.at - o.width / 2, '#8e947f');
-      if (o.kind !== 'door') segment(w, o.at - o.width / 2, o.at + o.width / 2, o.kind === 'window' ? '#69a5ae' : '#ba875f');
+      if (o.kind !== 'door') segment(w, o.at - o.width / 2, o.at + o.width / 2, o.kind === 'window' ? '#69a5ae' : o.kind === 'glazed-window' ? '#acbdc3' : '#ba875f');
       cursor = o.at + o.width / 2;
     }
     segment(w, cursor, w.end, '#8e947f');

@@ -7,6 +7,7 @@ import { FLOOR_HEIGHT, BOUNDS, LANDMARKS, roomAt } from './layout.js';
 import { drawLevelMap } from './level-map.js';
 import { bindMouseControls } from './mouse.js';
 import { createPoopBalls } from './poop.js';
+import { upperRoomsVisible } from './visibility.js';
 
 const elements = new Map();
 const $ = id => { if (!elements.has(id)) elements.set(id, document.getElementById(id)); return elements.get(id); };
@@ -39,7 +40,7 @@ function boot() {
   const fill = new THREE.DirectionalLight(0xc9e5f0, 1.1); fill.position.set(7, 8, -4); scene.add(fill);
   const stage = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0xe1e4d2, roughness: 1 }));
   stage.rotation.x = -Math.PI / 2; stage.position.y = -.56; stage.receiveShadow = true; scene.add(stage);
-  const { world, layers, upper } = createHouse(scene);
+  const { world, layers, upper, ceiling } = createHouse(scene);
   layers.forEach(batchStaticGeometry);
   const rabbit = createRabbit(); scene.add(rabbit.root);
   // Shidan already has an animated contact shadow. Keep her and the tiny balls
@@ -253,6 +254,7 @@ function boot() {
   // Read-only diagnostics, sampled in batches so profiling does not alter play.
   const frameTimes = [], cpuTimes = [];
   let profileTime = performance.now();
+  let upperApproach = false, shadowRevision = 0;
 
   function frame(now) {
     const cpuStart = performance.now();
@@ -282,11 +284,17 @@ function boot() {
     updateCamera(dt);
     if (mode === 'play' && !overview && !mapOpen && time - mapTick > .12) { drawMap(); mapTick = time; }
     const surveying = overview || mode === 'tour' || (mode === 'pause' && previousMode === 'tour');
-    const showUpper = surveying ? surveyFloor === 1 : controller.y >= FLOOR_HEIGHT - .65;
-    if (upper.visible !== showUpper) { upper.visible = showUpper; renderer.shadowMap.needsUpdate = true; }
+    upperApproach = upperRoomsVisible(controller, upperApproach);
+    const showUpper = surveying ? surveyFloor === 1 : upperApproach;
+    const showCeiling = !surveying || surveyFloor === 1;
+    if (upper.visible !== showUpper || ceiling.visible !== showCeiling) {
+      upper.visible = showUpper; ceiling.visible = showCeiling; renderer.shadowMap.needsUpdate = true;
+    }
     $('survey').hidden = !surveying || mode === 'pause';
     canvas.dataset.visibleFloor = upper.visible ? '1' : '0';
+    canvas.dataset.ceilingVisible = String(ceiling.visible);
     canvas.dataset.discoveries = String(discovered.size);
+    if (renderer.shadowMap.needsUpdate) canvas.dataset.shadowRevision = String(++shadowRevision);
     renderer.render(scene, camera);
     if (!document.hidden) cpuTimes.push(performance.now() - cpuStart);
     if (now - profileTime >= 2000 && frameTimes.length) {
