@@ -2,6 +2,7 @@
 // Open /tests/browser.html and click Run. No debug teleport or private game API.
 const frame = document.getElementById('app'), results = document.getElementById('results');
 import { DEN } from '../src/layout.js';
+import { SURFACES } from '../src/physics.js';
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const check = (label, passed, detail = '') => {
   const li = document.createElement('li'); li.className = passed ? 'pass' : 'fail'; li.textContent = `${passed ? 'PASS' : 'FAIL'}: ${label}${detail ? ` (${detail})` : ''}`; results.append(li);
@@ -102,7 +103,8 @@ document.getElementById('route').addEventListener('click', async () => {
       await wait(40);
       const p = pos(), now = performance.now(), dt = Math.max(.016, (now - oldTime) / 1000);
       vx = vx * .45 + (p[0] - old[0]) / dt * .55; vz = vz * .45 + (p[2] - old[2]) / dt * .55;
-      const dx = x - p[0], dz = z - p[2], drag = canvas.dataset.surface === 'wood' ? 1.9 : 13;
+      const surface = SURFACES[canvas.dataset.surface];
+      const dx = x - p[0], dz = z - p[2], drag = surface.grip ? Infinity : surface.drag;
       if (Math.hypot(dx, dz) < .2 && Math.hypot(vx, vz) < .3) { keys([]); check(`Walk to (${x}, ${z})`, Math.abs(p[1] - expectedY) < .15, `floor ${p[1]}`); return; }
       const codes = [];
       if (Math.abs(dx) > .09 && !(dx * vx > 0 && Math.abs(dx) <= Math.abs(vx) / drag + .04)) codes.push(dx > 0 ? 'KeyD' : 'KeyA');
@@ -127,6 +129,7 @@ document.getElementById('route').addEventListener('click', async () => {
       ['Reading room and balcony', [[1,-6,4.2],[0,-6,4.2],[0,-22.5,4.2]]],
       ['Balcony and outdoor stairs', [[20.5,-22.5,4.2],[20.5,-24,4.2],[20.5,-36,0]]],
       ['Backyard loop', [[20.5,-37,0],[2,-37,0],[2,-29,0],[0,-22,0],[0,-17,0],[0,-6,0],[1,-6,0],[1,0,0]]],
+      ['Front lawn', [[0,0,0],[0,29,0],[10,29,0],[10,22.6,0],[0,22.6,0],[0,18,0]]],
     ];
     for (const [name, points] of legs) { status.textContent = 'Walking: ' + name; for (const point of points) await walk(...point); }
     check('Full route finishes without fatal error', d.getElementById('fatal').hidden);

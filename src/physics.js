@@ -1,12 +1,13 @@
 // Engine-independent, metre-based character physics. Render code never owns movement.
-import { DEN, RAMPS, BOUNDS } from './layout.js';
+import { DEN, RAMPS, BOUNDS, HOUSE, FLOOR_HEIGHT } from './layout.js';
 export { DEN, STAIRS } from './layout.js';
 export const SURFACES = Object.freeze({
-  bedding: { acceleration: 19, drag: 15, walk: 2.1, run: 4.3, longJump: true },
-  carpet: { acceleration: 18, drag: 14, walk: 2.35, run: 4.8, longJump: true },
-  wood: { acceleration: 3.2, drag: 1.9, walk: 2.1, run: 4.5, longJump: false },
-  stairs: { acceleration: 13, drag: 12, walk: 2.2, run: 3.5, longJump: false },
-  grass: { acceleration: 16, drag: 13, walk: 2.35, run: 4.8, longJump: true },
+  bedding: { acceleration: 26, drag: 18, walk: 2.1, run: 7.8, longJump: true },
+  carpet: { acceleration: 28, drag: 18, walk: 2.35, run: 8.5, longJump: true },
+  wood: { acceleration: 16, drag: 9, walk: 2.3, run: 8.2, longJump: false },
+  stairs: { acceleration: 24, drag: 18, walk: 2.2, run: 7, longJump: false },
+  grass: { acceleration: 40, drag: 30, walk: 2.35, run: 8.8, longJump: true, grip: true },
+  deck: { acceleration: 40, drag: 30, walk: 2.35, run: 8.8, longJump: true, grip: true },
 });
 export const clamp = (v, low, high) => Math.max(low, Math.min(high, v));
 export const approach = (value, target, delta) => value + clamp(target - value, -delta, delta);
@@ -16,16 +17,39 @@ export function box(x, y, z, w, h, d, surface = 'wood') {
 export function inside(x, z, b, margin = 0) { return x > b.minX - margin && x < b.maxX + margin && z > b.minZ - margin && z < b.maxZ + margin; }
 
 export class World {
-  constructor() { this.solids = []; this.ramps = RAMPS; }
-  addBox(...args) { const b = box(...args); this.solids.push(b); return b; }
+  constructor() { this.solids = []; this.ramps = RAMPS; this.cells = new Map(); this.queryCache = new Map(); this.order = new WeakMap(); }
+  addBox(...args) {
+    const b = box(...args); this.order.set(b, this.solids.length); this.solids.push(b);
+    for (let x = Math.floor(b.minX / 4); x <= Math.floor(b.maxX / 4); x++) for (let z = Math.floor(b.minZ / 4); z <= Math.floor(b.maxZ / 4); z++) {
+      const key = `${x},${z}`;
+      if (!this.cells.has(key)) this.cells.set(key, []);
+      this.cells.get(key).push(b);
+    }
+    this.queryCache.clear(); return b;
+  }
+  query(minX, minZ, maxX = minX, maxZ = minZ) {
+    const x0 = Math.floor(minX / 4), x1 = Math.floor(maxX / 4), z0 = Math.floor(minZ / 4), z1 = Math.floor(maxZ / 4);
+    if (x0 === x1 && z0 === z1) return this.cells.get(`${x0},${z0}`) || [];
+    const key = `${x0},${z0},${x1},${z1}`;
+    if (!this.queryCache.has(key)) {
+      const found = new Set();
+      for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) for (const b of this.cells.get(`${x},${z}`) || []) found.add(b);
+      if (this.queryCache.size >= 128) this.queryCache.clear();
+      this.queryCache.set(key, [...found].sort((a, b) => this.order.get(a) - this.order.get(b)));
+    }
+    return this.queryCache.get(key);
+  }
   rampAt(x, z) { return this.ramps.find(r => x >= r.minX && x <= r.maxX && z >= Math.min(r.startZ, r.endZ) && z <= Math.max(r.startZ, r.endZ)); }
   rampHeight(x, z) {
     const r = this.rampAt(x, z);
     return r ? (r.startZ - z) / (r.startZ - r.endZ) * r.height : null;
   }
   support(x, z, maxHeight = Infinity) {
-    let y = 0, surface = Math.hypot(x - DEN.x, z - DEN.z) < DEN.radius ? 'bedding' : z < -20 ? 'grass' : 'wood';
-    for (const b of this.solids) if (b.maxY <= maxHeight + .001 && b.maxY > y && inside(x, z, b)) { y = b.maxY; surface = b.surface; }
+    const outdoors = x < HOUSE.minX || x > HOUSE.maxX || z < HOUSE.minZ || z > HOUSE.maxZ;
+    let y = 0, surface = Math.hypot(x - DEN.x, z - DEN.z) < DEN.radius ? 'bedding' : outdoors ? 'grass' : 'wood';
+    for (const b of this.query(x, z)) if (b.maxY <= maxHeight + .001 && b.maxY > y && inside(x, z, b)) { y = b.maxY; surface = b.surface; }
+    // Outdoor benches, stone paths and deck furniture have the same firm grip.
+    if (outdoors) surface = y >= FLOOR_HEIGHT - .3 ? 'deck' : 'grass';
     const ramp = this.rampHeight(x, z);
     if (ramp !== null && ramp <= maxHeight + .001 && ramp >= y) { y = ramp; surface = 'stairs'; }
     return { y, surface };
@@ -78,10 +102,11 @@ export class RabbitController {
     const speed = (input.run ? tuning.run : tuning.walk) * (this.charging ? .25 : 1);
     if (this.grounded) {
       if (moving) {
-        this.vx = approach(this.vx, dx * speed, tuning.acceleration * dt);
-        this.vz = approach(this.vz, dz * speed, tuning.acceleration * dt);
+        this.vx = tuning.grip ? dx * speed : approach(this.vx, dx * speed, tuning.acceleration * dt);
+        this.vz = tuning.grip ? dz * speed : approach(this.vz, dz * speed, tuning.acceleration * dt);
       } else {
-        this.vx *= Math.exp(-tuning.drag * dt); this.vz *= Math.exp(-tuning.drag * dt);
+        if (tuning.grip) this.vx = this.vz = 0;
+        else { this.vx *= Math.exp(-tuning.drag * dt); this.vz *= Math.exp(-tuning.drag * dt); }
       }
     } else if (moving) {
       // Limited air steering preserves the long jump's forward momentum.
@@ -95,7 +120,8 @@ export class RabbitController {
         this.vz = approach(this.vz, dz * Math.max(2.4, speed), 12 * dt);
       }
       const airSpeed = Math.hypot(this.vx, this.vz);
-      if (airSpeed > 6.4) { this.vx *= 6.4 / airSpeed; this.vz *= 6.4 / airSpeed; }
+      const airLimit = Math.max(6.4, input.run ? tuning.run : 0);
+      if (airSpeed > airLimit) { this.vx *= airLimit / airSpeed; this.vz *= airLimit / airSpeed; }
     }
     this.x += this.vx * dt; this.z += this.vz * dt;
     this.x = clamp(this.x, BOUNDS.minX + this.radius, BOUNDS.maxX - this.radius);
@@ -113,7 +139,7 @@ export class RabbitController {
       }
     }
     // Resolve circle vs. AABB horizontally; jumping on furniture remains possible.
-    for (let pass = 0; pass < 2; pass++) for (const b of this.world.solids) {
+    for (let pass = 0; pass < 2; pass++) for (const b of this.world.query(this.x - this.radius, this.z - this.radius, this.x + this.radius, this.z + this.radius)) {
       if (this.y >= b.maxY - .01 || this.y + this.height <= b.minY + .01 || (this.grounded && b.maxY - this.y <= .24)) continue;
       const nx = clamp(this.x, b.minX, b.maxX), nz = clamp(this.z, b.minZ, b.maxZ);
       let ox = this.x - nx, oz = this.z - nz, distance = Math.hypot(ox, oz);
@@ -131,7 +157,7 @@ export class RabbitController {
     this.vy -= 16 * dt;
     this.y += this.vy * dt;
     // Head collisions under the upper floor and tabletops.
-    if (this.vy > 0) for (const b of this.world.solids) {
+    if (this.vy > 0) for (const b of this.world.query(this.x - this.radius, this.z - this.radius, this.x + this.radius, this.z + this.radius)) {
       if (inside(this.x, this.z, b, this.radius * .65) && oldY + this.height <= b.minY + .01 && this.y + this.height >= b.minY) {
         this.y = b.minY - this.height; this.vy = 0;
       }

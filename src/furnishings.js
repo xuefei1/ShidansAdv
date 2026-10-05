@@ -1,5 +1,5 @@
 import { DEN, FLOOR_HEIGHT as H, BOUNDS } from './layout.js';
-import { palette as P, cylinder, ellipsoid, beam } from './model.js';
+import { palette as P, cylinder, sceneryEllipsoid as ellipsoid, beam } from './model.js';
 
 export function furnishHouse({ ground: g, upper: u, outside: o, solid: s, detail: d, world, label }) {
   const rug = (p, x, y, z, w, depth, color) => {
@@ -243,9 +243,24 @@ export function furnishHouse({ ground: g, upper: u, outside: o, solid: s, detail
     cylinder(o, 0xb49b75, x, 1.9, z, .35, 3.8, .25, 10);
     for (let i = 0; i < 5; i++) ellipsoid(o, [0xa7bf83, 0xbbcc93, 0x93b07d][i % 3], x + Math.sin(i * 2.4) * 1.1, 4.6 + i % 2 * .7, z + Math.cos(i * 2.4) * 1.1, 1.75, 1.5, 1.75);
   }
-  // Visible property boundary, including the narrow side paths around the house.
-  for (const [axis, fixed, start, end] of [['x', BOUNDS.minZ, BOUNDS.minX, BOUNDS.maxX], ['x', BOUNDS.maxZ, BOUNDS.minX, BOUNDS.maxX], ['z', BOUNDS.minX, BOUNDS.minZ, BOUNDS.maxZ], ['z', BOUNDS.maxX, BOUNDS.minZ, BOUNDS.maxZ]]) {
-    s(o, 0xdbd0ad, axis === 'x' ? (start + end) / 2 : fixed, 1.35, axis === 'x' ? fixed : (start + end) / 2, axis === 'x' ? end - start : .16, 2.7, axis === 'x' ? .16 : end - start);
-    for (let at = start; at < end; at += 1.4) d(o, 0xf0e5c5, axis === 'x' ? at : fixed, 1.4, axis === 'x' ? fixed : at, .15, 2.8, .15);
+  // Open front lawn and side paths. BOUNDS supplies an invisible, full-height
+  // fence for both the rabbit and the ball simulation; no wall blocks the view.
+  d(o, 0xc0d29f, 0, -.06, (20 + BOUNDS.maxZ) / 2, 52, .12, BOUNDS.maxZ - 20);
+  for (const x of [-25, 25]) d(o, 0xb7cc98, x, -.06, 0, 2, .12, 40);
+  d(o, 0xe3d8bb, 0, .005, 26, 3.4, .01, 11.8);
+  for (let i = 0; i < 7; i++) d(o, 0xf0e4c7, 0, .014, 21.4 + i * 1.55, 2.8, .008, 1.15);
+  for (const x of [-7, 7]) {
+    stool(o, x, 0, 25, 3.6, 1.1, .55, 0xc7af83, 'grass', `front-bench-${x}`);
+    for (const dx of [-2.5, 2.5]) plant(o, x + dx, 0, 25, .85, 0xeac6ac);
   }
+  for (const x of [-17, 17]) {
+    s(o, 0xaca07c, x, .18, 27, 5, .36, 2.6, 'grass');
+    s(o, 0x967b5c, x, .37, 27, 4.7, .04, 2.3, 'grass');
+    for (let i = 0; i < 7; i++) {
+      const px = x - 1.8 + i * .6, pz = 27 + (i % 2 ? .55 : -.55);
+      ellipsoid(o, 0x93ad78, px, .55, pz, .32, .18, .32);
+      ellipsoid(o, i % 2 ? 0xf3d8b1 : 0xe8b8ad, px, .76, pz, .19, .17, .19);
+    }
+  }
+  label(o, 'CLOVER HOUSE', 6.8, .8, 21.05, 2.3, .45);
 }

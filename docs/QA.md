@@ -2,6 +2,18 @@
 
 Verified on 2026-10-04 with Node.js 24.19.0 and the Codex in-app browser at 1280 × 720.
 
+## Clover House revision 0.2.1
+
+- Den rings now include their missing Z coordinate. Geometry checks compare all eight rings and 112 posts with the collision fence centre/radius. Static batching retains their bounds.
+- Perpendicular wall segments meet at faces and split around T-junctions. Every pair of structural wall solids is checked for overlapping volume, preventing the alternating wall-colour artifact.
+- Indoor wood accelerates five times faster and sheds momentum much sooner. Outdoor floors and furniture have zero release drift. Sprinting reaches its target within one second and travels at over three times walking speed; low-frame-rate collision and den containment still pass.
+- The front lawn extends the lot to 52 × 70 m. The entrance-to-lawn route is open. The invisible boundary retains both an airborne sprinting rabbit and fast balls on all four sides.
+- **66 Node checks** cover those fixes plus all previous movement, furniture, mouse and poop regressions. Spatially indexed character motion, floor support and camera rays are compared with full scans across the actual level.
+- **28 browser input/menu checks passed**, with visual review of the aligned den, open front yard and wall junctions. The extended live route could not be completed because the preview was throttled in the background and then lost its tab when made visible. Complete controller-level indoor, upstairs, balcony, backyard, hidden-passage and exterior routes pass; the browser runner now also includes the front lawn.
+- `node scripts/benchmark-level.mjs`: for 3,600 identical movement updates, median **4.68 ms indexed vs 67.94 ms full scan** over nine samples (about **14.5×** for character physics alone). Queries returned an average of **5.2 nearby solids out of 524**. This is not a whole-game FPS multiplier.
+- The same 1280 × 720 den view submitted **132,820 triangles vs 212,620** before the changes (about **38% fewer**). The ground-floor tour measured 156,950 vs 260,928 before the final camera reframing. Sun shadows are cached until the floor cutaway changes; the animated rabbit keeps her contact shadow, and poop balls receive shadows without casting into the static map. No cross-device frame-rate guarantee is implied.
+- Parsing, distribution build and HTTP asset/private-file smoke checks pass. Windows/macOS/Linux startup and build verification continue in GitHub Actions. Manual macOS graphics testing remains unavailable on this Windows host.
+
 ## Clover House revision 0.2.0
 
 - **56 Node tests pass.** The actual furnished level is instantiated in tests. Coverage includes den escape, floor traction, both stairways in both directions, the main downstairs circuit, the rear-room loop, the full upstairs/garden loop, both hidden indoor passages, the hedge passage and front/side exterior access.

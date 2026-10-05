@@ -8,7 +8,8 @@ import { drawLevelMap } from './level-map.js';
 import { bindMouseControls } from './mouse.js';
 import { createPoopBalls } from './poop.js';
 
-const $ = id => document.getElementById(id);
+const elements = new Map();
+const $ = id => { if (!elements.has(id)) elements.set(id, document.getElementById(id)); return elements.get(id); };
 const canvas = $('game');
 function fatal(message) { $('fatal-text').textContent = message; $('fatal').hidden = false; }
 window.addEventListener('error', event => {
@@ -25,6 +26,7 @@ function boot() {
   renderer.setPixelRatio(Math.min(devicePixelRatio, 1.65));
   renderer.setSize(innerWidth, innerHeight);
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
   const scene = new THREE.Scene(); scene.background = new THREE.Color(0xe3e6d6);
@@ -40,6 +42,9 @@ function boot() {
   const { world, layers, upper } = createHouse(scene);
   layers.forEach(batchStaticGeometry);
   const rabbit = createRabbit(); scene.add(rabbit.root);
+  // Shidan already has an animated contact shadow. Keep her and the tiny balls
+  // out of the cached sun map, so they never leave a frozen shadow behind.
+  rabbit.root.traverse(object => { object.castShadow = false; });
   const controller = new RabbitController(world);
   const poop = createPoopBalls(scene, world);
   const sound = new Sound();
@@ -47,11 +52,11 @@ function boot() {
   let mode = 'title', previousMode = 'play', overview = false, mapOpen = false, surveyFloor = 0, gardenView = false;
   const discovered = new Set();
   let yaw = -.45, pitch = .43, distance = 5.2, time = 0, previousTime = performance.now();
-  let toastUntil = 0, lastStep = 0, mapTick = 0;
+  let toastUntil = 0, lastStep = 0, mapTick = 0, hudTick = 0;
   let escaped = false, upstairs = false, cameraInitialized = false, jumpSeen = false, queuedHop = false;
   const target = new THREE.Vector3(), desiredCamera = new THREE.Vector3(), lookAt = new THREE.Vector3();
   const cameraRay = new THREE.Ray(), collisionPoint = new THREE.Vector3();
-  const collisionBoxes = world.solids.map(b => new THREE.Box3(new THREE.Vector3(b.minX - .12, b.minY - .12, b.minZ - .12), new THREE.Vector3(b.maxX + .12, b.maxY + .12, b.maxZ + .12)));
+  const collisionBoxes = new Map(world.solids.map(b => [b, new THREE.Box3(new THREE.Vector3(b.minX - .12, b.minY - .12, b.minZ - .12), new THREE.Vector3(b.maxX + .12, b.maxY + .12, b.maxZ + .12))]));
 
   function toast(text, seconds = 4) { $('toast').textContent = text; $('toast').hidden = false; toastUntil = time + seconds; }
   const mouse = bindMouseControls({
@@ -172,7 +177,7 @@ function boot() {
     } else if (overview || mode === 'tour' || (mode === 'pause' && previousMode === 'tour')) {
       const orbit = mode === 'tour' ? Math.sin(time * .08) * 1.5 : 0;
       if (gardenView) { desiredCamera.set(-35, 38, -62); lookAt.set(0, 1.5, -12); }
-      else { desiredCamera.set(42 + orbit, 54, 54); lookAt.set(0, 1, -7); }
+      else { desiredCamera.set(46 + orbit, 60, 60); lookAt.set(0, 1, -3); }
     } else {
       target.set(controller.x, controller.y + .62, controller.z);
       desiredCamera.set(controller.x + Math.sin(yaw) * Math.cos(pitch) * distance,
@@ -181,7 +186,8 @@ function boot() {
       desiredCamera.x = clamp(desiredCamera.x, BOUNDS.minX, BOUNDS.maxX); desiredCamera.z = clamp(desiredCamera.z, BOUNDS.minZ, BOUNDS.maxZ);
       cameraRay.origin.copy(target); cameraRay.direction.copy(desiredCamera).sub(target).normalize();
       let nearest = desiredCamera.distanceTo(target);
-      for (const b of collisionBoxes) {
+      for (const solid of world.query(Math.min(target.x, desiredCamera.x) - .12, Math.min(target.z, desiredCamera.z) - .12, Math.max(target.x, desiredCamera.x) + .12, Math.max(target.z, desiredCamera.z) + .12)) {
+        const b = collisionBoxes.get(solid);
         if (b.containsPoint(target)) continue;
         if (cameraRay.intersectBox(b, collisionPoint)) nearest = Math.min(nearest, target.distanceTo(collisionPoint) - .12);
       }
@@ -199,10 +205,10 @@ function boot() {
     const high = controller.y > FLOOR_HEIGHT - .3;
     const onStairs = controller.surface === 'stairs';
     const room = roomAt(controller.x, controller.y, controller.z);
-    $('floor-label').textContent = onStairs ? 'ON THE STAIRS' : room?.id === 'yard' ? 'OUTSIDE' : high ? 'UPSTAIRS' : 'GROUND FLOOR';
+    $('floor-label').textContent = onStairs ? 'ON THE STAIRS' : ['yard', 'front-yard', 'balcony'].includes(room?.id) ? 'OUTSIDE' : high ? 'UPSTAIRS' : 'GROUND FLOOR';
     $('map-floor').textContent = high ? '2F' : '1F';
     $('location').textContent = onStairs ? 'A little climb' : distFromDen < DEN.radius && !high ? 'Shidan’s den' : room?.name || 'The garden path';
-    const surfaces = { bedding: 'Soft bedding · good grip', carpet: 'Cozy carpet · good grip', wood: 'Wooden floor · slippery paws', stairs: 'Stair runner · steady paws', grass: 'Soft grass · happy leaps' };
+    const surfaces = { bedding: 'Soft bedding · good grip', carpet: 'Cozy carpet · good grip', wood: 'Wooden floor · a little slide', stairs: 'Stair runner · steady paws', grass: 'Soft grass · sure-footed paws', deck: 'Outdoor deck · sure-footed paws' };
     $('surface').textContent = surfaces[controller.surface];
     $('surface-dot').style.background = controller.surface === 'wood' ? '#bd995d' : '#91a773';
     $('charge').hidden = !controller.charging;
@@ -244,7 +250,13 @@ function boot() {
   const map = $('map').getContext('2d');
   function drawMap() { drawLevelMap(map, 170, 192, controller, controller.y >= FLOOR_HEIGHT - .25 ? 1 : 0, discovered); }
 
+  // Read-only diagnostics, sampled in batches so profiling does not alter play.
+  const frameTimes = [], cpuTimes = [];
+  let profileTime = performance.now();
+
   function frame(now) {
+    const cpuStart = performance.now();
+    if (!document.hidden) frameTimes.push(now - previousTime);
     requestAnimationFrame(frame);
     const dt = Math.min((now - previousTime) / 1000, .05); previousTime = now;
     if (mode !== 'pause') time += dt;
@@ -260,7 +272,7 @@ function boot() {
       const speed = Math.hypot(controller.vx, controller.vz);
       if (controller.grounded && speed > .6 && time - lastStep > .2) { sound.step(controller.surface === 'wood'); lastStep = time; }
       poop.update(dt, controller);
-      updateHUD();
+      if (time - hudTick >= .05) { updateHUD(); hudTick = time; }
     }
     poop.sync();
     rabbit.root.position.set(controller.x, controller.y, controller.z);
@@ -268,13 +280,20 @@ function boot() {
     const speed = mode === 'play' ? Math.hypot(controller.vx, controller.vz) : 0;
     rabbit.animate(time, speed, controller.grounded, controller.charge / .8, world.support(controller.x, controller.z, controller.y + .01).y);
     updateCamera(dt);
-    if (time - mapTick > .09) { drawMap(); mapTick = time; }
+    if (mode === 'play' && !overview && !mapOpen && time - mapTick > .12) { drawMap(); mapTick = time; }
     const surveying = overview || mode === 'tour' || (mode === 'pause' && previousMode === 'tour');
-    upper.visible = surveying ? surveyFloor === 1 : controller.y >= FLOOR_HEIGHT - .65;
+    const showUpper = surveying ? surveyFloor === 1 : controller.y >= FLOOR_HEIGHT - .65;
+    if (upper.visible !== showUpper) { upper.visible = showUpper; renderer.shadowMap.needsUpdate = true; }
     $('survey').hidden = !surveying || mode === 'pause';
     canvas.dataset.visibleFloor = upper.visible ? '1' : '0';
     canvas.dataset.discoveries = String(discovered.size);
     renderer.render(scene, camera);
+    if (!document.hidden) cpuTimes.push(performance.now() - cpuStart);
+    if (now - profileTime >= 2000 && frameTimes.length) {
+      const percentile = (values, p) => values.sort((a, b) => a - b)[Math.floor((values.length - 1) * p)].toFixed(2);
+      canvas.dataset.performance = JSON.stringify({ frameMedian: percentile(frameTimes, .5), frameP95: percentile(frameTimes, .95), cpuMedian: percentile(cpuTimes, .5), cpuP95: percentile(cpuTimes, .95), calls: renderer.info.render.calls, triangles: renderer.info.render.triangles });
+      frameTimes.length = cpuTimes.length = 0; profileTime = now;
+    }
   }
   updateHUD(); drawMap(); requestAnimationFrame(frame); canvas.dataset.ready = 'true';
 }

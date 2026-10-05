@@ -1,7 +1,7 @@
 import * as THREE from '../vendor/three.module.js';
 import { World } from './physics.js';
 import { DEN, FLOOR_HEIGHT as H, RAMPS, WALLS, ROOMS } from './layout.js';
-import { palette as P, cube, cylinder, ellipsoid, beam } from './model.js';
+import { cube, cylinder, beam, mat } from './model.js';
 import { furnishHouse } from './furnishings.js';
 
 // The house is a set of connected spaces, authored at rabbit scale. Ground and
@@ -30,17 +30,29 @@ export function createHouse(scene) {
   }
   // Upper floor and balcony have matching visible/collision tops at y=4.2.
   solid(upper, 0xbccda9, 0, H - .14, -9, 48, .28, 22, 'carpet', 'upper-floor');
-  solid(outside, 0xdac49e, 2, H - .14, -22.5, 44, .28, 5, 'wood', 'balcony-floor');
+  solid(outside, 0xdac49e, 2, H - .14, -22.5, 44, .28, 5, 'deck', 'balcony-floor');
   for (const r of ROOMS.filter(r => r.floor === 1 && r.id !== 'balcony')) {
     detail(upper, Number(r.color.replace('#', '0x')), (r.minX + r.maxX) / 2, H + .001, (r.minZ + r.maxZ) / 2, r.maxX - r.minX - .3, .002, r.maxZ - r.minZ - .3);
   }
   for (let x = -19.6; x < 24; x += .8) detail(outside, 0xc5af8c, x, H + .003, -22.5, .018, .005, 4.95);
 
-  function wallSegment(w, a, b, low, high) {
+  function wallSegment(w, a, b, low, high, joined = false) {
     if (b - a < .005 || high - low < .005) return;
+    // Butt z-running walls against the faces of x-running walls. Splitting at
+    // interior T-junctions also removes coplanar tops with conflicting colours.
+    if (w.axis === 'z' && !joined) {
+      let pieces = [[a, b]];
+      for (const cross of WALLS.filter(c => c.floor === w.floor && c.axis === 'x' && w.fixed >= c.start && w.fixed <= c.end)) {
+        const opening = cross.openings.find(o => w.fixed > o.at - o.width / 2 && w.fixed < o.at + o.width / 2);
+        if (opening && low >= opening.bottom && high <= opening.top) continue;
+        pieces = pieces.flatMap(([start, end]) => cross.fixed + .12 <= start || cross.fixed - .12 >= end ? [[start, end]] : [[start, Math.min(end, cross.fixed - .12)], [Math.max(start, cross.fixed + .12), end]]);
+      }
+      for (const [start, end] of pieces) wallSegment(w, start, end, low, high, true);
+      return;
+    }
     const parent = w.floor ? upper : ground, y = w.floor * H;
     solid(parent, w.color, w.axis === 'x' ? (a + b) / 2 : w.fixed, y + (low + high) / 2,
-      w.axis === 'x' ? w.fixed : (a + b) / 2, w.axis === 'x' ? b - a : .24, high - low, w.axis === 'x' ? .24 : b - a, 'wood', `${w.id}:${a}:${low}`);
+      w.axis === 'x' ? w.fixed : (a + b) / 2, w.axis === 'x' ? b - a : .24, high - low, w.axis === 'x' ? .24 : b - a, 'wood', `${w.id}:${a}:${low}`).userData.wall = w.id;
     if (low === 0) detail(parent, 0xf9f0dc, w.axis === 'x' ? (a + b) / 2 : w.fixed, y + .1,
       w.axis === 'x' ? w.fixed : (a + b) / 2, w.axis === 'x' ? b - a : .255, .2, w.axis === 'x' ? .255 : b - a);
   }
@@ -90,12 +102,13 @@ export function createHouse(scene) {
   cylinder(ground, 0xdcd5ad, DEN.x, .004, DEN.z, DEN.radius + .1, .006, DEN.radius + .1, 96).castShadow = false;
   cylinder(ground, 0xece4bf, DEN.x, .008, DEN.z, DEN.radius - .08, .002, DEN.radius - .08, 96).castShadow = false;
   for (let ring = 0; ring <= 7; ring++) {
-    const mesh = new THREE.Mesh(new THREE.TorusGeometry(DEN.radius, .016, 5, 128), new THREE.MeshStandardMaterial({ color: 0xfffaed }));
-    mesh.rotation.x = Math.PI / 2; mesh.position.set(DEN.x, .035 + ring * (DEN.fenceHeight - .045) / 7); ground.add(mesh);
+    const mesh = new THREE.Mesh(new THREE.TorusGeometry(DEN.radius, .016, 5, 128), mat(0xfffaed));
+    mesh.name = `Den ring ${ring}`;
+    mesh.rotation.x = Math.PI / 2; mesh.position.set(DEN.x, .035 + ring * (DEN.fenceHeight - .045) / 7, DEN.z); ground.add(mesh);
   }
   for (let i = 0; i < 112; i++) {
     const a = i / 112 * Math.PI * 2;
-    cylinder(ground, 0xfffaed, DEN.x + Math.sin(a) * DEN.radius, DEN.fenceHeight / 2, DEN.z + Math.cos(a) * DEN.radius, .014, DEN.fenceHeight, .014, 5);
+    cylinder(ground, 0xfffaed, DEN.x + Math.sin(a) * DEN.radius, DEN.fenceHeight / 2, DEN.z + Math.cos(a) * DEN.radius, .014, DEN.fenceHeight, .014, 5).name = `Den post ${i}`;
   }
   label(ground, 'SHIDAN', DEN.x, .65, DEN.z + DEN.radius + .023, 1.25, .35, '#f7edcb', '#71825e');
   const art = { group, ground, upper, outside, solid, detail, world, label };

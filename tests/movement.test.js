@@ -40,9 +40,10 @@ test('wood limits the jump while carpet and grass allow a full charge', () => {
     const r = place(x, y, z); run(r, .7, { jump: true }); const apex = run(r, 1.4); assert.ok(long ? apex > y + 1.7 : apex < y + .65); assert.ok(Math.abs(r.y - y) < .01);
   }
 });
-test('wood accelerates slowly and retains momentum; carpet grips', () => {
-  const wood = place(-10, 0, 16), carpet = place(0, H, 0); run(wood, .3, { x: 1, run: true }); run(carpet, .3, { x: 1, run: true }); assert.ok(carpet.vx > wood.vx * 2);
-  wood.vx = carpet.vx = 2; run(wood, .2); run(carpet, .2); assert.ok(wood.vx > carpet.vx * 3);
+test('wood has mild slip but reaches sprint promptly and stops within a metre', () => {
+  const wood = place(-10, 0, 16); run(wood, .3, { x: 1, run: true }); assert.ok(wood.vx >= 4.7);
+  const start = wood.z; wood.vx = 0; wood.vz = 8.2; run(wood, 1);
+  assert.ok(wood.z - start < 1); assert.ok(wood.vz < .01);
 });
 for (const ramp of RAMPS) {
   test(`${ramp.id} is walkable in both directions without jumping`, () => {

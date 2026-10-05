@@ -12,10 +12,13 @@ export function mat(color, roughness = 1) {
   return materialCache.get(key);
 }
 const sphereGeo = new THREE.SphereGeometry(1, 24, 16);
+const scenerySphereGeo = new THREE.SphereGeometry(1, 16, 10);
 const cubeGeo = new THREE.BoxGeometry(1, 1, 1);
-export function ellipsoid(parent, color, x, y, z, sx, sy, sz) {
-  const m = new THREE.Mesh(sphereGeo, mat(color)); m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m;
+export function ellipsoid(parent, color, x, y, z, sx, sy, sz, geometry = sphereGeo) {
+  const m = new THREE.Mesh(geometry, mat(color)); m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m;
 }
+// Leaves and lawn patches do not need the close-up rabbit's mesh density.
+export function sceneryEllipsoid(...args) { return ellipsoid(...args, scenerySphereGeo); }
 export function cube(parent, color, x, y, z, w, h, d) {
   const m = new THREE.Mesh(cubeGeo, mat(color)); m.position.set(x, y, z); m.scale.set(w, h, d); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m;
 }

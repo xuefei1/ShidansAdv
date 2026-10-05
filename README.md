@@ -23,9 +23,9 @@ Open **http://localhost:4173** if the browser does not open automatically. No pa
 | WASD / arrow keys | Camera-relative movement |
 | Mouse | Independently orbit the camera; click to capture it |
 | Drag the scene | Camera fallback when pointer lock is unavailable |
-| Left Shift | Run; acceleration is slower on wooden floors |
+| Left Shift | Sprint about 3–4× walking speed; wood has a short acceleration ramp |
 | Tap Space | Small hop, triggered on release |
-| Hold Space, then release | Charged long jump on bedding, carpet, and grass; hold a movement key to travel |
+| Hold Space, then release | Charged long jump on bedding, carpet, grass, and balcony; hold a movement key to travel |
 | Scroll wheel | Camera distance |
 | Right mouse click / P | Drop one poop ball behind Shidan |
 | C | Center camera behind Shidan |
@@ -39,6 +39,8 @@ Open **http://localhost:4173** if the browser does not open automatically. No pa
 ## Included in milestone 1
 
 - A rebuilt **48 × 40 m house**, an **8 m diameter den**, and a **52 × 18 m backyard**. Shidan remains her original size; the pen fence is 1.1 m high.
+- A **52 × 12 m front yard** with a clear entrance path, benches and flower beds. An invisible boundary encloses the full **52 × 70 m lot**, including the side paths.
+- Mild indoor wood slip, firm outdoor grip, and faster sprinting. The den wires align, wall joins do not overlap, and cached shadows plus nearby collision lookup reduce frame work.
 - Seven ground-floor areas, including the entrance and cross-hall, three upstairs rooms, a gallery, a full garden balcony, and two usable stairways.
 - Interconnected door routes, eight jump-through windows, concealed library and linen passages, and a low hedge tunnel.
 - Climbable sofa, coffee table, dining table, stacked crates, bed, and desk. Books, poufs, stools and trunks form reachable steps.
@@ -62,6 +64,8 @@ node --test
 node scripts/build.mjs
 node scripts/serve.mjs --dist
 ```
+
+`node scripts/benchmark-level.mjs` compares indexed and full-scan character collision on identical movement traces. Read-only `data-performance` on the game canvas reports sampled frame/CPU timing and render counts for local profiling.
 
 `npm run dev`, `npm test`, `npm run check`, and `npm run build` are aliases if npm is installed. The plain Node commands also work with the bundled runtime available on this computer.
 

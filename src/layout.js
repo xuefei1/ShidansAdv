@@ -1,7 +1,7 @@
 // All dimensions are authored directly in metres. Shidan's model is unscaled.
 export const FLOOR_HEIGHT = 4.2;
 export const DEN = Object.freeze({ x: -16, z: 12, radius: 4, fenceHeight: 1.1 });
-export const BOUNDS = Object.freeze({ minX: -26, maxX: 26, minZ: -38, maxZ: 23 });
+export const BOUNDS = Object.freeze({ minX: -26, maxX: 26, minZ: -38, maxZ: 32 });
 export const HOUSE = Object.freeze({ minX: -24, maxX: 24, minZ: -20, maxZ: 20 });
 export const STAIRS = Object.freeze({ id: 'hall-stairs', minX: 1, maxX: 4, startZ: 15, endZ: 2, height: FLOOR_HEIGHT });
 export const GARDEN_STAIRS = Object.freeze({ id: 'garden-stairs', minX: 19, maxX: 22, startZ: -35, endZ: -25, height: FLOOR_HEIGHT });
@@ -22,6 +22,7 @@ export const ROOMS = Object.freeze([
   room('gallery', 'The upstairs gallery', 1, -24, 24, -3, 2, '#dce1c5'),
   room('balcony', 'The garden balcony', 1, -20, 24, -25, -20, '#dccba8'),
   room('yard', 'The clover backyard', 0, -26, 26, -38, -20, '#bed3a3'),
+  room('front-yard', 'The sunny front yard', 0, -26, 26, 20, 32, '#c4d5a5'),
 ]);
 export const LANDMARKS = Object.freeze([
   { id: 'sofa', name: 'Climb the sofa', x: -17, y: .84, z: 5.8, radius: 1.7, hint: 'Use the book stack and footstool in the lounge.' },

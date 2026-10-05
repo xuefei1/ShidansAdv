@@ -1,6 +1,6 @@
 # Clover House — playable level design
 
-Revision 0.2.0 expands milestone 1. The layout prioritizes escape choices for a future pursuit game: broad circulation loops, corners that break sightlines, short rabbit-only alternatives, and elevated routes. Food, happiness, the mistress and noise/visibility AI are still future work.
+Revision 0.2.1 refines milestone 1 with a front yard, firm outdoor grip, faster sprinting, aligned den wires, clean wall junctions, and lower rendering/collision cost. The layout prioritizes escape choices for a future pursuit game: broad circulation loops, corners that break sightlines, short rabbit-only alternatives, and elevated routes. Food, happiness, the mistress and noise/visibility AI are still future work.
 
 ## Scale and spaces
 
@@ -20,6 +20,9 @@ Coordinates are metres, X east/west, Z north/south, Y up. The garden is north (n
 | Upper floor | y 4.2; x −24…24, z −20…2 | Carpeted bedroom, reading room, studio and gallery |
 | Balcony | y 4.2; x −20…24, z −25…−20 | Two doors and bedroom window; outdoor stairs at east end |
 | Backyard | x −26…26, z −38…−20 | Grass, raised-bed loops, picnic cover, stepping logs, hedge passage |
+| Front yard | x −26…26, z 20…32 | Clear entry path, two benches, flower beds and side-path connections |
+
+The lot is 52 × 70 m, bounded by an invisible full-height fence at x ±26 and z −38/32. Both Shidan and poop balls collide with this boundary, including while airborne. The old visible perimeter walls have been removed.
 
 The M map is generated from the same room and opening data as the level. V offers floor cutaways and a rear garden angle. The minimap follows the current floor. These are presentation features; hidden upper geometry retains its collision.
 
@@ -54,11 +57,13 @@ Climbable routes use books, stools, poufs, trunks, and stacked crates. Each succ
 | Bedroom | pouf 0.30 → trunk 0.61 → mattress 0.88 → quilt 0.96 |
 | Studio desk | books 0.29 → stool 0.65 → trunk 1.06 → desk 1.46 |
 
-Normal hops recover forward motion after an initial contact with a ledge. This fixes the earlier failure to get over a reachable sill while preserving slippery ground acceleration and the ban on long jumps on wood. Grass supports long jumps; balcony boards remain slippery.
+Normal hops recover forward motion after an initial contact with a ledge. Indoor wood has mild slip and still permits only short hops. The garden, front yard, side paths and balcony have firm grip, stop immediately on input release, and support long jumps. Sprint speed is 8.2 m/s on indoor wood and 8.8 m/s outdoors, versus 2.3–2.35 m/s walking; stairs use 7 m/s sprinting.
 
 ## Collision and future AI foundation
 
 `src/layout.js` owns room bounds, `WALLS`, opening dimensions, `PORTALS`, `RAMPS`, and discovery markers. `house.js` builds wall segments around the openings. `furnishings.js` uses one solid helper to create each visible box and its exact collider, including every blanket, mattress, quilt, seat and pillow.
+
+Perpendicular wall sections butt against one another and split at T-junctions, avoiding coplanar overlapping coloured tops. Den rings and posts use the same centre and radius as the fence collision. A cached 4 m spatial grid limits character and camera checks to nearby static solids while keeping their original collision order. Static sunlight shadows refresh when a floor cutaway changes; Shidan retains her animated contact shadow. Small poop balls receive sunlight shadows without casting into the static map.
 
 The existing sphere solver uses both ramp directions, and all furnishings remain obstacles for poop balls. The persistent 10,000-ball limit is unchanged. Foliage and cylindrical props use conservative box colliders; thin seams, printed labels and floor decals are decorative. Step meshes approximate continuous ramps within 7 cm to avoid stair snagging.
 

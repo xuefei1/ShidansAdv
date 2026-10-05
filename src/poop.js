@@ -4,7 +4,7 @@ import { PoopPhysics, MAX_POOP_BALLS } from './poop-physics.js';
 export function createPoopBalls(scene, world) {
   const physics = new PoopPhysics(world);
   const mesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshStandardMaterial({ color: 0x785032, roughness: 1 }), MAX_POOP_BALLS);
-  mesh.name = 'Persistent poop balls'; mesh.count = 0; mesh.castShadow = true; mesh.receiveShadow = true;
+  mesh.name = 'Persistent poop balls'; mesh.count = 0; mesh.castShadow = false; mesh.receiveShadow = true;
   mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); mesh.frustumCulled = false; scene.add(mesh);
   const transform = new THREE.Object3D();
   return {

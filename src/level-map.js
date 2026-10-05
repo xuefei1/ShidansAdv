@@ -1,12 +1,14 @@
-import { WALLS, ROOMS, LANDMARKS, DEN, RAMPS, HOUSE, FLOOR_HEIGHT } from './layout.js';
+import { WALLS, ROOMS, LANDMARKS, DEN, RAMPS, HOUSE, BOUNDS, FLOOR_HEIGHT } from './layout.js';
 
 export function drawLevelMap(ctx, width, height, player, floor, discovered, large = false) {
-  const scale = Math.min((width - 28) / 54, (height - 28) / 63);
-  const tx = x => width / 2 + x * scale, tz = z => height / 2 + (z + 7.5) * scale;
+  const lotWidth = BOUNDS.maxX - BOUNDS.minX, lotDepth = BOUNDS.maxZ - BOUNDS.minZ;
+  const scale = Math.min((width - 28) / (lotWidth + 2), (height - 28) / (lotDepth + 2));
+  const tx = x => width / 2 + (x - (BOUNDS.minX + BOUNDS.maxX) / 2) * scale;
+  const tz = z => height / 2 + (z - (BOUNDS.minZ + BOUNDS.maxZ) / 2) * scale;
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = '#e7ebd5'; ctx.fillRect(tx(-26), tz(-38), 52 * scale, 61 * scale);
-  ctx.strokeStyle = '#bbc49e'; ctx.lineWidth = 1; ctx.strokeRect(tx(-26), tz(-38), 52 * scale, 61 * scale);
-  for (const r of ROOMS.filter(r => r.floor === floor || r.id === 'yard')) {
+  ctx.fillStyle = '#e7ebd5'; ctx.fillRect(tx(BOUNDS.minX), tz(BOUNDS.minZ), lotWidth * scale, lotDepth * scale);
+  ctx.strokeStyle = '#bbc49e'; ctx.lineWidth = 1; ctx.strokeRect(tx(BOUNDS.minX), tz(BOUNDS.minZ), lotWidth * scale, lotDepth * scale);
+  for (const r of ROOMS.filter(r => r.floor === floor || r.id === 'yard' || r.id === 'front-yard')) {
     ctx.fillStyle = r.color; ctx.fillRect(tx(r.minX), tz(r.minZ), (r.maxX - r.minX) * scale, (r.maxZ - r.minZ) * scale);
   }
   if (floor) { ctx.fillStyle = '#eadcc966'; ctx.fillRect(tx(HOUSE.minX), tz(2), 48 * scale, 18 * scale); }
@@ -43,7 +45,7 @@ export function drawLevelMap(ctx, width, height, player, floor, discovered, larg
     ctx.font = '12px Segoe UI, sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#5d6d55';
     for (const r of ROOMS.filter(r => r.floor === floor)) {
       const text = { 'living': 'LOUNGE', 'foyer': 'HALL', 'kitchen': 'KITCHEN / DINING', 'hall': 'LONG HALLWAY', 'library': 'LIBRARY', 'garden-room': 'GARDEN ROOM', 'utility': 'CRAFT ROOM', 'bedroom': 'BEDROOM', 'reading': 'READING ROOM', 'study': 'STUDIO', 'gallery': 'GALLERY', 'balcony': 'BALCONY', 'yard': 'BACKYARD' }[r.id];
-      ctx.fillText(text, tx((r.minX + r.maxX) / 2), tz(r.minZ + (r.id === 'yard' ? 9 : 1.8)));
+      ctx.fillText(r.id === 'front-yard' ? 'FRONT YARD' : text, tx((r.minX + r.maxX) / 2), tz(r.minZ + (r.id === 'yard' ? 9 : 1.8)));
     }
   }
   LANDMARKS.forEach((l, index) => {
