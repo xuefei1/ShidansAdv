@@ -4,15 +4,17 @@ A cozy third-person 3D action adventure starring Shidan, a black rabbit with a w
 
 ## Play
 
-On this Windows computer, double-click **`Start-Game.cmd`**. It starts the server and opens **http://localhost:4173** in your browser. Keep the server window open while playing. If the game is already running, just open that address.
+**Windows:** double-click `Start-Game.cmd`.
 
-On any computer with **Node.js 20 or newer**:
+**macOS (Apple silicon or Intel):** install [Node.js LTS](https://nodejs.org/en/download) once, then double-click `Start-Game.command`. The launcher opens the game in your default browser. Keep its Terminal window open while playing; Control-C stops the server. If Finder reports a permission problem after downloading a ZIP, open Terminal in the project folder and run `bash Start-Game.command` instead. See [the macOS guide](docs/MACOS.md).
+
+**Any desktop with Node.js 22 or newer:**
 
 ```sh
-node scripts/serve.mjs
+node scripts/serve.mjs --open
 ```
 
-No package installation, account, build step, or internet connection is required to play. Three.js is pinned and included locally. Use a desktop browser with WebGL 2 support (Chrome, Edge, or Firefox). If the embedded browser cannot capture the mouse, drag the scene to look around; opening it in a regular browser is also supported.
+Open **http://localhost:4173** if the browser does not open automatically. No package installation, account, build step, or runtime internet connection is needed. The game and Three.js engine are included locally. Use a browser with WebGL 2 support. Mouse capture is optional: drag the scene to look around when capture is unavailable, including in browsers with limited pointer-lock support.
 
 ## Controls
 
@@ -23,24 +25,29 @@ No package installation, account, build step, or internet connection is required
 | Drag the scene | Camera fallback when pointer lock is unavailable |
 | Left Shift | Run; acceleration is slower on wooden floors |
 | Tap Space | Small hop, triggered on release |
-| Hold Space, then release | Charged long jump on bedding and carpet; hold a movement key to travel |
+| Hold Space, then release | Charged long jump on bedding, carpet, and grass; hold a movement key to travel |
 | Scroll wheel | Camera distance |
-| Right mouse click | Drop one poop ball behind Shidan |
+| Right mouse click / P | Drop one poop ball behind Shidan |
 | C | Center camera behind Shidan |
-| V | Toggle an overview of the house |
+| V | House tour with floor and garden-view choices |
+| M | Floor plan, route hints, and discoveries |
 | R | Return to the den |
 | Esc | Pause / resume; releases the mouse |
 
-**First adventure:** charge a jump in the den, release Space while moving to clear the fence, find the stairs on the right, then visit the upstairs reading nook. The exploration checklist is a tutorial, not the final happiness-scoring system.
+**First adventure:** charge a jump in the den and release while moving to escape. Explore at your own pace. Press **M** for the floor plan and seven little discoveries: sofa, library passage, upstairs, bed quilt, balcony, backyard, and hedge hideaway. Food, AI pursuit, and happiness scoring remain later milestones.
 
 ## Included in milestone 1
 
-- Original pastel, cartoon-style house with an open front for visibility: living room, kitchen, dining area, staircase, upstairs bedroom, study and reading nook.
-- House, furniture and den enlarged by 50% after the first playtest, with Shidan kept at her original size. The den is now 4.5 metres across with a 1.65-metre white wire fence.
+- A rebuilt **48 × 40 m house**, an **8 m diameter den**, and a **52 × 18 m backyard**. Shidan remains her original size; the pen fence is 1.1 m high.
+- Seven ground-floor areas, including the entrance and cross-hall, three upstairs rooms, a gallery, a full garden balcony, and two usable stairways.
+- Interconnected door routes, eight jump-through windows, concealed library and linen passages, and a low hedge tunnel.
+- Climbable sofa, coffee table, dining table, stacked crates, bed, and desk. Books, poufs, stools and trunks form reachable steps.
+- Solid cushions, blankets, mattress, quilt, pillows and furniture layers. Rendered box surfaces and collision share the same dimensions.
+- Floor cutaways, a floor-aware minimap, full map, garden tour angle, and seven optional discoveries.
 - Original procedural Shidan model based on the three local reference photos, with black fur, white nose marking, white toes, ears, whiskers and a fluffy tail.
 - Breathing, blinking, ear movement, running gait, crouch and airborne poses.
 - Third-person orbit camera, running, tap jumps, charged jumps, furniture/ceiling collision, stair traversal and floor-dependent traction.
-- Pause/resume, reset, minimap, house tour, three exploration objectives and optional synthesized sound effects.
+- Pause/resume, reset, exploration guidance, and optional synthesized sound effects.
 - Right-click poop balls with gravity, rolling, bounce and collisions against the house, fence, stairs, Shidan and one another. Resting balls can be nudged awake by Shidan.
 - Up to **10,000 balls** persist for the loaded session, including through pause, return-home and title navigation. There is no timed despawn. Each additional ball replaces only the oldest; reloading the page starts a fresh session.
 - Local source control, automated physics checks, browser integration checks, and a static distribution build.
@@ -58,7 +65,7 @@ node scripts/serve.mjs --dist
 
 `npm run dev`, `npm test`, `npm run check`, and `npm run build` are aliases if npm is installed. The plain Node commands also work with the bundled runtime available on this computer.
 
-For input integration checks, run the development server, open **http://localhost:4173/tests/browser.html**, and click **Run input and menu checks**. Keep that tab foreground while the checks run. The runner exercises the actual game input handlers, fast tap buffering, charged escape, pause/resume, overview and title navigation.
+For input integration checks, run the development server, open **http://localhost:4173/tests/browser.html**, and click **Run input and menu checks**. Keep that tab foreground while the checks run. The runner exercises actual input, mouse error recovery, poop, fast tap buffering, charged escape, pause/resume, maps, cutaways and title navigation. The separate **Walk the balcony–garden loop** button walks the real game through the entrance, both floors, balcony, garden stairs and back inside. Keep this tab active until it finishes.
 
 The build writes `dist/`, which can be served by any static HTTP host. It has no runtime CDN calls, analytics or backend. Double-clicking `index.html` directly is unsupported because browser ES modules require an HTTP origin.
 
@@ -68,15 +75,19 @@ The build writes `dist/`, which can be served by any static HTTP host. It has no
 | --- | --- |
 | `src/main.js` | Scene, input, orbit camera, game state and tutorial UI |
 | `src/physics.js` | Independent character controller, collision, stairs and traction |
-| `src/layout.js` | Environment scale, den/stair dimensions and room bounds |
+| `src/layout.js` | Room, wall, opening, ramp, and discovery data |
+| `src/level-map.js` | Shared minimap and full floor plan |
 | `src/mouse.js` | Mouse actions and safe pointer-lock/drag fallback |
 | `src/poop-physics.js` | Sphere collision, sleep/wake, spatial indexing and 10k pool |
 | `src/poop.js` | Instanced poop-ball rendering |
 | `src/model.js` | Procedural rabbit model, animation and geometry helpers |
-| `src/house.js` | Furnished house, den, level collision and static mesh batching |
+| `src/house.js` | House structure, true openings, den, stairs and static batching |
+| `src/furnishings.js` | Climbing furniture, blankets, garden and cover |
 | `src/audio.js` | Original Web Audio effects |
 | `tests/` | Physics and browser integration checks |
 | `docs/DESIGN.md` | Story, game design and implementation decisions |
+| `docs/LEVEL.md` | Clover House routes, dimensions, climbing and future AI constraints |
+| `docs/MACOS.md` | Mac setup, launcher and trackpad controls |
 | `docs/ROADMAP.md` | Milestones and acceptance criteria |
 | `docs/ASSETS.md` | Asset origins, licenses and future candidates |
 | `docs/QA.md` | Verification and current limitations |

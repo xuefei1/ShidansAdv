@@ -1,11 +1,12 @@
 // Engine-independent, metre-based character physics. Render code never owns movement.
-import { DEN, STAIRS, BOUNDS } from './layout.js';
+import { DEN, RAMPS, BOUNDS } from './layout.js';
 export { DEN, STAIRS } from './layout.js';
 export const SURFACES = Object.freeze({
   bedding: { acceleration: 19, drag: 15, walk: 2.1, run: 4.3, longJump: true },
   carpet: { acceleration: 18, drag: 14, walk: 2.35, run: 4.8, longJump: true },
   wood: { acceleration: 3.2, drag: 1.9, walk: 2.1, run: 4.5, longJump: false },
   stairs: { acceleration: 13, drag: 12, walk: 2.2, run: 3.5, longJump: false },
+  grass: { acceleration: 16, drag: 13, walk: 2.35, run: 4.8, longJump: true },
 });
 export const clamp = (v, low, high) => Math.max(low, Math.min(high, v));
 export const approach = (value, target, delta) => value + clamp(target - value, -delta, delta);
@@ -15,14 +16,15 @@ export function box(x, y, z, w, h, d, surface = 'wood') {
 export function inside(x, z, b, margin = 0) { return x > b.minX - margin && x < b.maxX + margin && z > b.minZ - margin && z < b.maxZ + margin; }
 
 export class World {
-  constructor() { this.solids = []; }
+  constructor() { this.solids = []; this.ramps = RAMPS; }
   addBox(...args) { const b = box(...args); this.solids.push(b); return b; }
+  rampAt(x, z) { return this.ramps.find(r => x >= r.minX && x <= r.maxX && z >= Math.min(r.startZ, r.endZ) && z <= Math.max(r.startZ, r.endZ)); }
   rampHeight(x, z) {
-    if (x < STAIRS.minX || x > STAIRS.maxX || z > STAIRS.startZ || z < STAIRS.endZ) return null;
-    return (STAIRS.startZ - z) / (STAIRS.startZ - STAIRS.endZ) * STAIRS.height;
+    const r = this.rampAt(x, z);
+    return r ? (r.startZ - z) / (r.startZ - r.endZ) * r.height : null;
   }
   support(x, z, maxHeight = Infinity) {
-    let y = 0, surface = Math.hypot(x - DEN.x, z - DEN.z) < DEN.radius ? 'bedding' : 'wood';
+    let y = 0, surface = Math.hypot(x - DEN.x, z - DEN.z) < DEN.radius ? 'bedding' : z < -20 ? 'grass' : 'wood';
     for (const b of this.solids) if (b.maxY <= maxHeight + .001 && b.maxY > y && inside(x, z, b)) { y = b.maxY; surface = b.surface; }
     const ramp = this.rampHeight(x, z);
     if (ramp !== null && ramp <= maxHeight + .001 && ramp >= y) { y = ramp; surface = 'stairs'; }
@@ -86,7 +88,12 @@ export class RabbitController {
       if (this.longJumping) {
         // Recover forward momentum once above a fence brushed during takeoff.
         this.vx = approach(this.vx, dx * 6.4, 12 * dt); this.vz = approach(this.vz, dz * 6.4, 12 * dt);
-      } else { this.vx += dx * 1.8 * dt; this.vz += dz * 1.8 * dt; }
+      } else {
+        // Recover after brushing a low ledge during takeoff. Without this, a
+        // stopped rabbit cannot move her centre over a reachable window sill.
+        this.vx = approach(this.vx, dx * Math.max(2.4, speed), 12 * dt);
+        this.vz = approach(this.vz, dz * Math.max(2.4, speed), 12 * dt);
+      }
       const airSpeed = Math.hypot(this.vx, this.vz);
       if (airSpeed > 6.4) { this.vx *= 6.4 / airSpeed; this.vz *= 6.4 / airSpeed; }
     }

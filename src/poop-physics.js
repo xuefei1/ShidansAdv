@@ -118,7 +118,8 @@ export class PoopPhysics {
         }
     const ramp = this.world.rampHeight(ball.x, ball.z);
     if (ramp !== null) {
-      const slope = STAIRS.height / (STAIRS.startZ - STAIRS.endZ), normalLength = Math.hypot(1, slope);
+      const stairs = this.world.rampAt(ball.x, ball.z);
+      const slope = stairs.height / (stairs.startZ - stairs.endZ), normalLength = Math.hypot(1, slope);
       const depth = r - (ball.y - ramp) / normalLength;
       if (depth > 0) this.bounce(ball, 0, 1 / normalLength, slope / normalLength, depth, dt);
     }

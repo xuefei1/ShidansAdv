@@ -59,9 +59,78 @@ document.getElementById('run').addEventListener('click', async () => {
     d.getElementById('view').click(); d.getElementById('home').click(); await wait(150);
     check('Return from overview restores controls', canvas.dataset.surface === 'bedding');
     check('Return home preserves poop balls', Number(canvas.dataset.poopCount) === initialCount + 3);
+    key('keydown', 'KeyP'); key('keyup', 'KeyP'); await wait(100);
+    check('P offers a trackpad-friendly poop shortcut', Number(canvas.dataset.poopCount) === initialCount + 4);
+    d.getElementById('map-button').click(); await wait(100);
+    const mapPosition = pos(); key('keydown', 'KeyW'); await wait(150); key('keyup', 'KeyW');
+    check('The floor plan opens and pauses movement', !d.getElementById('atlas').hidden && JSON.stringify(mapPosition) === JSON.stringify(pos()));
+    d.querySelector('#atlas [data-floor="1"]').click();
+    check('The map switches to the upstairs and balcony', d.getElementById('atlas-floor-name').textContent.includes('Upstairs'));
+    check('The map lists seven exploration landmarks', d.querySelectorAll('#discovery-list li').length === 7);
+    d.getElementById('close-atlas').click(); await wait(100);
+    check('Closing the map resumes exploration', d.getElementById('atlas').hidden && d.getElementById('pause').hidden);
+    d.getElementById('view').click(); d.querySelector('#survey [data-floor="1"]').click(); await wait(100);
+    check('The cutaway reveals the upper floor on demand', canvas.dataset.visibleFloor === '1');
+    d.querySelector('#survey [data-floor="0"]').click(); await wait(100);
+    check('Ground-floor cutaway exposes the rooms below', canvas.dataset.visibleFloor === '0');
+    d.getElementById('garden-view').click(); await wait(100);
+    check('Garden tour can be selected', d.getElementById('garden-view').textContent === 'Front view');
+    d.getElementById('view').click();
     d.getElementById('menu-button').click(); d.getElementById('back-title').click();
     check('Back to title restores the title screen', !d.getElementById('welcome').hidden && d.getElementById('hud').hidden);
     check('No fatal browser error', d.getElementById('fatal').hidden);
   } catch (error) { console.error(error); }
   finally { document.getElementById('run').disabled = false; }
+});
+
+// Real held-key traversal of both flights and the garden loop, using only DOM
+// telemetry for steering. No position mutation, debug teleport or alternate physics.
+document.getElementById('route').addEventListener('click', async () => {
+  results.replaceChildren(); document.getElementById('run').disabled = document.getElementById('route').disabled = true;
+  const w = frame.contentWindow, d = frame.contentDocument, canvas = d.getElementById('game'), status = document.getElementById('route-status');
+  const held = new Set(), key = (type, code) => canvas.dispatchEvent(new w.KeyboardEvent(type, { code, bubbles: true }));
+  const keys = codes => {
+    for (const code of [...held]) if (!codes.includes(code)) { key('keyup', code); held.delete(code); }
+    for (const code of codes) if (!held.has(code)) { key('keydown', code); held.add(code); }
+  };
+  const pos = () => canvas.dataset.position.split(',').map(Number);
+  const originalLock = canvas.requestPointerLock;
+  async function walk(x, z, expectedY = 0) {
+    const from = pos(), timeout = performance.now() + (Math.hypot(x - from[0], z - from[2]) / 1.5 + 8) * 1000;
+    let old = from, oldTime = performance.now(), vx = 0, vz = 0;
+    while (performance.now() < timeout) {
+      await wait(40);
+      const p = pos(), now = performance.now(), dt = Math.max(.016, (now - oldTime) / 1000);
+      vx = vx * .45 + (p[0] - old[0]) / dt * .55; vz = vz * .45 + (p[2] - old[2]) / dt * .55;
+      const dx = x - p[0], dz = z - p[2], drag = canvas.dataset.surface === 'wood' ? 1.9 : 13;
+      if (Math.hypot(dx, dz) < .2 && Math.hypot(vx, vz) < .3) { keys([]); check(`Walk to (${x}, ${z})`, Math.abs(p[1] - expectedY) < .15, `floor ${p[1]}`); return; }
+      const codes = [];
+      if (Math.abs(dx) > .09 && !(dx * vx > 0 && Math.abs(dx) <= Math.abs(vx) / drag + .04)) codes.push(dx > 0 ? 'KeyD' : 'KeyA');
+      if (Math.abs(dz) > .09 && !(dz * vz > 0 && Math.abs(dz) <= Math.abs(vz) / drag + .04)) codes.push(dz > 0 ? 'KeyS' : 'KeyW');
+      keys(codes); old = p; oldTime = now;
+      if (canvas.dataset.mode !== 'play') throw new Error('Keep the test tab active while walking the route.');
+    }
+    keys([]); check(`Walk to (${x}, ${z})`, false, pos().join(', '));
+  }
+  try {
+    canvas.requestPointerLock = () => Promise.reject(new w.DOMException('Use QA drag fallback', 'NotAllowedError'));
+    d.getElementById('play').click(); await wait(200); if (!d.getElementById('pause').hidden) d.getElementById('resume').click();
+    const yaw = Number(canvas.dataset.camera.split(',')[0]);
+    canvas.dispatchEvent(new w.MouseEvent('mousedown', { button: 0, clientX: 200, clientY: 200, bubbles: true }));
+    w.dispatchEvent(new w.MouseEvent('mousemove', { clientX: 200 + yaw / .003, clientY: 200 }));
+    w.dispatchEvent(new w.MouseEvent('mouseup', { button: 0 }));
+    keys(['Space']); await wait(750); keys(['KeyD']); await wait(1300); keys([]); await wait(1000);
+    check('Escape starts the level route', canvas.dataset.surface === 'wood');
+    const legs = [
+      ['Entrance hall', [[-7,17,0],[2.5,17,0]]],
+      ['Indoor staircase', [[2.5,1,4.2],[1,0,4.2]]],
+      ['Reading room and balcony', [[1,-6,4.2],[0,-6,4.2],[0,-22.5,4.2]]],
+      ['Balcony and outdoor stairs', [[20.5,-22.5,4.2],[20.5,-24,4.2],[20.5,-36,0]]],
+      ['Backyard loop', [[20.5,-37,0],[2,-37,0],[2,-29,0],[0,-22,0],[0,-17,0],[0,-6,0],[1,-6,0],[1,0,0]]],
+    ];
+    for (const [name, points] of legs) { status.textContent = 'Walking: ' + name; for (const point of points) await walk(...point); }
+    check('Full route finishes without fatal error', d.getElementById('fatal').hidden);
+    status.textContent = 'Complete: den escape, entrance, upstairs, balcony, garden stairs, backyard, and back inside.';
+  } catch (error) { status.textContent = error.message; console.error(error); }
+  finally { keys([]); canvas.requestPointerLock = originalLock; document.getElementById('run').disabled = document.getElementById('route').disabled = false; }
 });

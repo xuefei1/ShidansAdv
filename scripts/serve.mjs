@@ -24,7 +24,7 @@ const server = createServer(async (req, res) => {
 server.on('error', error => { console.error(error.code === 'EADDRINUSE' ? `Port ${port} is busy. Open http://localhost:${port}, or set PORT to another number.` : error); process.exitCode = 1; });
 server.listen(port, '127.0.0.1', () => {
   console.log(`Shidan's Adventure is ready at http://localhost:${port}\nPress Ctrl+C to stop.`);
-  if (process.argv.includes('--open')) {
+  if (process.argv.includes('--open') && !process.argv.includes('--no-open')) {
     const url = `http://localhost:${port}`;
     const command = process.platform === 'win32' ? 'cmd.exe' : process.platform === 'darwin' ? 'open' : 'xdg-open';
     const args = process.platform === 'win32' ? ['/c', 'start', '', url] : [url];

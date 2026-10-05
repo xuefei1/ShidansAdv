@@ -2,6 +2,20 @@
 
 Verified on 2026-10-04 with Node.js 24.19.0 and the Codex in-app browser at 1280 × 720.
 
+## Clover House revision 0.2.0
+
+- **56 Node tests pass.** The actual furnished level is instantiated in tests. Coverage includes den escape, floor traction, both stairways in both directions, the main downstairs circuit, the rear-room loop, the full upstairs/garden loop, both hidden indoor passages, the hedge passage and front/side exterior access.
+- All eight window clearances and standing-adult clearance at wide doors are checked. A normal-hop test crosses a real interior window. All six designed furniture routes (sofa, coffee table, dining table, craft crates, bed, studio desk) are reachable with normal hops.
+- Ten explicit blanket/mattress landing regressions pass. Every solid-box render mesh is compared against its actual physics bounds. Floors and ceilings remain collidable when their art is hidden by the cutaway.
+- **28 browser input/menu checks pass** for actual keyboard/mouse handlers, left-click failures, ball spawning/persistence, den escape, map pause, floor selection, seven discoveries and the garden tour.
+- **20 browser route checks pass.** The route runner uses real held-key events and read-only DOM position telemetry, without teleports or an alternate controller. It walks from the den through the entrance, indoor stairs, reading room, balcony, garden stairs, backyard and back inside.
+- The 10,000-ball benchmark retained every ball with finite positions/velocities after three simulated seconds. On this Windows machine the final-second physics median was **9.63 ms**, p95 **12.62 ms**, with 560 active bodies. Rendering is excluded; this is not a cross-device frame-rate guarantee.
+- JavaScript parsing and local server asset/private-file smoke checks pass. The Unix launcher passes Bash syntax validation. GitHub Actions verifies Node tests and the static build on Windows/macOS/Linux, plus actual launcher/server startup on macOS/Linux.
+
+Browser review covers the den proportions, title, floor plan, cutaways, both floors and rear garden view. Floor plank overlaps and pen-mat z-fighting were corrected during visual review. The game has no runtime network asset dependencies.
+
+A macOS CI pass covers startup, module serving, tests and build. macOS Safari/graphics/trackpad behavior has not been manually tested on this Windows development computer. Pointer-lock denial uses the tested drag fallback.
+
 ## Revision 0.1.1 — scale, mouse input and poop
 
 Final verification: 37 automated tests, 20 browser integration checks, and the static distribution smoke test pass. The built game also received a real left click, eight right clicks (eight visible balls), and a camera drag without game errors.
@@ -38,7 +52,7 @@ Inspect title screen, Shidan's nose/paws/ears, open-topped den, the house-tour o
 - Intended light cartoon style uses procedural geometry, not a final rigged character or detailed anime assets.
 - Original short sound effects only; no background music.
 - No enemy, happiness scoring, interaction system, player names, leaderboard, round timer or bedtime behavior in milestone 1.
-- The open front/right and missing roof are deliberate cutaway presentation choices; collision bounds still enclose the play space.
+- Clover House has real walls and open door/window apertures. The missing roof and automatic upper-floor cutaway are presentation choices; physical walls, floors and ceilings remain solid.
 - Shidan can push dynamic poop spheres. Furniture is still static; there is no general-purpose rigid-body furniture simulation.
 - Poop persistence is scoped to the loaded page session, not a saved game across browser reloads.
 - Decorative food and books are not collectible yet; the UI describes this as exploration.

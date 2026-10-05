@@ -8,17 +8,21 @@ The full game is a score chase before the masters go to sleep. Shidan begins in 
 
 ## Milestone 1 scope
 
-Establish the home, Shidan and movement before adding pressure or punishment. There is no timer, enemy, feeding system or final score yet. Decorative food and books communicate future interaction locations. The three exploration tasks teach den escape, stairs and safe carpet.
+Establish the home, Shidan and movement before adding pressure or punishment. There is no timer, enemy, feeding system or final score yet. Decorative food and books communicate future interaction locations. Three initial prompts introduce escape, stairs and the balcony; seven optional discoveries encourage furniture climbing and route exploration without a timer.
 
-### House layout
+### House layout — Clover House (0.2.0)
 
-- Footprint: approximately 24 × 21 m, Y-up and metre-based coordinates. The entire environment is 1.5× the original authored layout after the user's scale feedback; Shidan remains unchanged.
-- Ground floor: wood throughout except the den bedding; living room in front, kitchen and dining underneath the rear upper floor.
-- Den: center (-6.75, 0, 4.65), 2.25 m radius, 1.65 m white fence. No daytime lid. A folded cotton cover is nearby as a future bedtime cue.
-- Stairs: right-hand side, approximately 3.45 m wide, from z=7.05 to z=-4.05, reaching y=5.1. Individually modeled steps use a continuous collision ramp for smooth movement.
-- Upstairs: carpeted bedroom, study and reading nook, open balcony, connected landing. The double-height front room keeps the space readable and offers later stealth sightlines.
-- Open front/right cutaway and no roof make the house tour legible. Invisible outer bounds prevent falling out of the house. Interior furniture remains solid.
-- Tabletop and leg colliders permit under-table routes. Couch, bed, cabinets, plants and railings provide future visual cover. Noise/visibility occlusion is not implemented yet.
+The compact prototype has been replaced with a full connected level, authored directly in metres. See [LEVEL.md](LEVEL.md) for routes and future chase constraints.
+
+- House: 48 × 40 m downstairs; the 48 × 22 m rear upper floor is at y=4.2. The double-height front rooms provide a clear view of the main stairs.
+- Den: centre (-16, 0, 12), radius 4 m, white fence 1.1 m high. The greater floor area leaves room to run and charge; the fence remains jumpable.
+- Ground rooms: lounge, entrance, kitchen/dining, cross-hall, library, garden room, and craft/laundry room. Multiple doorways and jump windows connect these spaces.
+- Upper rooms: bedroom, reading room, studio, and gallery; a 44 × 5 m balcony overlooks the backyard.
+- Two broad flights connect ground/upper floor: indoor hall stairs and outdoor garden stairs. Going upstairs opens a loop back through the yard.
+- Backyard: 52 × 18 m, with grass grip, stepping stones, raised beds, picnic furniture, tree cover, and a two-ended hedge hideaway. Narrow side paths lead around the house to the front porch.
+- Furniture uses deliberately staged rises under 0.42 m. Solid mesh dimensions are also collision dimensions, including cushions, blankets and the quilt.
+- Eight open windows have 0.42 m sills; doors are generally 3–3.5 m wide. Two low passages run behind the library shelves and studio linen cupboards. Openings are modeled as actual gaps in walls.
+- An automatic upper-floor cutaway reveals the floor Shidan is exploring. V opens the house tour with floor selection and a garden angle. M opens the paused floor plan. These change visibility only; physical floors and ceilings stay solid.
 
 ### Shidan’s model
 
@@ -28,7 +32,7 @@ This is a stylized first-pass model, not a final skinned character mesh. Ear tip
 
 ### Movement
 
-WASD moves relative to the independently orbiting camera. Shift raises target speed; acceleration and stopping depend on the surface. Pressing Space starts a crouch, releasing it jumps. A very short press produces a hop; holding for roughly 0.65 seconds reaches full charge. A charged jump on bedding/carpet clears the fence. On wood/stairs the same input produces only a small hop.
+WASD moves relative to the independently orbiting camera. Shift raises target speed; acceleration and stopping depend on the surface. Pressing Space starts a crouch, releasing it jumps. A very short press produces a hop; holding for roughly 0.65 seconds reaches full charge. A charged jump on bedding/carpet/grass clears the fence. On wood/stairs the same input produces only a small hop.
 
 Current tuning, intended for playtesting:
 
@@ -38,12 +42,13 @@ Current tuning, intended for playtesting:
 | Carpet | 2.35 | 4.8 | 18 | Yes |
 | Wood | 2.1 | 4.5 | 3.2 | No |
 | Stairs | 2.2 | 3.5 | 13 | No |
+| Grass | 2.35 | 4.8 | 16 | Yes |
 
-Gravity is 16 m/s², normal jump impulse 4.2 m/s, fully charged impulse 8.25 m/s. Charged jumps recover forward momentum after brushing the fence, making escape work both from the center and beside the taller fence. These exaggerated arcade values prioritize reliable den escape. No stamina limitation in milestone 1. A small step allowance makes the stair-to-landing transition reliable. Simulation substeps prevent tunnelling at low frame rates.
+Gravity is 16 m/s², normal jump impulse 4.2 m/s, fully charged impulse 8.25 m/s. Charged jumps recover forward momentum after brushing the fence, making escape work both from the center and beside the fence. These exaggerated arcade values prioritize reliable den escape. Small hops recover forward movement after brushing a ledge during takeoff, so the rabbit can clear a 0.42 m sill even from a stop. Their jump height remains unchanged; ground wood acceleration and sliding are preserved. No stamina limitation in milestone 1. A small step allowance makes the stair-to-landing transition reliable. Simulation substeps prevent tunnelling at low frame rates.
 
 ### Poop balls (milestone 1 revision)
 
-Right-click the game to drop one 0.065 m radius brown ball behind Shidan. There is no cooldown or timed disappearance. Balls collide with the room, furniture, ceilings, den fence, stairs, other balls and Shidan's heavier capsule; Shidan can push them. They remain through pause, return-home and title navigation. The current page session holds 10,000 balls, replacing only the oldest when a new ball would exceed the cap. Reloading starts a new session; disk persistence is not part of this prototype.
+Right-click the game, or press P on a trackpad, to drop one 0.065 m radius brown ball behind Shidan. There is no cooldown or timed disappearance. Balls collide with the room, furniture, ceilings, den fence, stairs, other balls and Shidan's heavier capsule; Shidan can push them. They remain through pause, return-home and title navigation. The current page session holds 10,000 balls, replacing only the oldest when a new ball would exceed the cap. Reloading starts a new session; disk persistence is not part of this prototype.
 
 The balls use a fixed-capacity instance pool, spatial collision grids, and sleeping bodies that wake on contact. Sleeping preserves collision and rendering. They are rendered in one instanced draw instead of creating 10,000 independent meshes. The sphere solver is intentionally separate from the rabbit's kinematic controller.
 
@@ -62,7 +67,7 @@ Bedtime ends the round, places the cotton cover over the den and records the fin
 - Three.js 0.180.0, pinned locally: instant browser play, low setup overhead, no proprietary editor or asset pipeline.
 - Plain ES modules and Node built-ins: no package-install step or runtime CDN dependence.
 - Custom kinematic rabbit controller plus a sphere-only dynamic solver for poop balls. General-purpose dynamic furniture remains a later engine decision.
-- Static mesh batching groups house geometry by material, reducing draw calls. Rabbit parts stay separate for animation.
+- Static mesh batching groups geometry by material separately for ground, upper and outdoor layers, reducing draw calls while preserving floor cutaways. Rabbit parts stay separate for animation.
 - A local Node server binds only to 127.0.0.1 and serves an explicit allowlist. Personal reference photos never enter the web build.
 - Camera casts against collision boxes to shorten its orbit near furniture and floors. The wire den is excluded from camera collision so the rabbit remains visible from outside the fence.
 - Optional original synthesized effects are muted by default. Background music is deferred until a suitable track is selected.

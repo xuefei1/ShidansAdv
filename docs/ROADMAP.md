@@ -21,6 +21,18 @@ Acceptance: a player can start in the den, long-jump out, explore the ground flo
 - [x] Persistent 10,000-ball pool with oldest-first replacement and no timeout.
 - [x] Regression tests for revised traversal, mouse errors, ball collisions and capacity.
 
+### Milestone 1 level revision (0.2.0)
+
+- [x] Replace the compact floor plan with Clover House: 48 × 40 m, connected rooms, 8 m den, balcony and backyard.
+- [x] Two stairways form an upstairs–garden–ground loop.
+- [x] Open jump windows, two indoor hidden passages and a hedge tunnel.
+- [x] Furniture routes with reachable risers; solid blankets, cushions, mattress and quilt.
+- [x] Floor plan, minimap, automatic cutaways, garden tour and seven discoveries.
+- [x] Actual-controller traversal tests for chase loops, passages, windows and climbing.
+- [x] macOS launcher, Mac guide, trackpad P shortcut and Windows/macOS/Linux CI.
+
+This remains milestone 1: the expanded level is ready for the interaction and AI work to follow. Adult-sized door clearance is checked, but NPC navigation and chase balance still need to be implemented and playtested.
+
 ## Milestone 2 — little joys
 
 - Context-sensitive eating, drinking and chewing prompts.

@@ -6,7 +6,11 @@ permissions:
   contents: read
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -15,3 +19,14 @@ jobs:
       - run: node scripts/check.mjs
       - run: node --test
       - run: node scripts/build.mjs
+      - name: Check macOS launcher syntax
+        if: runner.os != 'Windows'
+        run: bash -n Start-Game.command
+      - name: Start the game through the macOS launcher
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          PORT=4317 ./Start-Game.command --no-open > "$RUNNER_TEMP/shidan-server.log" 2>&1 &
+          GAME_PID=$!
+          trap 'kill "$GAME_PID" 2>/dev/null || true' EXIT
+          node scripts/smoke-server.mjs http://127.0.0.1:4317

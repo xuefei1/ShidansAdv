@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from '../vendor/three.module.js';
 import { createHouse } from '../src/house.js';
 import { World, RabbitController } from '../src/physics.js';
-import { ENVIRONMENT_SCALE as S, DEN, STAIRS } from '../src/layout.js';
+import { DEN, STAIRS } from '../src/layout.js';
 import { PoopPhysics, POOP_RADIUS as R, MAX_POOP_BALLS } from '../src/poop-physics.js';
 const { world } = createHouse(new THREE.Scene());
 function run(physics, seconds, rabbit) { for (let i = 0; i < seconds * 60; i++) physics.update(1 / 60, rabbit); }
@@ -28,11 +28,11 @@ test('dropping beside the fence does not create a ball through the fence', () =>
   run(physics, 2); assert.ok(Math.hypot(ball.x - DEN.x, ball.z - DEN.z) < DEN.radius - R);
 });
 test('balls land on the upper floor, not the ground below', () => {
-  const physics = new PoopPhysics(world), ball = physics.spawn({ x: 1.3 * S, y: STAIRS.height + 1, z: -2.4 * S });
+  const physics = new PoopPhysics(world), ball = physics.spawn({ x: 1.3, y: STAIRS.height + 1, z: -2.4 });
   run(physics, 4); assert.ok(Math.abs(ball.y - STAIRS.height - R) < .001);
 });
 test('balls below the upper floor stay on the ground floor', () => {
-  const physics = new PoopPhysics(world), ball = physics.spawn({ x: .4 * S, y: 1, z: -2 * S });
+  const physics = new PoopPhysics(world), ball = physics.spawn({ x: .4, y: 1, z: -2 });
   run(physics, 4); assert.ok(Math.abs(ball.y - R) < .001);
 });
 test('furniture and ceilings block balls', () => {
@@ -61,7 +61,7 @@ test('coincident balls separate without NaN positions', () => {
   run(physics, 2); assert.ok(Number.isFinite(distance(a, b))); assert.ok(distance(a, b) >= R * 1.95);
 });
 test('stairs support balls and let them roll downward', () => {
-  const physics = new PoopPhysics(world), x = (STAIRS.minX + STAIRS.maxX) / 2, z = 1;
+  const physics = new PoopPhysics(world), x = (STAIRS.minX + STAIRS.maxX) / 2, z = (STAIRS.startZ + STAIRS.endZ) / 2;
   const ball = physics.spawn({ x, y: world.rampHeight(x, z) + R + .1, z });
   run(physics, 1); assert.ok(ball.z > z + .1); assert.ok(ball.y >= world.rampHeight(ball.x, ball.z));
 });

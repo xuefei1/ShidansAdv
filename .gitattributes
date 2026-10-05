@@ -8,5 +8,6 @@
 *.svg text eol=lf
 *.yml text eol=lf
 *.cmd text eol=crlf
+*.command text eol=lf
 # Preserve upstream vendor formatting, including its existing mixed indentation.
 vendor/*.js -whitespace
