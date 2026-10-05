@@ -12,6 +12,8 @@ Verified on 2026-10-04 with Node.js 24.19.0 and the Codex in-app browser at 1280
 - The 10,000-ball benchmark retained every ball with finite positions/velocities after three simulated seconds. On this Windows machine the final-second physics median was **9.63 ms**, p95 **12.62 ms**, with 560 active bodies. Rendering is excluded; this is not a cross-device frame-rate guarantee.
 - JavaScript parsing and local server asset/private-file smoke checks pass. The Unix launcher passes Bash syntax validation. GitHub Actions verifies Node tests and the static build on Windows/macOS/Linux, plus actual launcher/server startup on macOS/Linux.
 
+The [Windows, macOS, and Linux jobs passed](https://github.com/xuefei1/ShidansAdv/actions/runs/37258968085) for the level release. The macOS runner successfully started the game through the executable `.command` launcher and served the required assets.
+
 Browser review covers the den proportions, title, floor plan, cutaways, both floors and rear garden view. Floor plank overlaps and pen-mat z-fighting were corrected during visual review. The game has no runtime network asset dependencies.
 
 A macOS CI pass covers startup, module serving, tests and build. macOS Safari/graphics/trackpad behavior has not been manually tested on this Windows development computer. Pointer-lock denial uses the tested drag fallback.

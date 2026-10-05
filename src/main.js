@@ -162,6 +162,10 @@ function boot() {
   canvas.addEventListener('webglcontextlost', event => { event.preventDefault(); pause(); fatal('The graphics context was lost. Reload to resume exploration.'); });
 
   function updateCamera(dt) {
+    // A close near-plane is useful beside furniture, but wastes depth precision
+    // in the distant tour and makes thin rugs/planks flicker against the floor.
+    const near = overview || mode === 'tour' ? .4 : .06;
+    if (camera.near !== near) { camera.near = near; camera.updateProjectionMatrix(); }
     if (mode === 'title') {
       desiredCamera.set(DEN.x + 5.8 + Math.sin(time * .12) * .15, 3.8, DEN.z + 5.5);
       lookAt.set(DEN.x - 1.5, .65, DEN.z);
