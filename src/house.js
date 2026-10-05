@@ -20,7 +20,7 @@ export function createHouse(scene) {
   };
   // Art-only geometry is limited to floor decals, thin trim, leaves, and details
   // contained by a solid prop. Every walkable furnishing uses solid().
-  const detail = (parent, color, ...dimensions) => { const mesh = cube(parent, color, ...dimensions); mesh.userData.decoration = true; return mesh; };
+  const detail = (parent, color, ...dimensions) => { const mesh = cube(parent, color, ...dimensions); mesh.userData.decoration = true; mesh.castShadow = false; return mesh; };
   detail(ground, 0xf0e5cc, 0, -.27, 0, 48.4, .5, 40.4);
   const planks = [0xd6b386, 0xe2bf92, 0xdec097, 0xdaba91, 0xe4c69e];
   for (let row = 0; row < 50; row++) for (let col = 0; col < 9; col++) {
@@ -87,8 +87,8 @@ export function createHouse(scene) {
   }
 
   // A much wider pen, while the fence stays a rabbit-jumpable 1.1m high.
-  cylinder(ground, 0xdcd5ad, DEN.x, .004, DEN.z, DEN.radius + .1, .006, DEN.radius + .1, 96);
-  cylinder(ground, 0xece4bf, DEN.x, .008, DEN.z, DEN.radius - .08, .002, DEN.radius - .08, 96);
+  cylinder(ground, 0xdcd5ad, DEN.x, .004, DEN.z, DEN.radius + .1, .006, DEN.radius + .1, 96).castShadow = false;
+  cylinder(ground, 0xece4bf, DEN.x, .008, DEN.z, DEN.radius - .08, .002, DEN.radius - .08, 96).castShadow = false;
   for (let ring = 0; ring <= 7; ring++) {
     const mesh = new THREE.Mesh(new THREE.TorusGeometry(DEN.radius, .016, 5, 128), new THREE.MeshStandardMaterial({ color: 0xfffaed }));
     mesh.rotation.x = Math.PI / 2; mesh.position.set(DEN.x, .035 + ring * (DEN.fenceHeight - .045) / 7); ground.add(mesh);
@@ -119,10 +119,11 @@ export function batchStaticGeometry(group) {
     if (!object.isMesh || !object.visible || object.material.transparent) return;
     const geometry = object.geometry.index ? object.geometry.toNonIndexed() : object.geometry.clone();
     geometry.applyMatrix4(worldToLocal.clone().multiply(object.matrixWorld));
-    if (!batches.has(object.material)) batches.set(object.material, []);
-    batches.get(object.material).push(geometry); sources.push(object);
+    const key = `${object.material.uuid}:${object.castShadow}`;
+    if (!batches.has(key)) batches.set(key, { material: object.material, castShadow: object.castShadow, geometries: [] });
+    batches.get(key).geometries.push(geometry); sources.push(object);
   });
-  for (const [material, geometries] of batches) {
+  for (const { material, castShadow, geometries } of batches.values()) {
     const merged = new THREE.BufferGeometry();
     for (const attribute of ['position', 'normal', 'uv']) {
       const arrays = geometries.map(g => g.getAttribute(attribute));
@@ -132,7 +133,7 @@ export function batchStaticGeometry(group) {
       merged.setAttribute(attribute, new THREE.BufferAttribute(data, arrays[0].itemSize));
     }
     merged.computeBoundingSphere();
-    const mesh = new THREE.Mesh(merged, material); mesh.castShadow = true; mesh.receiveShadow = true; mesh.name = 'Batched level'; group.add(mesh);
+    const mesh = new THREE.Mesh(merged, material); mesh.castShadow = castShadow; mesh.receiveShadow = true; mesh.name = 'Batched level'; group.add(mesh);
     for (const geometry of geometries) geometry.dispose();
   }
   sources.forEach(source => source.removeFromParent());

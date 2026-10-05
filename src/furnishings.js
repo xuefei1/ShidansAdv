@@ -63,8 +63,8 @@ export function furnishHouse({ ground: g, upper: u, outside: o, solid: s, detail
     }
   };
   const paw = (p, x, y, z, angle = 0) => {
-    const print = ellipsoid(p, 0xb89970, x, y + .014, z, .09, .003, .12); print.rotation.y = angle;
-    for (const dx of [-.07, 0, .07]) ellipsoid(p, 0xb89970, x + dx, y + .014, z - .15, .028, .003, .035);
+    const print = ellipsoid(p, 0xb89970, x, y + .014, z, .09, .003, .12); print.rotation.y = angle; print.castShadow = false;
+    for (const dx of [-.07, 0, .07]) ellipsoid(p, 0xb89970, x + dx, y + .014, z - .15, .028, .003, .035).castShadow = false;
   };
 
   // Den: clear central runway and props near the perimeter, leaving room to charge.
@@ -212,7 +212,7 @@ export function furnishHouse({ ground: g, upper: u, outside: o, solid: s, detail
   d(o, 0xb7cc98, 0, -.06, -29, 52, .12, 18);
   for (let i = 0; i < 32; i++) {
     const x = -24 + (i * 13.37 % 48), z = -21 - (i * 7.71 % 15);
-    ellipsoid(o, i % 2 ? 0xc8d8a8 : 0xc0d19e, x, .005, z, 1.3 + i % 3, .008, .65 + i % 2);
+    ellipsoid(o, i % 2 ? 0xc8d8a8 : 0xc0d19e, x, .015, z, 1.3 + i % 3, .008, .65 + i % 2).castShadow = false;
   }
   for (let i = 0; i < 9; i++) {
     const z = -21.5 - i * 1.5, x = Math.sin(i * .52) * 1.2;
