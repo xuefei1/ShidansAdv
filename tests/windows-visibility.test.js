@@ -40,7 +40,7 @@ test('closed windows batch into two cheap draws and the ceiling costs 12 triangl
   layers.forEach(batchStaticGeometry);
   const glass = []; group.traverse(m => { if (m.name === 'Batched window glass') glass.push(m); });
   assert.equal(glass.length, 2);
-  assert.equal(glass.reduce((n, m) => n + m.geometry.attributes.position.count / 3, 0), 32 * 12);
+  assert.equal(glass.reduce((n, m) => n + m.geometry.index.count / 3, 0), 32 * 12);
   assert.equal(ceiling.children.length, 1); assert.equal(ceiling.children[0].geometry.index.count / 3, 12);
   upper.visible = false;
   assert.equal(ceiling.visible, true); assert.equal(ceiling.parent, group);

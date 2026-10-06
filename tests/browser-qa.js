@@ -9,12 +9,20 @@ const check = (label, passed, detail = '') => {
   if (!passed) throw new Error(label);
 };
 const disableRunners = disabled => ['run', 'route', 'stairs'].forEach(id => { document.getElementById(id).disabled = disabled; });
+async function waitForScene(canvas) {
+  const deadline = performance.now() + 15000;
+  while (canvas.dataset.ready !== 'true') {
+    if (performance.now() > deadline || !canvas.ownerDocument.getElementById('fatal').hidden) throw new Error('The game did not finish preparing its graphics.');
+    await wait(50);
+  }
+}
 document.getElementById('run').addEventListener('click', async () => {
   results.replaceChildren(); disableRunners(true);
   const w = frame.contentWindow, d = frame.contentDocument, canvas = d.getElementById('game');
   const key = (type, code) => canvas.dispatchEvent(new w.KeyboardEvent(type, { code, key: code === 'Space' ? ' ' : code.replace('Key', '').toLowerCase(), bubbles: true }));
   const pos = () => canvas.dataset.position.split(',').map(Number);
   try {
+    await waitForScene(canvas);
     check('WebGL scene initialized', canvas.dataset.ready === 'true');
     d.getElementById('play').click(); await wait(150);
     if (!d.getElementById('pause').hidden) d.getElementById('resume').click();
@@ -118,6 +126,7 @@ async function walkRoute(stairOnly = false) {
     keys([]); check(`Walk to (${x}, ${z})`, false, pos().join(', '));
   }
   try {
+    await waitForScene(canvas);
     canvas.requestPointerLock = () => Promise.reject(new w.DOMException('Use QA drag fallback', 'NotAllowedError'));
     d.getElementById('play').click(); await wait(200); if (!d.getElementById('pause').hidden) d.getElementById('resume').click();
     const yaw = Number(canvas.dataset.camera.split(',')[0]);

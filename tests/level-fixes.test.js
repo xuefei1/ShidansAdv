@@ -50,7 +50,7 @@ test('batching preserves the full level bounds and shadow participation', () => 
   }
 });
 
-test('Shift reaches full speed within a second, at least three times walking speed', () => {
+test('Shift reaches full speed within a second, at least two and a half times walking speed', () => {
   for (const [name, surface] of Object.entries(SURFACES)) {
     const empty = new World(); empty.ramps = []; empty.addBox(0, -.1, 0, 40, .2, 38, name);
     // A tiny positive top chooses the fixture surface instead of the default ground.
@@ -60,7 +60,7 @@ test('Shift reaches full speed within a second, at least three times walking spe
     assert.ok(Math.abs(sprint.vx - surface.run) < .001);
     const startWalk = walk.x, startSprint = sprint.x;
     advance(walk, .5, { x: 1 }); advance(sprint, .5, { x: 1, run: true });
-    assert.ok(sprint.x - startSprint > (walk.x - startWalk) * 3, name);
+    assert.ok(sprint.x - startSprint > (walk.x - startWalk) * 2.5, name);
   }
 });
 

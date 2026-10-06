@@ -1,4 +1,5 @@
 import * as THREE from '../vendor/three.module.js';
+import { batchStaticGeometry } from './render-batching.js';
 
 export const palette = {
   ink: 0x292c3a, furLight: 0x363949, white: 0xfff8e8, pink: 0xa97886,
@@ -73,6 +74,8 @@ export function createRabbit() {
   ellipsoid(body, palette.ink, 0, .37, -.535, .12, .13, .125);
   const shadow = new THREE.Mesh(new THREE.CircleGeometry(.36, 32), new THREE.MeshBasicMaterial({ color: 0x443c35, transparent: true, opacity: .16, depthWrite: false }));
   shadow.rotation.x = -Math.PI / 2; shadow.position.y = .012; root.add(shadow);
+  // Each animated joint stays independent; rigid details share one draw.
+  for (const joint of [body, head, ...eyes, ...ears, ...paws]) batchStaticGeometry(joint, { recursive: false, cellSize: Infinity });
   return {
     root,
     animate(time, speed = 0, grounded = true, charge = 0, floorY = 0) {

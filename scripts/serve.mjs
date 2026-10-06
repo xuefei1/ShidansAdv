@@ -8,7 +8,7 @@ const root = resolve(fileURLToPath(new URL('..', import.meta.url)), process.argv
 const port = Number(process.env.PORT || 4173);
 const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png' };
 // An explicit allowlist keeps personal photos, Git metadata and docs off the server.
-const allowed = p => p === '/index.html' || p === '/style.css' || p === '/favicon.svg' || p === '/tests/browser.html' || p === '/tests/browser-qa.js' || p.startsWith('/src/') || p.startsWith('/vendor/');
+const allowed = p => p === '/index.html' || p === '/style.css' || p === '/favicon.svg' || p === '/tests/browser.html' || p === '/tests/browser-qa.js' || p === '/tests/performance.html' || p === '/tests/performance.js' || p.startsWith('/src/') || p.startsWith('/vendor/');
 const server = createServer(async (req, res) => {
   try {
     if (!['GET', 'HEAD'].includes(req.method)) { res.writeHead(405); res.end(); return; }

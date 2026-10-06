@@ -23,7 +23,7 @@ Open **http://localhost:4173** if the browser does not open automatically. No pa
 | WASD / arrow keys | Camera-relative movement |
 | Mouse | Independently orbit the camera; click to capture it |
 | Drag the scene | Camera fallback when pointer lock is unavailable |
-| Left Shift | Sprint about 3–4× walking speed; wood has a short acceleration ramp |
+| Left Shift | Sprint about 2.5–3× walking speed; wood has a short acceleration ramp |
 | Tap Space | Small hop, triggered on release |
 | Hold Space, then release | Charged long jump on bedding, carpet, grass, and balcony; hold a movement key to travel |
 | Scroll wheel | Camera distance |
@@ -70,6 +70,8 @@ node scripts/serve.mjs --dist
 `npm run dev`, `npm test`, `npm run check`, and `npm run build` are aliases if npm is installed. The plain Node commands also work with the bundled runtime available on this computer.
 
 For input integration checks, run the development server, open **http://localhost:4173/tests/browser.html**, and click **Run input and menu checks**. Keep that tab foreground while the checks run. The runner exercises actual input, mouse error recovery, poop, fast tap buffering, charged escape, pause/resume, maps, cutaways and title navigation. The separate **Walk the balcony–garden loop** button walks the real game through the entrance, both floors, balcony, garden stairs and back inside. Keep this tab active until it finishes. **Check stair visibility** walks to the middle of the indoor stairs, verifies the ceiling and upstairs reveal, and checks that sunlight shadows remain cached.
+
+For rendering measurements, open **http://localhost:4173/tests/performance.html**, select a view size, and run the six-second camera orbit. Keep the test tab active. It reports frame intervals, CPU work, asynchronous GPU time where supported, and drawing submissions. `node scripts/benchmark-render.mjs` measures visible geometry across six locations; it is not an FPS test.
 
 The build writes `dist/`, which can be served by any static HTTP host. It has no runtime CDN calls, analytics or backend. Double-clicking `index.html` directly is unsupported because browser ES modules require an HTTP origin.
 

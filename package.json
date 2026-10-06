@@ -1,6 +1,6 @@
 {
   "name": "shidans-adventure",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "type": "module",
   "description": "A cozy 3D rabbit adventure — milestone 1 exploration prototype",

@@ -8,7 +8,7 @@ for (let i = 0; i < 60; i++) {
   await setTimeout(100);
 }
 assert.ok(ready, 'The launcher started the local HTTP server');
-for (const path of ['/', '/src/main.js', '/src/layout.js', '/src/furnishings.js', '/src/level-map.js', '/vendor/three.module.js', '/style.css']) {
+for (const path of ['/', '/src/main.js', '/src/layout.js', '/src/furnishings.js', '/src/level-map.js', '/src/render-batching.js', '/src/render-quality.js', '/src/render-profile.js', '/vendor/three.module.js', '/style.css']) {
   const response = await fetch(base + path);
   assert.equal(response.status, 200, path); assert.ok((await response.text()).length > 50, path);
 }

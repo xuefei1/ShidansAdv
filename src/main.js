@@ -8,11 +8,16 @@ import { drawLevelMap } from './level-map.js';
 import { bindMouseControls } from './mouse.js';
 import { createPoopBalls } from './poop.js';
 import { upperRoomsVisible } from './visibility.js';
+import { createRenderProfile } from './render-profile.js';
+import { renderPixelRatio } from './render-quality.js';
 
 const elements = new Map();
 const $ = id => { if (!elements.has(id)) elements.set(id, document.getElementById(id)); return elements.get(id); };
 const canvas = $('game');
-function fatal(message) { $('fatal-text').textContent = message; $('fatal').hidden = false; }
+function setText(id, value) { const element = $(id); if (element.textContent !== value) element.textContent = value; }
+function setData(name, value) { if (canvas.dataset[name] !== value) canvas.dataset[name] = value; }
+function setHidden(id, value) { const element = $(id); if (element.hidden !== value) element.hidden = value; }
+function fatal(message) { setText('fatal-text', message); $('fatal').hidden = false; }
 window.addEventListener('error', event => {
   // Host/browser extensions can also emit errors in this window. Only errors
   // originating in our game modules should replace the game with a fatal dialog.
@@ -20,12 +25,15 @@ window.addEventListener('error', event => {
   if (source.startsWith(new URL('./src/', location.href).href) || source.startsWith(new URL('./vendor/', location.href).href)) fatal(`The game could not continue: ${event.message}`);
 });
 
-try { boot(); } catch (error) { console.error(error); fatal(error.message); }
+boot().catch(error => { console.error(error); fatal(error.message); });
 
-function boot() {
+async function boot() {
+  $('play').disabled = $('tour').disabled = true;
+  $('load-status').hidden = false;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.65));
+  renderer.setPixelRatio(renderPixelRatio(innerWidth, innerHeight, devicePixelRatio));
   renderer.setSize(innerWidth, innerHeight);
+  const renderProfile = createRenderProfile(renderer, canvas);
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -55,16 +63,17 @@ function boot() {
   let yaw = -.45, pitch = .43, distance = 5.2, time = 0, previousTime = performance.now();
   let toastUntil = 0, lastStep = 0, mapTick = 0, hudTick = 0;
   let escaped = false, upstairs = false, cameraInitialized = false, jumpSeen = false, queuedHop = false;
+  let renderDirty = true, wasFrozen = false;
   const target = new THREE.Vector3(), desiredCamera = new THREE.Vector3(), lookAt = new THREE.Vector3();
   const cameraRay = new THREE.Ray(), collisionPoint = new THREE.Vector3();
   const collisionBoxes = new Map(world.solids.map(b => [b, new THREE.Box3(new THREE.Vector3(b.minX - .12, b.minY - .12, b.minZ - .12), new THREE.Vector3(b.maxX + .12, b.maxY + .12, b.maxZ + .12))]));
 
-  function toast(text, seconds = 4) { $('toast').textContent = text; $('toast').hidden = false; toastUntil = time + seconds; }
+  function toast(text, seconds = 4) { setText('toast', text); $('toast').hidden = false; toastUntil = time + seconds; }
   const mouse = bindMouseControls({
     canvas, document, window, canControl: () => mode === 'play' && !overview && !mapOpen,
     onLook: (dx, dy) => { yaw -= dx * .003; pitch = clamp(pitch + dy * .0027, .06, 1.15); },
-    onPoop: () => { poop.drop(controller); $('poop-count').textContent = poop.physics.count.toLocaleString(); },
-    onLockDenied: () => { $('camera-hint').hidden = false; $('camera-hint').textContent = 'Drag to look · right-click to poop · scroll to zoom'; },
+    onPoop: () => { poop.drop(controller); setText('poop-count', poop.physics.count.toLocaleString()); },
+    onLockDenied: () => { $('camera-hint').hidden = false; setText('camera-hint', 'Drag to look · right-click to poop · scroll to zoom'); },
     onLockChange: (locked, lostLock) => { $('camera-hint').hidden = locked; if (lostLock && mode === 'play' && !overview && !mapOpen) pause(); },
   });
   function clearInput() { keys.clear(); mouse.clear(); queuedHop = false; jumpSeen = false; controller.releaseInput(); }
@@ -99,8 +108,8 @@ function boot() {
   $('play').addEventListener('click', () => {
     escaped = upstairs = false; discovered.clear();
     ['step-den', 'step-upstairs', 'step-window'].forEach(id => $(id).classList.remove('done'));
-    $('quest-title').textContent = 'The world beyond the fence';
-    $('quest-text').textContent = 'Hold Space to charge, then release while moving to leap out of your den.';
+    setText('quest-title', 'The world beyond the fence');
+    setText('quest-text', 'Hold Space to charge, then release while moving to leap out of your den.');
     reset(); showGame(); lock(); toast('Hello, little explorer. Charge a jump to clear the fence.', 6);
   });
   $('tour').addEventListener('click', () => {
@@ -128,7 +137,7 @@ function boot() {
   }
   function renderAtlas() {
     drawLevelMap($('atlas-canvas').getContext('2d'), 680, 740, controller, surveyFloor, discovered, true);
-    $('atlas-floor-name').textContent = surveyFloor ? 'Upstairs & balcony' : 'Ground floor & garden';
+    setText('atlas-floor-name', surveyFloor ? 'Upstairs & balcony' : 'Ground floor & garden');
     $('discovery-list').replaceChildren(...LANDMARKS.map((l, i) => {
       const li = document.createElement('li'); li.className = discovered.has(l.id) ? 'found' : '';
       li.textContent = `${discovered.has(l.id) ? '✓' : i + 1} ${l.name}`; li.title = l.hint; return li;
@@ -137,9 +146,9 @@ function boot() {
   }
   $('map-button').addEventListener('click', toggleMap); $('close-atlas').addEventListener('click', toggleMap);
   document.querySelectorAll('[data-floor]').forEach(button => button.addEventListener('click', () => { surveyFloor = Number(button.dataset.floor); renderAtlas(); }));
-  $('garden-view').addEventListener('click', () => { gardenView = !gardenView; $('garden-view').textContent = gardenView ? 'Front view' : 'Garden view'; });
+  $('garden-view').addEventListener('click', () => { gardenView = !gardenView; setText('garden-view', gardenView ? 'Front view' : 'Garden view'); });
   $('sound').addEventListener('click', () => {
-    const enabled = sound.toggle(); $('sound').textContent = enabled ? 'Sound on' : 'Sound off';
+    const enabled = sound.toggle(); setText('sound', enabled ? 'Sound on' : 'Sound off');
     $('sound').setAttribute('aria-label', enabled ? 'Disable sound' : 'Enable sound');
   });
   addEventListener('keydown', event => {
@@ -154,7 +163,7 @@ function boot() {
     if (event.repeat) return;
     if (event.code === 'Space') jumpSeen = false;
     if (event.code === 'KeyR') reset();
-    if (event.code === 'KeyP' && !overview && !mapOpen) { poop.drop(controller); $('poop-count').textContent = poop.physics.count.toLocaleString(); }
+    if (event.code === 'KeyP' && !overview && !mapOpen) { poop.drop(controller); setText('poop-count', poop.physics.count.toLocaleString()); }
     if (event.code === 'KeyC') { yaw = controller.facing + Math.PI; pitch = .43; }
   });
   addEventListener('keyup', event => {
@@ -164,7 +173,11 @@ function boot() {
   addEventListener('blur', () => { clearInput(); if (mode === 'play') pause(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden) { clearInput(); pause(); } });
   canvas.addEventListener('wheel', event => { event.preventDefault(); distance = clamp(distance + event.deltaY * .004, 1.5, 9); }, { passive: false });
-  addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+  addEventListener('resize', () => {
+    camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+    renderer.setPixelRatio(renderPixelRatio(innerWidth, innerHeight, devicePixelRatio));
+    renderer.setSize(innerWidth, innerHeight); renderDirty = true;
+  });
   canvas.addEventListener('webglcontextlost', event => { event.preventDefault(); pause(); fatal('The graphics context was lost. Reload to resume exploration.'); });
 
   function updateCamera(dt) {
@@ -206,17 +219,17 @@ function boot() {
     const high = controller.y > FLOOR_HEIGHT - .3;
     const onStairs = controller.surface === 'stairs';
     const room = roomAt(controller.x, controller.y, controller.z);
-    $('floor-label').textContent = onStairs ? 'ON THE STAIRS' : ['yard', 'front-yard', 'balcony'].includes(room?.id) ? 'OUTSIDE' : high ? 'UPSTAIRS' : 'GROUND FLOOR';
-    $('map-floor').textContent = high ? '2F' : '1F';
-    $('location').textContent = onStairs ? 'A little climb' : distFromDen < DEN.radius && !high ? 'Shidan’s den' : room?.name || 'The garden path';
+    setText('floor-label', onStairs ? 'ON THE STAIRS' : ['yard', 'front-yard', 'balcony'].includes(room?.id) ? 'OUTSIDE' : high ? 'UPSTAIRS' : 'GROUND FLOOR');
+    setText('map-floor', high ? '2F' : '1F');
+    setText('location', onStairs ? 'A little climb' : distFromDen < DEN.radius && !high ? 'Shidan’s den' : room?.name || 'The garden path');
     const surfaces = { bedding: 'Soft bedding · good grip', carpet: 'Cozy carpet · good grip', wood: 'Wooden floor · a little slide', stairs: 'Stair runner · steady paws', grass: 'Soft grass · sure-footed paws', deck: 'Outdoor deck · sure-footed paws' };
-    $('surface').textContent = surfaces[controller.surface];
-    $('surface-dot').style.background = controller.surface === 'wood' ? '#bd995d' : '#91a773';
-    $('charge').hidden = !controller.charging;
+    setText('surface', surfaces[controller.surface]);
+    if (canvas.dataset.surface !== controller.surface) $('surface-dot').style.background = controller.surface === 'wood' ? '#bd995d' : '#91a773';
+    setHidden('charge', !controller.charging);
     if (controller.charging) {
       const power = Math.round(Math.min(1, controller.charge / .65) * 100);
-      $('charge-fill').style.width = `${power}%`; $('charge-percent').textContent = `${power}%`;
-      $('charge-label').textContent = controller.surface === 'wood' || controller.surface === 'stairs' ? 'Too slippery for a long jump' : power >= 100 ? 'Ready! Release Space' : 'Crouch & spring';
+      $('charge-fill').style.width = `${power}%`; setText('charge-percent', `${power}%`);
+      setText('charge-label', controller.surface === 'wood' || controller.surface === 'stairs' ? 'Too slippery for a long jump' : power >= 100 ? 'Ready! Release Space' : 'Crouch & spring');
     }
     if (!escaped && distFromDen > DEN.radius + .36 && controller.grounded) {
       escaped = true; $('step-den').classList.add('done');
@@ -232,21 +245,21 @@ function boot() {
         if (l.id === 'balcony') $('step-window').classList.add('done');
       }
     }
-    $('discoveries').textContent = `${discovered.size} / ${LANDMARKS.length} little discoveries`;
+    setText('discoveries', `${discovered.size} / ${LANDMARKS.length} little discoveries`);
     if (escaped) {
       const next = LANDMARKS.find(l => !discovered.has(l.id));
-      $('quest-title').textContent = next ? 'A house full of possibilities' : 'Every corner, a little adventure';
-      $('quest-text').textContent = next ? next.hint : 'All seven discoveries found! Try another route through the windows, furniture, and hidden passages.';
+      setText('quest-title', next ? 'A house full of possibilities' : 'Every corner, a little adventure');
+      setText('quest-text', next ? next.hint : 'All seven discoveries found! Try another route through the windows, furniture, and hidden passages.');
     }
-    if (time > toastUntil) $('toast').hidden = true;
+    if (time > toastUntil) setHidden('toast', true);
     // Useful DOM-level telemetry for browser QA, without exposing a mutable debug API.
-    canvas.dataset.position = `${controller.x.toFixed(2)},${controller.y.toFixed(2)},${controller.z.toFixed(2)}`;
-    canvas.dataset.surface = controller.surface; canvas.dataset.mode = mode; canvas.dataset.grounded = String(controller.grounded);
-    canvas.dataset.camera = `${yaw.toFixed(2)},${pitch.toFixed(2)}`;
-    canvas.dataset.poopCount = String(poop.physics.count);
-    canvas.dataset.poopActive = String(poop.physics.active.size);
+    setData('position', `${controller.x.toFixed(2)},${controller.y.toFixed(2)},${controller.z.toFixed(2)}`);
+    setData('surface', controller.surface); setData('mode', mode); setData('grounded', String(controller.grounded));
+    setData('camera', `${yaw.toFixed(2)},${pitch.toFixed(2)}`);
+    setData('poopCount', String(poop.physics.count));
+    setData('poopActive', String(poop.physics.active.size));
     const latestPoop = poop.physics.balls[(poop.physics.cursor + poop.physics.capacity - 1) % poop.physics.capacity];
-    if (latestPoop) canvas.dataset.lastPoopPosition = `${latestPoop.x.toFixed(3)},${latestPoop.y.toFixed(3)},${latestPoop.z.toFixed(3)}`;
+    if (latestPoop) setData('lastPoopPosition', `${latestPoop.x.toFixed(3)},${latestPoop.y.toFixed(3)},${latestPoop.z.toFixed(3)}`);
   }
   const map = $('map').getContext('2d');
   function drawMap() { drawLevelMap(map, 170, 192, controller, controller.y >= FLOOR_HEIGHT - .25 ? 1 : 0, discovered); }
@@ -258,10 +271,14 @@ function boot() {
 
   function frame(now) {
     const cpuStart = performance.now();
-    if (!document.hidden) frameTimes.push(now - previousTime);
+    const frameMs = now - previousTime;
     requestAnimationFrame(frame);
     const dt = Math.min((now - previousTime) / 1000, .05); previousTime = now;
-    if (mode !== 'pause') time += dt;
+    const frozen = mode === 'pause' || mapOpen || document.hidden;
+    if (frozen && wasFrozen && !renderDirty) return;
+    wasFrozen = frozen; renderDirty = false;
+    if (!document.hidden) frameTimes.push(frameMs);
+    if (!frozen) time += dt;
     if (mode === 'play' && !overview && !mapOpen) {
       const forward = Number(keys.has('KeyW') || keys.has('ArrowUp')) - Number(keys.has('KeyS') || keys.has('ArrowDown'));
       const right = Number(keys.has('KeyD') || keys.has('ArrowRight')) - Number(keys.has('KeyA') || keys.has('ArrowLeft'));
@@ -290,18 +307,36 @@ function boot() {
     if (upper.visible !== showUpper || ceiling.visible !== showCeiling) {
       upper.visible = showUpper; ceiling.visible = showCeiling; renderer.shadowMap.needsUpdate = true;
     }
-    $('survey').hidden = !surveying || mode === 'pause';
-    canvas.dataset.visibleFloor = upper.visible ? '1' : '0';
-    canvas.dataset.ceilingVisible = String(ceiling.visible);
-    canvas.dataset.discoveries = String(discovered.size);
-    if (renderer.shadowMap.needsUpdate) canvas.dataset.shadowRevision = String(++shadowRevision);
+    setHidden('survey', !surveying || mode === 'pause');
+    setData('mode', mode);
+    setData('visibleFloor', upper.visible ? '1' : '0');
+    setData('ceilingVisible', String(ceiling.visible));
+    setData('discoveries', String(discovered.size));
+    if (renderer.shadowMap.needsUpdate) setData('shadowRevision', String(++shadowRevision));
+    renderProfile.begin();
     renderer.render(scene, camera);
+    renderProfile.end(frameMs, performance.now() - cpuStart);
     if (!document.hidden) cpuTimes.push(performance.now() - cpuStart);
     if (now - profileTime >= 2000 && frameTimes.length) {
       const percentile = (values, p) => values.sort((a, b) => a - b)[Math.floor((values.length - 1) * p)].toFixed(2);
-      canvas.dataset.performance = JSON.stringify({ frameMedian: percentile(frameTimes, .5), frameP95: percentile(frameTimes, .95), cpuMedian: percentile(cpuTimes, .5), cpuP95: percentile(cpuTimes, .95), calls: renderer.info.render.calls, triangles: renderer.info.render.triangles });
+      setData('performance', JSON.stringify({ frameMedian: percentile(frameTimes, .5), frameP95: percentile(frameTimes, .95), cpuMedian: percentile(cpuTimes, .5), cpuP95: percentile(cpuTimes, .95), calls: renderer.info.render.calls, triangles: renderer.info.render.triangles }));
       frameTimes.length = cpuTimes.length = 0; profileTime = now;
     }
   }
-  updateHUD(); drawMap(); requestAnimationFrame(frame); canvas.dataset.ready = 'true';
+  updateHUD(); drawMap(); updateCamera(0);
+  // Compile the upstairs and window variants too, before any camera turn can
+  // reveal them. compileAsync uses parallel shader compilation when available.
+  await renderer.compileAsync(scene, camera);
+  // Upload every chunk now, including off-screen rooms, so the first look in a
+  // new direction does not allocate vertex buffers during play.
+  const culling = [];
+  scene.traverse(object => { if (object.isMesh) { culling.push([object, object.frustumCulled]); object.frustumCulled = false; } });
+  rabbit.root.position.set(controller.x, controller.y, controller.z);
+  renderer.render(scene, camera);
+  for (const [object, enabled] of culling) object.frustumCulled = enabled;
+  upper.visible = false;
+  renderer.shadowMap.needsUpdate = true;
+  previousTime = performance.now();
+  $('load-status').hidden = true; $('play').disabled = $('tour').disabled = false;
+  requestAnimationFrame(frame); setData('ready', 'true');
 }

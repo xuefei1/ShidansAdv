@@ -2,12 +2,12 @@
 import { DEN, RAMPS, BOUNDS, HOUSE, FLOOR_HEIGHT } from './layout.js';
 export { DEN, STAIRS } from './layout.js';
 export const SURFACES = Object.freeze({
-  bedding: { acceleration: 26, drag: 18, walk: 2.1, run: 7.8, longJump: true },
-  carpet: { acceleration: 28, drag: 18, walk: 2.35, run: 8.5, longJump: true },
-  wood: { acceleration: 9, drag: 4.5, walk: 2.3, run: 8.2, longJump: false },
-  stairs: { acceleration: 24, drag: 18, walk: 2.2, run: 7, longJump: false },
-  grass: { acceleration: 40, drag: 30, walk: 2.35, run: 8.8, longJump: true, grip: true },
-  deck: { acceleration: 40, drag: 30, walk: 2.35, run: 8.8, longJump: true, grip: true },
+  bedding: { acceleration: 26, drag: 18, walk: 2.8, run: 7.8, longJump: true },
+  carpet: { acceleration: 28, drag: 18, walk: 3, run: 8.5, longJump: true },
+  wood: { acceleration: 9, drag: 4.5, walk: 3, run: 8.2, longJump: false },
+  stairs: { acceleration: 24, drag: 18, walk: 2.8, run: 7, longJump: false },
+  grass: { acceleration: 40, drag: 30, walk: 3, run: 8.8, longJump: true, grip: true },
+  deck: { acceleration: 40, drag: 30, walk: 3, run: 8.8, longJump: true, grip: true },
 });
 export const clamp = (v, low, high) => Math.max(low, Math.min(high, v));
 export const approach = (value, target, delta) => value + clamp(target - value, -delta, delta);

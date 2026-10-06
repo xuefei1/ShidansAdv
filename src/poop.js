@@ -18,6 +18,9 @@ export function createPoopBalls(scene, world) {
         transform.position.set(ball.x, ball.y, ball.z); transform.scale.setScalar(ball.radius);
         transform.rotation.set(ball.z * 3, ball.id * 2.399, ball.x * 3); transform.updateMatrix();
         mesh.setMatrixAt(slot, transform.matrix);
+        // Three merges adjacent ranges before upload. One moving ball should
+        // not transfer the entire 10,000-slot buffer on every frame.
+        mesh.instanceMatrix.addUpdateRange(slot * 16, 16);
       }
       mesh.count = physics.count; mesh.instanceMatrix.needsUpdate = true; physics.dirty.clear();
     },

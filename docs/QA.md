@@ -2,6 +2,44 @@
 
 Verified on 2026-10-04 with Node.js 24.19.0 and the Codex in-app browser at 1280 × 720.
 
+## Rendering and movement revision 0.2.3
+
+The earlier physics benchmark did not measure rendering. This revision separately measures actual browser GPU work and camera-visible geometry, and leaves the collision layout intact.
+
+- The full 78-test suite covers existing traversal, furniture, windows, slippery wood, outdoor grip and ball collisions, plus transformed vertex/normal/colour preservation, spatial culling, independent animated joints, pixel limits and partial instance-buffer uploads.
+- The 30 browser input/menu checks and nine real stair checks pass. Ordinary walking is now 3 m/s on wood/carpet/outdoors and 2.8 m/s on bedding/stairs (roughly 30% faster). Sprint speeds are unchanged. Wood stops in about 0.65 m from the new walking speed; outdoor surfaces still stop immediately.
+- Geometry is indexed and batched by compatible shading properties and 8 m spatial cells. RGB differences are stored in linear vertex colours. This keeps the original shapes and lets the renderer cull unseen chunks. Shidan's independently animated joints use 11 draws instead of 50.
+- Shaders and room buffers warm up before Play. The 3D drawing buffer is limited to 2.07 million pixels and a maximum 1.5 pixel ratio, while the HTML interface retains native display resolution. Large displays therefore trade some 3D sharpness for lower GPU load. Live HUD blur and repeated unchanged text writes were removed. Pause/map/hidden scenes stop redrawing after their final frame, and only changed ball matrices upload.
+
+Measured on the same Windows/RTX 5070 Laptop GPU, in the Codex browser, at a 1241 × 720 drawing buffer. Each run turns the real camera for six seconds and excludes the first 0.7 seconds. GPU queries are asynchronous; unsupported browsers report no GPU timing. These timings do not include browser compositing.
+
+| Camera-orbit measurement | 0.2.2 | 0.2.3 |
+| --- | ---: | ---: |
+| Sampled frames | 398 | 397 |
+| Median / p95 frame interval | 13.3 / 13.9 ms | 13.3 / 13.6 ms |
+| Median / p95 game CPU | 1.2 / 1.5 ms | 0.8 / 1.1 ms |
+| Median / p95 GPU render | 2.315 / 5.815 ms | 0.679 / 3.502 ms |
+| Median drawing submissions | 132 | 51 |
+| Median submitted triangles | 122,554 | 78,494 |
+| Frames over 25 ms | 0 | 0 |
+
+Both short runs were already refresh-limited near 75 Hz. The result is about 71% less median GPU rendering time and more headroom; it is **not** a 71% FPS increase, nor a claim to have reproduced every reported intermittent drop.
+
+A second pair used a 3840 × 2160 CSS viewport at device pixel ratio 1. The old build rendered 3840 × 2160; the new budget rendered 1920 × 1080. Median draws fell from 127 to 48, GPU median/p95 from 2.797/4.883 ms to 2.405/4.635 ms, and CPU median from 1.1 to 0.8 ms. Both runs sampled 398 frames, with no interval above 25 ms. GPU clock/load variation means timing gains need not track pixel or triangle reductions. The idle checks observed **zero** draws while paused, **one** on paused resize, successful resume, and **zero** with the map open.
+
+`node scripts/benchmark-render.mjs` sweeps 72 directions at each of six positions using Three's actual frustum/bounds tests (without camera-wall shortening). It measures geometry workload, not FPS. Unique position/normal/UV/colour/index buffer storage drops from **15.73 MiB to 8.46 MiB**; this excludes textures, render targets and other GPU memory.
+
+| Location | Average draws before → after | Average triangles before → after |
+| --- | ---: | ---: |
+| Den | 142.9 → 63.4 | 133,051 → 79,050 |
+| Entrance | 139.5 → 64.0 | 125,207 → 73,646 |
+| Stairs | 176.0 → 89.3 | 153,217 → 81,363 |
+| Bedroom | 198.4 → 94.3 | 159,833 → 98,139 |
+| Balcony | 192.4 → 89.8 | 157,939 → 88,586 |
+| Garden | 132.9 → 59.4 | 112,751 → 69,767 |
+
+Repeat the browser comparison with `/tests/performance.html`; it offers preview, 1080p and 4K view sizes and also checks paused rendering, resize repaint, resume and the open map. Keep the test tab active and examine frame counts/long frames before interpreting a run. No runtime profiling queries run without `?profile=1`.
+
 ## Clover House revision 0.2.2
 
 - **72 Node tests pass.** New checks cover all 32 transparent glass panes blocking an airborne rabbit and poop from both sides, preservation of the eight open jump windows, glass batching, the independent ceiling slab, both stair reveals and visibility stability near their boundaries.

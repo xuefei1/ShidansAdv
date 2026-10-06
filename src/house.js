@@ -138,29 +138,4 @@ export function label(parent, text, x, y, z, w, h, background = '#f8efda', foreg
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: texture, roughness: 1 })); mesh.position.set(x, y, z); parent.add(mesh);
 }
 
-export function batchStaticGeometry(group) {
-  group.updateWorldMatrix(true, true);
-  const worldToLocal = group.matrixWorld.clone().invert(), batches = new Map(), sources = [];
-  group.traverse(object => {
-    if (!object.isMesh || !object.visible || (object.material.transparent && !object.userData.batchTransparent)) return;
-    const geometry = object.geometry.index ? object.geometry.toNonIndexed() : object.geometry.clone();
-    geometry.applyMatrix4(worldToLocal.clone().multiply(object.matrixWorld));
-    const key = `${object.material.uuid}:${object.castShadow}`;
-    if (!batches.has(key)) batches.set(key, { material: object.material, castShadow: object.castShadow, geometries: [] });
-    batches.get(key).geometries.push(geometry); sources.push(object);
-  });
-  for (const { material, castShadow, geometries } of batches.values()) {
-    const merged = new THREE.BufferGeometry();
-    for (const attribute of ['position', 'normal', 'uv']) {
-      const arrays = geometries.map(g => g.getAttribute(attribute));
-      if (arrays.some(a => !a)) continue;
-      const data = new Float32Array(arrays.reduce((n, a) => n + a.array.length, 0));
-      let offset = 0; for (const a of arrays) { data.set(a.array, offset); offset += a.array.length; }
-      merged.setAttribute(attribute, new THREE.BufferAttribute(data, arrays[0].itemSize));
-    }
-    merged.computeBoundingSphere();
-    const mesh = new THREE.Mesh(merged, material); mesh.castShadow = castShadow; mesh.receiveShadow = !material.transparent; mesh.name = material.transparent ? 'Batched window glass' : 'Batched level'; group.add(mesh);
-    for (const geometry of geometries) geometry.dispose();
-  }
-  sources.forEach(source => source.removeFromParent());
-}
+export { batchStaticGeometry } from './render-batching.js';

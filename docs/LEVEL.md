@@ -1,6 +1,6 @@
 # Clover House — playable level design
 
-Revision 0.2.2 adds 32 solid glazed exterior windows, restores a moderate wood slide, and preserves the ceiling during play while revealing upstairs before a stair climb. The layout prioritizes escape choices for a future pursuit game: broad circulation loops, corners that break sightlines, short rabbit-only alternatives, and elevated routes. Food, happiness, the mistress and noise/visibility AI are still future work.
+Revision 0.2.3 improves rendering and increases ordinary walking speed while retaining the 0.2.2 layout: 32 solid glazed exterior windows, moderate wood slide, and a ceiling that stays visible while upstairs rooms appear before a stair climb. The layout prioritizes escape choices for a future pursuit game: broad circulation loops, corners that break sightlines, short rabbit-only alternatives, and elevated routes. Food, happiness, the mistress and noise/visibility AI are still future work.
 
 ## Scale and spaces
 
@@ -61,7 +61,7 @@ Climbable routes use books, stools, poufs, trunks, and stacked crates. Each succ
 | Bedroom | pouf 0.30 → trunk 0.61 → mattress 0.88 → quilt 0.96 |
 | Studio desk | books 0.29 → stool 0.65 → trunk 1.06 → desk 1.46 |
 
-Normal hops recover forward motion after an initial contact with a ledge. Indoor wood has moderate slip and still permits only short hops. The garden, front yard, side paths and balcony have firm grip, stop immediately on input release, and support long jumps. Sprint speed is 8.2 m/s on indoor wood and 8.8 m/s outdoors, versus 2.3–2.35 m/s walking; stairs use 7 m/s sprinting.
+Normal hops recover forward motion after an initial contact with a ledge. Indoor wood has moderate slip and still permits only short hops. The garden, front yard, side paths and balcony have firm grip, stop immediately on input release, and support long jumps. Sprint speed is 8.2 m/s on indoor wood and 8.8 m/s outdoors, versus 3 m/s walking; stairs use 7 m/s sprinting.
 
 ## Collision and future AI foundation
 
