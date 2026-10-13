@@ -47,7 +47,8 @@ export function createRabbit() {
   ellipsoid(head, 0x49414b, 0, -.087, .31, .027, .019, .013);
   const eyes = [];
   for (const side of [-1, 1]) {
-    const eye = new THREE.Group(); eye.position.set(side * .208, .035, .174); eye.rotation.y = side * .59; head.add(eye);
+    // Follow the cheek's surface with shallow eyes, keeping the highlights inset.
+    const eye = new THREE.Group(); eye.position.set(side * .213, .035, .178); eye.rotation.y = side * .95; eye.scale.z = .5; head.add(eye);
     ellipsoid(eye, 0x756b5f, 0, 0, 0, .073, .086, .03);
     ellipsoid(eye, 0x171b29, 0, .003, .022, .060, .072, .022);
     ellipsoid(eye, 0xffffff, -.017, .027, .042, .021, .025, .008);
@@ -58,6 +59,8 @@ export function createRabbit() {
   const ears = [];
   for (const side of [-1, 1]) {
     const ear = new THREE.Group(); ear.position.set(side * .115, .17, -.015); ear.rotation.z = side * -.14; ear.rotation.x = -.09; head.add(ear);
+    // Enlarge the whole ear from its root so the inner markings stay aligned.
+    ear.scale.set(1.3, 1.3, 1);
     ellipsoid(ear, palette.ink, 0, .235, 0, .084, .3, .064);
     ellipsoid(ear, 0x6d5262, 0, .25, .052, .046, .22, .014);
     ellipsoid(ear, 0x866373, 0, .25, .062, .02, .17, .008);
