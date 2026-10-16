@@ -1,6 +1,6 @@
 # Shidan’s Adventure
 
-A cozy third-person 3D action adventure starring Shidan, a black rabbit with a white nose patch and white paws. **Milestone 1 is a playable exploration prototype.**
+A cozy third-person 3D action adventure starring Shidan, a black rabbit with a white nose patch and white paws. **Milestone 2 adds energy, snacks, and chewing to the playable house.**
 
 ## Play
 
@@ -23,10 +23,11 @@ Open **http://localhost:4173** if the browser does not open automatically. No pa
 | WASD / arrow keys | Camera-relative movement |
 | Mouse | Independently orbit the camera; click to capture it |
 | Drag the scene | Camera fallback when pointer lock is unavailable |
-| Left Shift | Sprint about 2.5–3× walking speed; wood has a short acceleration ramp |
+| Left Shift | Sprint about 2.5–3× walking speed; uses energy while moving |
 | Tap Space | Small hop, triggered on release |
 | Hold Space, then release | Charged long jump on bedding, carpet, grass, and balcony; hold a movement key to travel |
 | Scroll wheel | Camera distance |
+| Hold left mouse for 1 second near a snack | Eat or chew; releasing early cancels |
 | Right mouse click / P | Drop one poop ball behind Shidan |
 | C | Center camera behind Shidan |
 | V | House tour with floor and garden-view choices |
@@ -34,7 +35,29 @@ Open **http://localhost:4173** if the browser does not open automatically. No pa
 | R | Return to the den |
 | Esc | Pause / resume; releases the mouse |
 
-**First adventure:** charge a jump in the den and release while moving to escape. Explore at your own pace. Press **M** for the floor plan and seven little discoveries: sofa, library passage, upstairs, bed quilt, balcony, backyard, and hedge hideaway. Food, AI pursuit, and happiness scoring remain later milestones.
+**First adventure:** charge a jump in the den and release while moving to escape. Find the hay outside the den and hold left-click nearby to try eating. Press **M** for the floor plan and seven little discoveries: sofa, library passage, upstairs, bed quilt, balcony, backyard, and hedge hideaway. AI pursuit and happiness scoring remain later milestones.
+
+## Energy and consumables (0.3.0)
+
+Energy starts at **100.00%**, displayed to two decimal places. A full bar supports **30 seconds of continuous sprinting**, including passive recovery. Charged jumps cost **5–10 energy**, depending on charge time. Ordinary movement and small hops (including charged inputs on slippery wood) are free. Standing still with Shift is free. Empty energy restores ordinary speed; release Shift before sprinting again. A charged jump without enough energy becomes a free small hop.
+
+Passive recovery is **0.01 energy per second**, applied smoothly. Hold left-click for one uninterrupted second near a snack to consume it. Early release, leaving reach, jumping away, and menus cancel the hold. Walls and floors block eating through them. The item shrinks into golden particles and restores energy over **one second**, capped at 100. One press consumes one item. Eating at full energy still uses the item.
+
+The house starts with **41 consumables** at fixed, reachable feeding places, kitchen tables, furniture, and library/studio corners on both floors:
+
+| Item | Energy | Initial count |
+| --- | ---: | ---: |
+| Book | +2 | 12 |
+| Carrot | +5 | 8 |
+| Hay stack | +10 | 6 |
+| Apple | +15 | 4 |
+| Rabbit food | +20 | 3 |
+| Banana | +20 | 3 |
+| Bread | +25 | 2 |
+| Noodles | +30 | 2 |
+| Cake | +50 | 1 |
+
+The den stays free of consumables, including during restocking. The loose collectible books are separate from solid climbing steps. While fewer than **two** items remain, one appears every **60 seconds of active play**, stopping at two. The choice of kind is weighted by **1 / energy reward**, then placed in a vacant appropriate spot. Pause, map, house tour, title, and background tabs freeze resource timers. Home/title navigation preserves supplies, energy, and pending food recovery; reloading starts a fresh session.
 
 ## Included in milestone 1
 
@@ -54,7 +77,7 @@ Open **http://localhost:4173** if the browser does not open automatically. No pa
 - Up to **10,000 balls** persist for the loaded session, including through pause, return-home and title navigation. There is no timed despawn. Each additional ball replaces only the oldest; reloading the page starts a fresh session.
 - Local source control, automated physics checks, browser integration checks, and a static distribution build.
 
-**Later milestones:** edible/chewable interactions and happiness points; the mistress, her phone/laughter, noise and line-of-sight detection, pursuit and capture; a day/bedtime timer and cotton cover; player names and a persistent leaderboard. These are planned, not implemented in this build. No player name is collected yet.
+**Later milestones:** happiness points and more interaction types; the mistress, her phone/laughter, noise and line-of-sight detection, pursuit and capture; a day/bedtime timer and cotton cover; player names and a persistent leaderboard. These are planned, not implemented in this build. No player name is collected yet.
 
 ## Develop and verify
 
@@ -75,6 +98,8 @@ For rendering measurements, open **http://localhost:4173/tests/performance.html*
 
 The build writes `dist/`, which can be served by any static HTTP host. It has no runtime CDN calls, analytics or backend. Double-clicking `index.html` directly is unsupported because browser ES modules require an HTTP origin.
 
+The browser QA page also has **Run energy and eating checks**. It starts a fresh session, exercises sprint/jump costs, interrupted and completed holds, gradual recovery, and home/title persistence. Unit tests simulate 30-second sprinting and restocking without waiting in real time.
+
 ## Project map
 
 | Path | Purpose |
@@ -87,6 +112,10 @@ The build writes `dist/`, which can be served by any static HTTP host. It has no
 | `src/poop-physics.js` | Sphere collision, sleep/wake, spatial indexing and 10k pool |
 | `src/poop.js` | Instanced poop-ball rendering |
 | `src/model.js` | Procedural rabbit model, animation and geometry helpers |
+| `src/energy.js` | Sprint/jump costs, passive recovery, timed food rewards |
+| `src/consumable-data.js` | Nine item kinds and 41 authored locations |
+| `src/consumable-system.js` | Reach/occlusion, hold interaction, weighted restocking |
+| `src/consumables.js` | Instanced snack models, selection ring, disappearance particles |
 | `src/house.js` | House structure, true openings, den, stairs and static batching |
 | `src/furnishings.js` | Climbing furniture, blankets, garden and cover |
 | `src/audio.js` | Original Web Audio effects |

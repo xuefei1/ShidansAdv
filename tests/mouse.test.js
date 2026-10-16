@@ -4,12 +4,12 @@ import { bindMouseControls } from '../src/mouse.js';
 
 function setup(request) {
   const canvas = new EventTarget(), document = new EventTarget(), window = new EventTarget();
-  const state = { allowed: true, poops: 0, denied: 0, look: [], locks: [] };
+  const state = { allowed: true, poops: 0, denied: 0, look: [], locks: [], primary: [] };
   canvas.focus = () => {}; canvas.requestPointerLock = request;
   canvas.setPointerCapture = () => { throw new Error('Pointer capture must not be called'); };
   document.pointerLockElement = null;
   const controls = bindMouseControls({ canvas, document, window, canControl: () => state.allowed,
-    onPoop: () => state.poops++, onLook: (x, y) => state.look.push([x, y]), onLockDenied: () => state.denied++, onLockChange: (...value) => state.locks.push(value) });
+    onPoop: () => state.poops++, onLook: (x, y) => state.look.push([x, y]), onLockDenied: () => state.denied++, onLockChange: (...value) => state.locks.push(value), onPrimary: held => state.primary.push(held) });
   const emit = (target, name, args = {}) => { const event = Object.assign(new Event(name, { cancelable: true }), args); target.dispatchEvent(event); return event; };
   return { canvas, document, window, state, controls, emit };
 }
@@ -56,4 +56,17 @@ test('mouseup and blur stop drag without depending on pointer IDs', () => {
   const t = setup(); t.emit(t.canvas, 'mousedown', { button: 0, clientX: 0, clientY: 0 });
   t.emit(t.window, 'blur'); t.emit(t.window, 'mousemove', { clientX: 9, clientY: 9 });
   assert.deepEqual(t.state.look, [[0, 0]]);
+});
+test('consumption holds survive denied capture and cancel on release, blur or menu clear', () => {
+  for(const end of ['mouseup','blur','clear']) {
+    const t=setup(()=>{throw new Error('Capture denied');});
+    t.emit(t.canvas,'mousedown',{button:0}); t.emit(t.canvas,'mousedown',{button:0});
+    assert.deepEqual(t.state.primary,[true]);
+    if(end==='clear') t.controls.clear(); else t.emit(t.window,end,{button:0});
+    assert.deepEqual(t.state.primary,[true,false]);
+  }
+});
+test('right-click and inactive controls never begin consumption', () => {
+  const t=setup(); t.emit(t.canvas,'mousedown',{button:2}); t.state.allowed=false; t.emit(t.canvas,'mousedown',{button:0});
+  assert.deepEqual(t.state.primary,[]);
 });

@@ -1,9 +1,9 @@
 {
   "name": "shidans-adventure",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "A cozy 3D rabbit adventure — milestone 1 exploration prototype",
+  "description": "A cozy 3D rabbit adventure — milestone 2 energy and consumables",
   "engines": { "node": ">=22" },
   "scripts": {
     "start": "node scripts/serve.mjs",

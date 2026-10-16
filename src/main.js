@@ -10,6 +10,9 @@ import { createPoopBalls } from './poop.js';
 import { upperRoomsVisible } from './visibility.js';
 import { createRenderProfile } from './render-profile.js';
 import { renderPixelRatio } from './render-quality.js';
+import { createConsumables } from './consumables.js';
+import { CONSUMABLE_TYPES } from './consumable-data.js';
+import { highJumpCost } from './energy.js';
 
 const elements = new Map();
 const $ = id => { if (!elements.has(id)) elements.set(id, document.getElementById(id)); return elements.get(id); };
@@ -55,6 +58,7 @@ async function boot() {
   // out of the cached sun map, so they never leave a frozen shadow behind.
   rabbit.root.traverse(object => { object.castShadow = false; });
   const controller = new RabbitController(world);
+  const consumables = createConsumables(scene, world);
   const poop = createPoopBalls(scene, world);
   const sound = new Sound();
   const keys = new Set();
@@ -73,10 +77,11 @@ async function boot() {
     canvas, document, window, canControl: () => mode === 'play' && !overview && !mapOpen,
     onLook: (dx, dy) => { yaw -= dx * .003; pitch = clamp(pitch + dy * .0027, .06, 1.15); },
     onPoop: () => { poop.drop(controller); setText('poop-count', poop.physics.count.toLocaleString()); },
-    onLockDenied: () => { $('camera-hint').hidden = false; setText('camera-hint', 'Drag to look · right-click to poop · scroll to zoom'); },
+    onPrimary: held => { if (held) consumables.system.begin(controller, Math.min(.05, (performance.now() - previousTime) / 1000)); else consumables.system.cancel(); },
+    onLockDenied: () => { $('camera-hint').hidden = false; setText('camera-hint', 'Drag to look · hold left-click near food to eat · scroll to zoom'); },
     onLockChange: (locked, lostLock) => { $('camera-hint').hidden = locked; if (lostLock && mode === 'play' && !overview && !mapOpen) pause(); },
   });
-  function clearInput() { keys.clear(); mouse.clear(); queuedHop = false; jumpSeen = false; controller.releaseInput(); }
+  function clearInput() { keys.clear(); mouse.clear(); consumables.system.cancel(); setHidden('consume-prompt', true); queuedHop = false; jumpSeen = false; controller.releaseInput(); }
   const { lock, unlock } = mouse;
   function showGame() {
     document.body.classList.add('playing'); document.body.classList.remove('touring');
@@ -110,7 +115,7 @@ async function boot() {
     ['step-den', 'step-upstairs', 'step-window'].forEach(id => $(id).classList.remove('done'));
     setText('quest-title', 'The world beyond the fence');
     setText('quest-text', 'Hold Space to charge, then release while moving to leap out of your den.');
-    reset(); showGame(); lock(); toast('Hello, little explorer. Charge a jump to clear the fence.', 6);
+    reset(); showGame(); lock(); toast('Hold left-click near a snack to eat. Shift and charged leaps use energy.', 6);
   });
   $('tour').addEventListener('click', () => {
     mode = 'tour'; overview = true; surveyFloor = 0; renderAtlas(); document.body.classList.add('touring');
@@ -215,6 +220,25 @@ async function boot() {
   }
 
   function updateHUD() {
+    const energy = controller.energy.value.toFixed(2), nearby = consumables.system.target || consumables.system.nearest(controller);
+    setText('energy-value', `${energy}%`); $('energy-fill').style.width = `${energy}%`;
+    $('energy-meter').setAttribute('aria-valuenow', energy);
+    $('energy-panel').dataset.low = String(controller.energy.value < 10);
+    $('energy-panel').dataset.recovering = String(controller.energy.recovering);
+    setText('energy-status', controller.energy.recovering ? 'Restoring energy…' : controller.sprintExhausted ? 'Rest to recover · release Shift to sprint' : controller.sprinting ? 'Sprinting · using energy' : 'Restoring 0.01% per second');
+    setText('food-count', `${consumables.system.count} snacks left in the house`);
+    setHidden('consume-prompt', !nearby || mode !== 'play' || overview || mapOpen);
+    if (nearby) {
+      const type = CONSUMABLE_TYPES[nearby.type], progress = Math.min(1,consumables.system.progress);
+      setText('consume-name', type.name); setText('consume-energy', `+${type.energy} energy`);
+      setText('consume-action', `${type.verb} · hold left mouse for 1 second`);
+      $('consume-fill').style.width = `${progress*100}%`;
+      $('consume-meter').setAttribute('aria-valuenow', (progress*100).toFixed(0));
+    }
+    setData('energy', energy); setData('sprinting', String(controller.sprinting));
+    setData('consumableCount', String(consumables.system.count));
+    setData('consumeTarget', nearby?.id || ''); setData('consumeProgress', consumables.system.progress.toFixed(2));
+    setData('energyRecovering', String(controller.energy.recovering));
     const distFromDen = Math.hypot(controller.x - DEN.x, controller.z - DEN.z);
     const high = controller.y > FLOOR_HEIGHT - .3;
     const onStairs = controller.surface === 'stairs';
@@ -229,7 +253,8 @@ async function boot() {
     if (controller.charging) {
       const power = Math.round(Math.min(1, controller.charge / .65) * 100);
       $('charge-fill').style.width = `${power}%`; setText('charge-percent', `${power}%`);
-      setText('charge-label', controller.surface === 'wood' || controller.surface === 'stairs' ? 'Too slippery for a long jump' : power >= 100 ? 'Ready! Release Space' : 'Crouch & spring');
+      const cost = highJumpCost(controller.charge);
+      setText('charge-label', controller.surface === 'wood' || controller.surface === 'stairs' ? 'Slippery floor · free small hop' : controller.energy.value < cost ? 'Low energy · free small hop' : `${power >= 100 ? 'Release!' : 'Crouch & spring'} · −${cost.toFixed(2)} energy`);
     }
     if (!escaped && distFromDen > DEN.radius + .36 && controller.grounded) {
       escaped = true; $('step-den').classList.add('done');
@@ -285,14 +310,23 @@ async function boot() {
       const input = { x: -Math.sin(yaw) * forward + Math.cos(yaw) * right, z: -Math.cos(yaw) * forward - Math.sin(yaw) * right, run: keys.has('ShiftLeft') || keys.has('ShiftRight'), jump: keys.has('Space') };
       if (queuedHop) { controller.update(.0001, { ...input, jump: true }); queuedHop = false; }
       controller.update(dt, input);
+      const resourceEvents = consumables.system.update(dt, controller);
+      consumables.handle(resourceEvents);
+      for (const event of resourceEvents) if (event.kind === 'consume') {
+        const type = CONSUMABLE_TYPES[event.item.type];
+        toast(`${type.name} · +${type.energy} energy over 1 second`, 2.2); sound.chime();
+        setData('lastConsumed', event.item.type);
+      }
+      consumables.sync(dt, consumables.system.target || consumables.system.nearest(controller), !!consumables.system.target);
       if (input.jump) jumpSeen = true;
       if (controller.lastJump) sound.hop(controller.lastJump === 'long');
+      if (controller.jumpEnergyBlocked) toast('A little hop for now. Eat a snack to restore energy.', 3);
       if (controller.lastLanding) sound.land();
       const speed = Math.hypot(controller.vx, controller.vz);
       if (controller.grounded && speed > .6 && time - lastStep > .2) { sound.step(controller.surface === 'wood'); lastStep = time; }
       poop.update(dt, controller);
       if (time - hudTick >= .05) { updateHUD(); hudTick = time; }
-    }
+    } else consumables.sync(0);
     poop.sync();
     rabbit.root.position.set(controller.x, controller.y, controller.z);
     rabbit.root.rotation.y = mode === 'title' ? .43 : controller.facing;
@@ -304,6 +338,7 @@ async function boot() {
     upperApproach = upperRoomsVisible(controller, upperApproach);
     const showUpper = surveying ? surveyFloor === 1 : upperApproach;
     const showCeiling = !surveying || surveyFloor === 1;
+    consumables.setUpperVisible(showUpper);
     if (upper.visible !== showUpper || ceiling.visible !== showCeiling) {
       upper.visible = showUpper; ceiling.visible = showCeiling; renderer.shadowMap.needsUpdate = true;
     }
@@ -335,6 +370,7 @@ async function boot() {
   renderer.render(scene, camera);
   for (const [object, enabled] of culling) object.frustumCulled = enabled;
   upper.visible = false;
+  consumables.setUpperVisible(false);
   renderer.shadowMap.needsUpdate = true;
   previousTime = performance.now();
   $('load-status').hidden = true; $('play').disabled = $('tour').disabled = false;

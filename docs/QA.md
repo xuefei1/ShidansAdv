@@ -1,4 +1,16 @@
-# Milestone 1 verification
+# Verification
+
+## Milestone 2 — energy and consumables 0.3.0
+
+Verified locally on 2026-10-16 with Node.js 24.21.0 and the Codex in-app browser on macOS.
+
+- 99 Node tests cover the original level, movement, rendering and poop plus energy/consumables. 30-second sprinting is checked both at multiple simulation rates and through the actual controller. All nine rewards, one-second recovery, caps, charge costs, free hops, exhaustion fallback, passive regeneration, hold cancellation, wall/floor/fence occlusion, all 41 placements, initial/restocked den exclusion, weighted random selection and low-count restock timing are covered.
+- All 20 energy/eating browser checks pass against the real game, using mouse and keyboard events. They check two-decimal UI, sprint and 5–10 energy jump costs, 0.01%/second passive recovery, reaching hay outside the den, short/released/paused holds, gradual recovery, single-item consumption and persistence through home/title navigation. The existing 30 browser input/menu checks passed on 2026-10-15. No browser errors were logged during the energy checks.
+- A real held left click was visually checked: the hay shrinks and rises into golden particles, the remaining count decreases, and the energy meter glows during the one-second reward. The HUD and original carrot, rabbit-food, apple and banana models were inspected in play. The revised cylindrical hay sheaf, fine grass blades and twine tie were visually checked beside Shidan on 2026-10-16.
+- Consumables use one instanced draw per kind/floor (at most 18), plus the selection ring and a shared particle batch. They do not modify static collision or cached sunlight shadows.
+- JavaScript parsing, the static build, and built-server HTTP smoke checks pass, including the four new resource modules and private-file exclusions. User playtesting is still needed for the feel of scarcity, eating reach and sprint pacing.
+
+## Milestone 1 history
 
 Verified on 2026-10-04 with Node.js 24.19.0 and the Codex in-app browser at 1280 × 720.
 
@@ -112,11 +124,12 @@ Inspect title screen, Shidan's nose/paws/ears, open-topped den, the house-tour o
 - Desktop keyboard/mouse prototype; no touch or gamepad support yet.
 - Intended light cartoon style uses procedural geometry, not a final rigged character or detailed anime assets.
 - Original short sound effects only; no background music.
-- No enemy, happiness scoring, interaction system, player names, leaderboard, round timer or bedtime behavior in milestone 1.
+- No enemy, happiness scoring, player names, leaderboard, round timer or bedtime behavior yet. Milestone 2 implements eating/chewing for energy.
 - Clover House has real walls and open door/window apertures. The missing roof and automatic upper-floor cutaway are presentation choices; physical walls, floors and ceilings remain solid.
 - Shidan can push dynamic poop spheres. Furniture is still static; there is no general-purpose rigid-body furniture simulation.
 - Poop persistence is scoped to the loaded page session, not a saved game across browser reloads.
-- Decorative food and books are not collectible yet; the UI describes this as exploration.
+- Only the new loose snack/book models are consumable. Original scenery books, climbing steps and decorative fruit remain part of the static level.
+- Energy and consumables persist only in the loaded page session. Reloading starts with a full bar and the fixed 41 items; menus freeze all resource timers.
 
 ## Release checks
 

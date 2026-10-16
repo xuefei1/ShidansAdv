@@ -6,3 +6,19 @@
 @media(max-height:780px){.minimap{width:158px;padding:8px}.minimap canvas{width:140px;height:158px}.quest{padding:16px}}
 
 #load-status{font-size:11px;color:#68775b}button:disabled{cursor:wait;opacity:.55}
+
+.energy{position:fixed;left:30px;top:230px;width:226px;padding:16px 18px;pointer-events:none}
+.energy-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.energy-heading>span{font-size:8px;letter-spacing:1.5px;color:#6e805e;font-weight:700}
+#energy-value{font-size:19px;font-variant-numeric:tabular-nums;letter-spacing:-.6px;color:#48613c}
+.energy-track{height:9px;border-radius:12px;background:#dce2c8;margin:12px 0 10px;overflow:hidden}
+#energy-fill{display:block;height:100%;width:100%;border-radius:inherit;background:linear-gradient(90deg,#87a66c,#b0c985);transition:width .05s linear}
+.energy p{font-size:9px;line-height:1.5;color:#728366;margin:0 0 7px}.energy small{font-size:9px;color:#899378}
+.energy[data-low=true] #energy-fill{background:#c38b59}.energy[data-low=true] #energy-value{color:#a06b40}
+.energy[data-recovering=true] .energy-track{box-shadow:0 0 0 3px #d1df9c70,0 0 18px #bfda8170}
+.consume{position:fixed;left:50%;bottom:118px;transform:translateX(-50%);width:285px;padding:15px 18px;pointer-events:none;border-color:#e4cd8d}
+.consume>div:first-child{display:flex;align-items:center;justify-content:space-between}.consume strong{font:19px Georgia;color:#4e6541}.consume span{font-size:11px;font-weight:600;color:#8c793e}.consume p{font-size:10px;color:#7b846b;margin:9px 0 12px}
+.consume-track{height:5px;background:#e8e3c7;border-radius:5px;overflow:hidden}#consume-fill{display:block;width:0;height:100%;background:#b4a35d;transition:width .05s linear}
+.charge{bottom:235px;width:285px}.toast{bottom:310px;pointer-events:none}
+@media(max-width:1100px){.controls{gap:10px;max-width:96%;flex-wrap:wrap;justify-content:center;width:max-content}}
+@media(max-width:700px){.energy{left:15px;top:225px;width:170px;padding:13px}.energy-heading{flex-wrap:wrap;gap:5px}.energy-heading>span{font-size:7px}.consume{bottom:142px;width:255px}.charge{bottom:250px;width:255px}.toast{bottom:320px;max-width:85%}}

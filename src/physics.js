@@ -1,5 +1,6 @@
 // Engine-independent, metre-based character physics. Render code never owns movement.
 import { DEN, RAMPS, BOUNDS, HOUSE, FLOOR_HEIGHT } from './layout.js';
+import { Energy, highJumpCost, HIGH_JUMP_THRESHOLD } from './energy.js';
 export { DEN, STAIRS } from './layout.js';
 export const SURFACES = Object.freeze({
   bedding: { acceleration: 26, drag: 18, walk: 2.8, run: 7.8, longJump: true },
@@ -57,17 +58,18 @@ export class World {
 }
 
 export class RabbitController {
-  constructor(world) { this.world = world; this.radius = .22; this.height = .68; this.reset(); }
+  constructor(world) { this.world = world; this.radius = .22; this.height = .68; this.energy = new Energy(); this.sprintExhausted = false; this.reset(); }
   reset() {
     this.x = DEN.x; this.y = 0; this.z = DEN.z; this.vx = 0; this.vy = 0; this.vz = 0;
     this.facing = Math.PI; this.grounded = true; this.surface = 'bedding'; this.charge = 0;
     this.charging = false; this.jumpHeld = false; this.lastJump = null; this.lastLanding = false; this.longJumping = false;
+    this.sprinting = false; this.jumpEnergyBlocked = false;
   }
   releaseInput() { this.jumpHeld = false; this.charging = false; this.charge = 0; }
   update(dt, input = {}) {
     // Small substeps prevent tunnelling at low framerates, including the circular fence.
     const duration = clamp(dt, 0, .1), n = Math.max(1, Math.ceil(duration / (1 / 120)));
-    this.lastJump = null; this.lastLanding = false;
+    this.lastJump = null; this.lastLanding = false; this.jumpEnergyBlocked = false;
     for (let i = 0; i < n; i++) this.step(duration / n, input);
   }
   step(dt, input) {
@@ -88,7 +90,9 @@ export class RabbitController {
     if (this.charging && input.jump && this.grounded) this.charge = Math.min(.8, this.charge + dt);
     if (!input.jump && this.jumpHeld && this.charging) {
       if (this.grounded) {
-        const long = this.charge >= .22 && tuning.longJump;
+        const wantsLong = this.charge + 1e-9 >= HIGH_JUMP_THRESHOLD && tuning.longJump;
+        const long = wantsLong && this.energy.spend(highJumpCost(this.charge));
+        this.jumpEnergyBlocked = wantsLong && !long;
         const power = clamp(this.charge / .65, 0, 1);
         this.vy = long ? 6 + power * 2.25 : 4.2;
         this.longJumping = long;
@@ -99,7 +103,10 @@ export class RabbitController {
     }
     this.jumpHeld = !!input.jump;
     if (!this.grounded) this.charging = false;
-    const speed = (input.run ? tuning.run : tuning.walk) * (this.charging ? .25 : 1);
+    if (!input.run) this.sprintExhausted = false;
+    else if (this.energy.value === 0) this.sprintExhausted = true;
+    const sprint = !!input.run && moving && !this.charging && !this.sprintExhausted && this.energy.value > 0;
+    const speed = (sprint ? tuning.run : tuning.walk) * (this.charging ? .25 : 1);
     if (this.grounded) {
       if (moving) {
         this.vx = tuning.grip ? dx * speed : approach(this.vx, dx * speed, tuning.acceleration * dt);
@@ -120,7 +127,7 @@ export class RabbitController {
         this.vz = approach(this.vz, dz * Math.max(2.4, speed), 12 * dt);
       }
       const airSpeed = Math.hypot(this.vx, this.vz);
-      const airLimit = Math.max(6.4, input.run ? tuning.run : 0);
+      const airLimit = Math.max(6.4, sprint ? tuning.run : 0);
       if (airSpeed > airLimit) { this.vx *= airLimit / airSpeed; this.vz *= airLimit / airSpeed; }
     }
     this.x += this.vx * dt; this.z += this.vz * dt;
@@ -167,6 +174,10 @@ export class RabbitController {
       this.lastLanding ||= !this.grounded;
       this.y = below.y; this.vy = 0; this.grounded = true; this.surface = below.surface; this.longJumping = false;
     } else this.grounded = false;
+    // Only moving with Shift spends sprint energy; a blocked/idle rabbit is free.
+    this.sprinting = sprint && Math.hypot(this.x - oldX, this.z - oldZ) > dt * .05;
+    this.energy.update(dt, this.sprinting);
+    if (this.sprinting && this.energy.value === 0) this.sprintExhausted = true;
     if (this.y < -4 || !Number.isFinite(this.x + this.y + this.z)) this.reset();
   }
 }

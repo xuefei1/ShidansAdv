@@ -1,9 +1,9 @@
 // Pointer lock is optional. An ordinary click must never depend on pointer
 // capture (setPointerCapture throws for inactive/synthetic pointer IDs).
-export function bindMouseControls({ canvas, document, window, canControl, onLook, onPoop, onLockChange, onLockDenied }) {
-  let dragging = false, lastX = 0, lastY = 0, pending = false, wasLocked = false;
+export function bindMouseControls({ canvas, document, window, canControl, onLook, onPoop, onLockChange, onLockDenied, onPrimary = () => {} }) {
+  let dragging = false, primaryHeld = false, lastX = 0, lastY = 0, pending = false, wasLocked = false;
   const denied = () => { pending = false; onLockDenied(); };
-  const clear = () => { dragging = false; };
+  const clear = () => { dragging = false; if (primaryHeld) { primaryHeld = false; onPrimary(false); } };
   function unlock() {
     clear();
     try { if (document.pointerLockElement === canvas) document.exitPointerLock?.(); } catch { denied(); }
@@ -32,7 +32,9 @@ export function bindMouseControls({ canvas, document, window, canControl, onLook
     if (!canControl()) return;
     if (event.button === 2) { event.preventDefault(); canvas.focus(); onPoop(); return; }
     if (event.button !== 0) return;
-    canvas.focus(); dragging = true; lastX = event.clientX; lastY = event.clientY; lock();
+    canvas.focus(); dragging = true; lastX = event.clientX; lastY = event.clientY;
+    if (!primaryHeld) { primaryHeld = true; onPrimary(true); }
+    lock();
   });
   window.addEventListener('mouseup', event => { if (event.button === 0) clear(); });
   window.addEventListener('blur', clear);

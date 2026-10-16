@@ -33,15 +33,22 @@ Acceptance: a player can start in the den, long-jump out, explore the ground flo
 
 This remains milestone 1: the expanded level is ready for the interaction and AI work to follow. Adult-sized door clearance is checked, but NPC navigation and chase balance still need to be implemented and playtested.
 
-## Milestone 2 — little joys
+## Milestone 2 — energy and little joys (implemented, ready for playtest)
 
-- Context-sensitive eating, drinking and chewing prompts.
-- Food, vegetables, fruit, cardboard, books and wires as data-driven interaction types.
-- Happiness points, visible feedback, depletion and respawn policy.
-- Action-noise events separate from audible sound effects.
-- Improve Shidan’s animations and tune movement after playtesting.
+Scope updated on 2026-10-15 to the requested energy/consumable loop.
 
-Acceptance: the player can earn and understand happiness, see which actions make noise, and find rewards on both floors. No fake leaderboard or inaccessible interaction props.
+- [x] 100.00% meter; 30-second sprint capacity; charged jumps cost 5–10.
+- [x] Free ordinary movement/tap hops, low-energy fallback, and passive recovery.
+- [x] Nine consumable kinds, the requested rewards, and 41 fixed initial items on both floors.
+- [x] One-second left-click hold with progress, reach and obstruction checks.
+- [x] Disappearance particles and one-second energy recovery, capped at 100.
+- [x] One new item per minute below two remaining, with inverse-energy probabilities.
+- [x] Menus/background freeze resource timers; home/title preserve the session.
+- [x] Unit coverage and an actual-game browser energy/eating runner.
+
+Acceptance: sprint and charged leaps use the displayed energy; all nine items can be found, consumed and depleted; cancelled holds grant nothing; low supplies replenish at the specified rate. User playtesting remains the final tuning step.
+
+Deferred from the earlier sketch: drinking, cardboard/wire interactions, happiness scoring, and AI noise events. These are outside the current energy-focused milestone.
 
 ## Milestone 3 — the mistress
 

@@ -8,7 +8,7 @@ const check = (label, passed, detail = '') => {
   const li = document.createElement('li'); li.className = passed ? 'pass' : 'fail'; li.textContent = `${passed ? 'PASS' : 'FAIL'}: ${label}${detail ? ` (${detail})` : ''}`; results.append(li);
   if (!passed) throw new Error(label);
 };
-const disableRunners = disabled => ['run', 'route', 'stairs'].forEach(id => { document.getElementById(id).disabled = disabled; });
+const disableRunners = disabled => ['run', 'energy', 'route', 'stairs'].forEach(id => { document.getElementById(id).disabled = disabled; });
 async function waitForScene(canvas) {
   const deadline = performance.now() + 15000;
   while (canvas.dataset.ready !== 'true') {
@@ -164,3 +164,56 @@ async function walkRoute(stairOnly = false) {
 }
 document.getElementById('route').addEventListener('click', () => walkRoute());
 document.getElementById('stairs').addEventListener('click', () => walkRoute(true));
+
+document.getElementById('energy').addEventListener('click', async () => {
+  results.replaceChildren(); disableRunners(true);
+  // A new loaded session gives this test its authored population and full bar.
+  await new Promise(resolve => { frame.addEventListener('load',resolve,{once:true}); frame.src='/'; });
+  const w=frame.contentWindow, d=frame.contentDocument, canvas=d.getElementById('game');
+  const key=(type,code)=>canvas.dispatchEvent(new w.KeyboardEvent(type,{code,bubbles:true}));
+  const mouse=(type)=>canvas.dispatchEvent(new w.MouseEvent(type,{button:0,clientX:300,clientY:400,bubbles:true}));
+  const energy=()=>Number(canvas.dataset.energy), count=()=>Number(canvas.dataset.consumableCount);
+  const originalLock=canvas.requestPointerLock;
+  try {
+    await waitForScene(canvas);
+    canvas.requestPointerLock=()=>Promise.reject(new w.DOMException('QA fallback','NotAllowedError'));
+    d.getElementById('play').click(); await wait(200);
+    check('Energy starts at exactly 100.00%',d.getElementById('energy-value').textContent==='100.00%');
+    check('The house starts with 41 snacks, all outside Shidan’s den',count()===41 && !canvas.dataset.consumeTarget);
+    key('keydown','Space'); key('keyup','Space'); await wait(750);
+    check('A tap hop costs no energy',energy()===100);
+    key('keydown','ShiftLeft'); key('keydown','KeyD'); await wait(300); key('keyup','KeyD'); key('keyup','ShiftLeft'); await wait(100);
+    check('Moving with Shift spends about 1 energy in 0.3 seconds',energy()>98.7 && energy()<99.3,energy().toFixed(2));
+    d.getElementById('home').click(); await wait(100);
+    check('Return home preserves spent energy',energy()<100);
+    const beforeJumps=energy();
+    for(let i=0;i<3;i++) { key('keydown','Space'); await wait(750); key('keyup','Space'); await wait(1200); }
+    check('Three fully charged stationary jumps cost about 30 energy',Math.abs(beforeJumps-energy()-30)<.2,energy().toFixed(2));
+    const resting=energy(); await wait(2000);
+    check('Passive recovery adds 0.01% per second',Math.abs(energy()-resting-.02)<.008,`${resting.toFixed(3)} → ${energy().toFixed(3)}`);
+    key('keydown','Space'); await wait(750); key('keydown','KeyD'); key('keyup','Space');
+    await wait(1150); key('keyup','KeyD'); await wait(450);
+    check('Hay is reachable after escaping the den',canvas.dataset.surface==='wood' && canvas.dataset.consumeTarget==='hay-0',canvas.dataset.position);
+    mouse('mousedown'); await wait(400);
+    check('Holding left mouse shows consumption progress',Number(canvas.dataset.consumeProgress)>.15 && Number(canvas.dataset.consumeProgress)<.8);
+    w.dispatchEvent(new w.MouseEvent('mouseup',{button:0})); await wait(700);
+    check('Early release outside the canvas leaves the snack intact',count()===41 && canvas.dataset.energyRecovering==='false' && Number(canvas.dataset.consumeProgress)===0);
+    mouse('mousedown'); await wait(400); d.getElementById('menu-button').click(); await wait(80);
+    const frozenEnergy=energy(); await wait(1200);
+    check('Pausing cancels the hold and freezes energy',count()===41 && energy()===frozenEnergy);
+    d.getElementById('resume').click(); await wait(150);
+    check('Resume requires a fresh press to consume',Number(canvas.dataset.consumeProgress)===0 && count()===41);
+    const before=energy(); mouse('mousedown'); await wait(1300);
+    check('One second consumes one hay stack',count()===40 && canvas.dataset.lastConsumed==='hay');
+    check('Energy is restored gradually after consumption',energy()>before+1 && energy()<before+9 && canvas.dataset.energyRecovering==='true');
+    await wait(900); mouse('mouseup');
+    check('Hay finishes restoring 10 energy after a further second',Math.abs(energy()-before-10)<.15 && canvas.dataset.energyRecovering==='false');
+    check('The held button does not chain into another snack',count()===40);
+    d.getElementById('home').click(); await wait(100); check('Return home preserves consumed items',count()===40 && canvas.dataset.consumeTarget!=='hay-0');
+    d.getElementById('menu-button').click(); d.getElementById('back-title').click(); await wait(100); d.getElementById('play').click(); await wait(150);
+    check('Title navigation preserves food and energy',count()===40 && energy()<100);
+    check('Energy always shows two decimal places',/^\d+\.\d{2}%$/.test(d.getElementById('energy-value').textContent));
+    check('No fatal browser error',d.getElementById('fatal').hidden);
+  } catch(error) { console.error(error); }
+  finally { mouse('mouseup'); key('keyup','ShiftLeft'); key('keyup','KeyD'); key('keyup','Space'); canvas.requestPointerLock=originalLock; disableRunners(false); }
+});
