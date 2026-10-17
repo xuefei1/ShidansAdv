@@ -2,6 +2,16 @@
 
 A cozy third-person 3D action adventure starring Shidan, a black rabbit with a white nose patch and white paws. **Milestone 2 adds energy, snacks, and chewing to the playable house.**
 
+## Screenshots
+
+Captured from the playable v0.3.0 build. Click an image to view it at full size.
+
+| Title screen | Snack time in the sunny lounge |
+| --- | --- |
+| [![The title screen introducing Shidan in her den](docs/screenshots/title-screen.jpg)](docs/screenshots/title-screen.jpg) | [![Shidan beside a hay bundle, with the energy bar and eating prompt visible](docs/screenshots/lounge-snack.jpg)](docs/screenshots/lounge-snack.jpg) |
+| **Exploring the clover backyard** | **A tour of Clover House** |
+| [![Shidan exploring the backyard's vegetable beds and stepping-stone path](docs/screenshots/backyard-exploration.jpg)](docs/screenshots/backyard-exploration.jpg) | [![A cutaway overview of Clover House, its furnished rooms, den, stairs, and gardens](docs/screenshots/house-overview.jpg)](docs/screenshots/house-overview.jpg) |
+
 ## Play
 
 **Windows:** double-click `Start-Game.cmd`.
