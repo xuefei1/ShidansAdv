@@ -1,6 +1,6 @@
 {
   "name": "shidans-adventure",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "description": "A cozy 3D rabbit adventure — milestone 2 energy and consumables",

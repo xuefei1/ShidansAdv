@@ -11,7 +11,7 @@ import { upperRoomsVisible } from './visibility.js';
 import { createRenderProfile } from './render-profile.js';
 import { renderPixelRatio } from './render-quality.js';
 import { createConsumables } from './consumables.js';
-import { CONSUMABLE_TYPES } from './consumable-data.js';
+import { consumableDetails } from './consumable-data.js';
 import { highJumpCost } from './energy.js';
 
 const elements = new Map();
@@ -101,7 +101,7 @@ async function boot() {
   }
   function reset() {
     controller.reset(); yaw = -.45; pitch = .43; distance = 5.2; clearInput(); cameraInitialized = false;
-    toast('Back in your cozy den. Hold Space, then release to leap.');
+    toast('Back in your cozy den. Hold left-click by the special hay to refill your energy.');
   }
   function setOverview() {
     if (mode !== 'play') return;
@@ -229,8 +229,8 @@ async function boot() {
     setText('food-count', `${consumables.system.count} snacks left in the house`);
     setHidden('consume-prompt', !nearby || mode !== 'play' || overview || mapOpen);
     if (nearby) {
-      const type = CONSUMABLE_TYPES[nearby.type], progress = Math.min(1,consumables.system.progress);
-      setText('consume-name', type.name); setText('consume-energy', `+${type.energy} energy`);
+      const type = consumableDetails(nearby), progress = Math.min(1,consumables.system.progress);
+      setText('consume-name', type.name); setText('consume-energy', nearby.permanent ? '100% · unlimited' : `+${type.energy} energy`);
       setText('consume-action', `${type.verb} · hold left mouse for 1 second`);
       $('consume-fill').style.width = `${progress*100}%`;
       $('consume-meter').setAttribute('aria-valuenow', (progress*100).toFixed(0));
@@ -313,9 +313,10 @@ async function boot() {
       const resourceEvents = consumables.system.update(dt, controller);
       consumables.handle(resourceEvents);
       for (const event of resourceEvents) if (event.kind === 'consume') {
-        const type = CONSUMABLE_TYPES[event.item.type];
-        toast(`${type.name} · +${type.energy} energy over 1 second`, 2.2); sound.chime();
+        const type = consumableDetails(event.item);
+        toast(event.item.permanent ? 'Energy fully restored! Your special hay is always here.' : `${type.name} · +${type.energy} energy over 1 second`, 2.2); sound.chime();
         setData('lastConsumed', event.item.type);
+        setData('lastConsumedId', event.item.id);
       }
       consumables.sync(dt, consumables.system.target || consumables.system.nearest(controller), !!consumables.system.target);
       if (input.jump) jumpSeen = true;

@@ -6,8 +6,8 @@ import { CONSUMABLE_TYPES, CONSUMABLE_SLOTS } from './consumable-data.js';
 import { FLOOR_HEIGHT } from './layout.js';
 
 // One small original model per food, instanced by kind/floor. Shared vertex colours
-// keep the new props to at most 18 draws, including the upstairs cutaway layer.
-function model(type) {
+// keep the props to at most 19 draws, including the permanent den hay.
+function model(type, permanent = false) {
   const group = new THREE.Group(), color = CONSUMABLE_TYPES[type].color;
   const ball = (c,x,y,z,sx,sy,sz) => ellipsoid(group,c,x,y,z,sx,sy,sz);
   const box = (c,x,y,z,w,h,d) => cube(group,c,x,y,z,w,h,d);
@@ -39,8 +39,18 @@ function model(type) {
       group.add(new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:shades[i%shades.length],roughness:1})));
     }
     // A thin twine loop keeps the cut grass together without wooden braces.
-    const tie = new THREE.Mesh(new THREE.TorusGeometry(.255,.009,5,32),new THREE.MeshStandardMaterial({color:0x9d8152,roughness:1}));
+    const tie = new THREE.Mesh(new THREE.TorusGeometry(.255,permanent ? .025 : .009,5,32),new THREE.MeshStandardMaterial({color:permanent ? 0x83cdb1 : 0x9d8152,roughness:1}));
     tie.rotation.x = Math.PI/2; tie.position.y = .17; group.add(tie);
+    if (permanent) {
+      // A cream dish and mint bow make the inexhaustible den bundle recognizable.
+      cylinder(group,0xfff1d7,0,.035,0,.35,.07,.39,24);
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(.38,.018,5,32),new THREE.MeshStandardMaterial({color:0x83cdb1,roughness:1}));
+      rim.rotation.x = Math.PI/2; rim.position.y = .07; group.add(rim);
+      for (const side of [-1,1]) {
+        const bow = ball(0xa3dfc5,side*.065,.18,.26,.075,.038,.025); bow.rotation.z = side*.4;
+      }
+      ball(0xfff1d7,0,.18,.28,.027,.027,.02);
+    }
   } else if (type === 'carrot') {
     const carrot = cylinder(group,color,0,.14,0,.03,.48,.12,12); carrot.rotation.z = -1.25;
     for (let i = 0; i < 3; i++) rod(0x85a65e,[.21,.22,0],[.33+i*.035,.31+(i%2)*.08,(i-1)*.09],.024);
@@ -100,6 +110,11 @@ export function createConsumables(scene, world) {
       floors[floor].add(mesh); batches.set(`${type}:${floor}`, mesh);
     }
   }
+  const denSource = model('hay', true);
+  const denMesh = new THREE.InstancedMesh(denSource.geometry, denSource.material, 1);
+  denMesh.name = 'Special den hay'; denMesh.receiveShadow = true; denMesh.frustumCulled = false;
+  denMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  floors[0].add(denMesh); batches.set('den-hay', denMesh);
   const ring = new THREE.Mesh(new THREE.RingGeometry(.32,.37,40),new THREE.MeshBasicMaterial({color:0xe9c66c,transparent:true,opacity:.85,side:THREE.DoubleSide,depthWrite:false}));
   ring.rotation.x = -Math.PI/2; ring.visible = false; scene.add(ring);
   const sparkGeometry = new THREE.IcosahedronGeometry(.035,0);
@@ -107,13 +122,13 @@ export function createConsumables(scene, world) {
   sparks.instanceMatrix.setUsage(THREE.DynamicDrawUsage); sparks.frustumCulled = false; sparks.count = 0; scene.add(sparks);
   const particles = [], transform = new THREE.Object3D();
   let time = 0, upperVisible = true;
-  for (const item of system.items.values()) visuals.set(item.id,{item,age:1,state:'idle'});
+  for (const item of system.availableItems()) visuals.set(item.id,{item,age:1,state:'idle'});
   function handle(events) {
     for (const event of events) {
       const { item } = event;
       if (event.kind === 'spawn') visuals.set(item.id,{item,age:0,state:'spawn'});
       else {
-        const visual = visuals.get(item.id); visual.age = 0; visual.state = 'consume';
+        const visual = visuals.get(item.id); visual.age = 0; visual.state = item.permanent ? 'idle' : 'consume';
         for (let i = 0; i < 12; i++) particles.push({x:item.x,y:item.y+.2,z:item.z,age:0,angle:i*Math.PI/6,speed:.3+(i%3)*.12});
       }
     }
@@ -131,12 +146,12 @@ export function createConsumables(scene, world) {
       const bob = .02+Math.sin(time*2+item.x)*.016;
       transform.position.set(item.x,item.y+bob+(state==='consume' ? t*.65 : 0),item.z);
       transform.rotation.set(0, Math.sin(item.x*3+item.z)*.5+(state==='consume' ? t*2 : 0), target?.id===id && interacting ? Math.sin(time*35)*.045 : 0);
-      transform.scale.setScalar(scale); transform.updateMatrix();
-      const mesh = batches.get(`${item.type}:${floor}`); mesh.setMatrixAt(mesh.count++,transform.matrix);
+      transform.scale.setScalar(scale * (item.permanent ? 1.35 : 1)); transform.updateMatrix();
+      const mesh = batches.get(item.permanent ? 'den-hay' : `${item.type}:${floor}`); mesh.setMatrixAt(mesh.count++,transform.matrix);
     }
     for (const mesh of batches.values()) mesh.instanceMatrix.needsUpdate = true;
     ring.visible = !!target;
-    if (target) { ring.position.set(target.x,target.y+.018,target.z); ring.scale.setScalar(1+Math.sin(time*4)*.06); }
+    if (target) { ring.position.set(target.x,target.y+.018,target.z); ring.scale.setScalar((target.permanent ? 1.55 : 1)*(1+Math.sin(time*4)*.06)); }
     sparks.count = 0;
     for (let i = particles.length-1; i >= 0; i--) {
       const p = particles[i]; p.age += dt;

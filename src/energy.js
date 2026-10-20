@@ -21,6 +21,7 @@ export class Energy {
     return true;
   }
   consume(amount) { this.recoveries.push({ rate: amount, remaining: 1 }); }
+  refill() { this.value = MAX_ENERGY; this.recoveries = []; }
   get recovering() { return this.recoveries.length > 0; }
   update(dt, sprinting = false) {
     if (!(dt > 0) || !Number.isFinite(dt)) return;

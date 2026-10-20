@@ -4,7 +4,7 @@ import * as THREE from '../vendor/three.module.js';
 import { Energy, PASSIVE_REGEN, highJumpCost } from '../src/energy.js';
 import { RabbitController, World, DEN } from '../src/physics.js';
 import { createHouse } from '../src/house.js';
-import { CONSUMABLE_TYPES, CONSUMABLE_SLOTS, randomConsumableType } from '../src/consumable-data.js';
+import { CONSUMABLE_TYPES, CONSUMABLE_SLOTS, DEN_HAY, randomConsumableType } from '../src/consumable-data.js';
 import { ConsumableSystem, canReachConsumable } from '../src/consumable-system.js';
 import { createConsumables } from '../src/consumables.js';
 const close = (a,b,epsilon=1e-7) => assert.ok(Math.abs(a-b)<epsilon, `${a} ≠ ${b}`);
@@ -90,7 +90,7 @@ test('initial population is fixed, includes every kind, and larger rewards are s
   assert.ok(CONSUMABLE_SLOTS.some(s=>s.y>=4.2));
 });
 test('every authored snack is supported and reachable on the real furnished map', () => {
-  for(const item of CONSUMABLE_SLOTS) {
+  for(const item of [...CONSUMABLE_SLOTS, DEN_HAY]) {
     close(world.support(item.x,item.z,item.y+.01).y,item.y,.015);
     let reachable=false;
     for(let i=0;i<16;i++) {
@@ -102,7 +102,7 @@ test('every authored snack is supported and reachable on the real furnished map'
     assert.ok(reachable,`Unreachable ${item.id}`);
   }
 });
-test('the den and its fence remain empty at startup and during random restocking', () => {
+test('finite snacks stay outside the den at startup and during random restocking', () => {
   const outside = item => Math.hypot(item.x-DEN.x,item.z-DEN.z) >= DEN.radius+.4;
   assert.ok(CONSUMABLE_SLOTS.every(outside));
   const slots = [...CONSUMABLE_SLOTS,
@@ -170,7 +170,81 @@ test('respawn probabilities are inversely proportional to energy', () => {
 test('collectible renderer batches all kinds and removes consumed geometry after its effect', () => {
   const scene=new THREE.Scene(), view=createConsumables(scene,world);
   let total=()=>scene.children.slice(0,2).flatMap(g=>g.children).reduce((n,m)=>n+m.count,0);
-  assert.equal(total(),41); assert.equal(scene.children[0].children.length,9);
-  const item=CONSUMABLE_SLOTS[0]; view.handle([{kind:'consume',item}]); view.sync(.3); assert.equal(total(),41);
-  view.sync(.4); assert.equal(total(),40); view.setUpperVisible(false); assert.equal(scene.children[1].visible,false);
+  assert.equal(total(),42); assert.equal(scene.children[0].children.length,10);
+  const item=CONSUMABLE_SLOTS[0]; view.handle([{kind:'consume',item}]); view.sync(.3); assert.equal(total(),42);
+  view.sync(.4); assert.equal(total(),41); view.setUpperVisible(false); assert.equal(scene.children[1].visible,false);
+});
+
+test('special hay refills an exhausted rabbit at home and permits an actual den escape', () => {
+  const r=new RabbitController(world), s=new ConsumableSystem(world);
+  r.energy.value=0; r.sprintExhausted=true; r.reset();
+  assert.equal(s.nearest(r).id,DEN_HAY.id);
+  s.begin(r); assert.equal(s.update(.99,r).length,0); assert.equal(r.energy.value,0);
+  const [event]=s.update(.01,r);
+  assert.equal(event.item.id,DEN_HAY.id); assert.equal(r.energy.value,100);
+  tick(r,.75,{jump:true}); r.update(1/120,{x:1}); assert.equal(r.lastJump,'long');
+  tick(r,.8,{x:1}); tick(r,.6); assert.ok(r.x>DEN.x+DEN.radius);
+  assert.equal(r.grounded,true); assert.equal(r.surface,'wood');
+});
+
+test('special hay remains available across repeated uses, full energy, and returning home', () => {
+  const r=new RabbitController(world), s=new ConsumableSystem(world);
+  for(const startingEnergy of [0,37,99,100,0]) {
+    r.reset(); r.energy.value=startingEnergy; r.energy.consume(10);
+    s.begin(r); const [event]=s.update(1,r);
+    assert.equal(event.item.id,DEN_HAY.id); assert.equal(r.energy.value,100);
+    assert.equal(r.energy.recovering,false); assert.equal(s.count,41);
+    assert.equal(s.nearest(r).id,DEN_HAY.id);
+    // Staying held never grants another refill without a fresh press.
+    r.energy.spend(10); assert.deepEqual(s.update(2,r),[]); assert.equal(r.energy.value,90);
+  }
+});
+
+test('interrupted special-hay holds grant no energy and restart from zero', () => {
+  for(const interrupt of [(r,s)=>s.cancel(),r=>r.x+=2,r=>r.grounded=false]) {
+    const r=new RabbitController(world), s=new ConsumableSystem(world); r.energy.value=0;
+    s.begin(r); s.update(.6,r); interrupt(r,s); s.update(.4,r);
+    assert.equal(r.energy.value,0); assert.equal(s.progress,0);
+    r.reset(); s.begin(r); s.update(.5,r); assert.equal(r.energy.value,0);
+    s.update(.5,r); assert.equal(r.energy.value,100);
+  }
+});
+
+test('special hay requires grounded reach inside the den and respects obstructions', () => {
+  const r=new RabbitController(world), s=new ConsumableSystem(world);
+  assert.equal(canReachConsumable(r,DEN_HAY,world),true);
+  for(const offset of [{x:DEN.x+DEN.radius+.1},{y:4.2},{grounded:false}]) {
+    assert.equal(canReachConsumable({...r,...offset},DEN_HAY,world),false);
+  }
+  const blocked=new World(); blocked.addBox(DEN.x-.45,.5,DEN.z,.1,1,2);
+  assert.equal(canReachConsumable(r,DEN_HAY,blocked),false);
+  // Even a reachable permanent item beside the fence cannot be used from outside.
+  assert.equal(canReachConsumable({...r,x:DEN.x+DEN.radius+.1},
+    {...DEN_HAY,x:DEN.x+DEN.radius-.1,z:DEN.z},new World()),false);
+  assert.equal(s.nearest({...r,x:DEN.x+2}),null);
+});
+
+test('permanent den hay never suppresses the finite-snack restock timer', () => {
+  const r=new RabbitController(world), s=new ConsumableSystem(world,{random:()=>0});
+  s.items.clear(); s.update(59,r); s.begin(r);
+  const events=s.update(1,r);
+  assert.deepEqual(events.map(e=>e.kind),['spawn','consume']);
+  assert.equal(s.count,1); assert.equal(s.nearest(r).id,DEN_HAY.id);
+  s.update(60,r); assert.equal(s.count,2); assert.equal([...s.availableItems()].length,3);
+  assert.ok([...s.items.values()].every(item=>!item.permanent && item.id!==DEN_HAY.id));
+});
+
+test('special hay stays rendered after eating and uses only one additional drawing batch', () => {
+  const scene=new THREE.Scene(), view=createConsumables(scene,world), r=new RabbitController(world);
+  const hay=scene.getObjectByName('Special den hay'); assert.equal(hay.count,1);
+  const original=new THREE.Matrix4(); hay.getMatrixAt(0,original);
+  for(let i=0;i<3;i++) {
+    view.system.begin(r); view.handle(view.system.update(1,r));
+    view.sync(.3); assert.equal(hay.count,1); view.sync(1); assert.equal(hay.count,1);
+    assert.equal(view.system.count,41);
+  }
+  const matrix=new THREE.Matrix4(); hay.getMatrixAt(0,matrix);
+  close(matrix.elements[0],original.elements[0]); close(matrix.elements[12],DEN_HAY.x,1e-6);
+  view.setUpperVisible(false); assert.equal(hay.parent.visible,true);
+  assert.equal(scene.children[0].children.length+scene.children[1].children.length,19);
 });

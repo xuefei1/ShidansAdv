@@ -47,7 +47,7 @@ Open **http://localhost:4173** if the browser does not open automatically. No pa
 
 **First adventure:** charge a jump in the den and release while moving to escape. Find the hay outside the den and hold left-click nearby to try eating. Press **M** for the floor plan and seven little discoveries: sofa, library passage, upstairs, bed quilt, balcony, backyard, and hedge hideaway. AI pursuit and happiness scoring remain later milestones.
 
-## Energy and consumables (0.3.0)
+## Energy and consumables (0.3.1)
 
 Energy starts at **100.00%**, displayed to two decimal places. A full bar supports **30 seconds of continuous sprinting**, including passive recovery. Charged jumps cost **5–10 energy**, depending on charge time. Ordinary movement and small hops (including charged inputs on slippery wood) are free. Standing still with Shift is free. Empty energy restores ordinary speed; release Shift before sprinting again. A charged jump without enough energy becomes a free small hop.
 
@@ -67,7 +67,9 @@ The house starts with **41 consumables** at fixed, reachable feeding places, kit
 | Noodles | +30 | 2 |
 | Cake | +50 | 1 |
 
-The den stays free of consumables, including during restocking. The loose collectible books are separate from solid climbing steps. While fewer than **two** items remain, one appears every **60 seconds of active play**, stopping at two. The choice of kind is weighted by **1 / energy reward**, then placed in a vacant appropriate spot. Pause, map, house tour, title, and background tabs freeze resource timers. Home/title navigation preserves supplies, energy, and pending food recovery; reloading starts a fresh session.
+Inside the den, **special hay in a cream dish with a mint bow** is within reach of Shidan’s starting position. Hold left-click for one uninterrupted second to restore energy immediately to **100%**, even from zero. This stack is permanent and reusable; it stays visible after eating and is excluded from the snack count and random restocking. It prevents running out of energy from trapping Shidan inside the fence.
+
+The 41 finite snacks and their restocks stay outside the den. The loose collectible books are separate from solid climbing steps. While fewer than **two** finite items remain, one appears every **60 seconds of active play**, stopping at two. The choice of kind is weighted by **1 / energy reward**, then placed in a vacant appropriate spot. Pause, map, house tour, title, and background tabs freeze resource timers. Home/title navigation preserves supplies, energy, and pending food recovery; reloading starts a fresh session.
 
 ## Included in milestone 1
 
@@ -108,7 +110,7 @@ For rendering measurements, open **http://localhost:4173/tests/performance.html*
 
 The build writes `dist/`, which can be served by any static HTTP host. It has no runtime CDN calls, analytics or backend. Double-clicking `index.html` directly is unsupported because browser ES modules require an HTTP origin.
 
-The browser QA page also has **Run energy and eating checks**. It starts a fresh session, exercises sprint/jump costs, interrupted and completed holds, gradual recovery, and home/title persistence. Unit tests simulate 30-second sprinting and restocking without waiting in real time.
+The browser QA page also has **Run energy and eating checks**. It starts a fresh session, exercises sprint/jump costs, interrupted and completed holds, gradual recovery, and home/title persistence. **Check permanent den hay** tests cancelled holds, full refills and repeated use through the actual game controls. Unit tests simulate exhaustion, a refill followed by escape, 30-second sprinting and restocking without waiting in real time.
 
 ## Project map
 
@@ -123,7 +125,7 @@ The browser QA page also has **Run energy and eating checks**. It starts a fresh
 | `src/poop.js` | Instanced poop-ball rendering |
 | `src/model.js` | Procedural rabbit model, animation and geometry helpers |
 | `src/energy.js` | Sprint/jump costs, passive recovery, timed food rewards |
-| `src/consumable-data.js` | Nine item kinds and 41 authored locations |
+| `src/consumable-data.js` | Nine finite item kinds, 41 authored locations, and special den hay |
 | `src/consumable-system.js` | Reach/occlusion, hold interaction, weighted restocking |
 | `src/consumables.js` | Instanced snack models, selection ring, disappearance particles |
 | `src/house.js` | House structure, true openings, den, stairs and static batching |

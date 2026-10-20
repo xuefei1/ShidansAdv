@@ -1,4 +1,4 @@
-import { FLOOR_HEIGHT as H } from './layout.js';
+import { DEN, FLOOR_HEIGHT as H } from './layout.js';
 
 export const CONSUMABLE_TYPES = Object.freeze({
   hay: { name: 'Hay stack', energy: 10, color: 0xd6b85c, verb: 'Nibble' },
@@ -11,6 +11,14 @@ export const CONSUMABLE_TYPES = Object.freeze({
   cake: { name: 'Cake', energy: 50, color: 0xe6a7b6, verb: 'Eat' },
   noodles: { name: 'Noodles', energy: 30, color: 0xe6cb93, verb: 'Eat' },
 });
+
+// A permanent recovery point, separate from the finite snacks and their restock pool.
+// Reachable from the reset position without sprinting or jumping.
+export const DEN_HAY = Object.freeze({
+  id: 'den-hay', type: 'hay', permanent: true, x: DEN.x - .9, y: 0, z: DEN.z + .3,
+});
+const DEN_HAY_DETAILS = Object.freeze({ name: 'Special den hay', energy: 100, color: 0xd6b85c, verb: 'Nibble' });
+export const consumableDetails = item => item.permanent ? DEN_HAY_DETAILS : CONSUMABLE_TYPES[item.type];
 
 // Fixed, reachable places on both floors. Books here are loose chewable props;
 // the large structural book steps in furnishings.js remain solid climbing aids.

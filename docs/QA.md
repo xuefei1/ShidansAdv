@@ -1,5 +1,13 @@
 # Verification
 
+## Permanent den hay — 0.3.1
+
+Verified locally on 2026-10-19 with Node.js 24.19.0 and the Codex in-app browser on Windows.
+
+- All 105 Node tests pass. New coverage includes recovery from zero energy followed by an actual charged escape through the furnished den, repeated/full-bar use, interrupted holds, inside-den reach and obstruction checks, independent restocking, and persistent rendered geometry. The special hay costs one additional drawing batch.
+- All nine **Check permanent den hay** browser checks pass through the real game controls: prompt at spawn, full-refill wording, spending jump energy, release/menu cancellation, exactly 100% on completion, unchanged finite snack count, and reuse after home/title navigation. No browser warnings or errors were logged. The runner waits for visible game state so rendering throttling does not invalidate hold/jump timing.
+- The cream dish, mint bow, selection ring and unlimited-refill prompt were visually inspected in the playable scene. JavaScript parsing, static build and local server smoke checks pass.
+
 ## Milestone 2 — energy and consumables 0.3.0
 
 Verified locally on 2026-10-16 with Node.js 24.21.0 and the Codex in-app browser on macOS.

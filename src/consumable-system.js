@@ -1,4 +1,4 @@
-import { CONSUMABLE_SLOTS, CONSUMABLE_TYPES, randomConsumableType } from './consumable-data.js';
+import { CONSUMABLE_SLOTS, DEN_HAY, consumableDetails, randomConsumableType } from './consumable-data.js';
 import { DEN } from './layout.js';
 
 export const CONSUME_SECONDS = 1;
@@ -23,6 +23,7 @@ export function canReachConsumable(player, item, world) {
   if (!player.grounded || Math.abs(player.y - item.y) > .45 || Math.hypot(player.x - item.x, player.z - item.z) > CONSUME_REACH) return false;
   const a = { x: player.x, y: player.y + .32, z: player.z }, b = { x: item.x, y: item.y + .2, z: item.z };
   const insideDen = p => Math.hypot(p.x - DEN.x, p.z - DEN.z) < DEN.radius;
+  if (item.permanent && !insideDen(player)) return false;
   if (Math.min(a.y, b.y) < DEN.fenceHeight && insideDen(a) !== insideDen(b)) return false;
   return !world.query(Math.min(a.x,b.x), Math.min(a.z,b.z), Math.max(a.x,b.x), Math.max(a.z,b.z)).some(box => segmentHitsBox(a,b,box));
 }
@@ -34,12 +35,14 @@ export class ConsumableSystem {
     // clearance that an item's geometry cannot overlap the den fence either.
     this.slots = slots.filter(slot => Math.hypot(slot.x - DEN.x, slot.z - DEN.z) >= DEN.radius + .4);
     this.items = new Map(this.slots.map(slot => [slot.id, { ...slot }]));
+    this.denHay = DEN_HAY;
     this.target = null; this.progress = 0; this.restockTime = 0;
   }
   get count() { return this.items.size; }
+  *availableItems() { yield this.denHay; yield* this.items.values(); }
   nearest(player) {
     let found = null, distance = Infinity;
-    for (const item of this.items.values()) {
+    for (const item of this.availableItems()) {
       const d = Math.hypot(player.x - item.x, player.z - item.z);
       if (d < distance && canReachConsumable(player, item, this.world)) { found = item; distance = d; }
     }
@@ -67,13 +70,14 @@ export class ConsumableSystem {
       if (this.count >= 2) this.restockTime = 0;
     } else this.restockTime = 0;
     if (!this.target) return events;
-    if (!this.items.has(this.target.id) || !canReachConsumable(player, this.target, this.world)) { this.cancel(); return events; }
+    if ((this.target !== this.denHay && !this.items.has(this.target.id)) || !canReachConsumable(player, this.target, this.world)) { this.cancel(); return events; }
     // Do not credit the part of the first frame before the mouse was pressed.
     this.progress += Math.max(0, dt - this.holdDelay);
     this.holdDelay = Math.max(0, this.holdDelay - dt);
     if (this.progress + 1e-9 >= CONSUME_SECONDS) {
-      const item = this.target, type = CONSUMABLE_TYPES[item.type];
-      this.items.delete(item.id); player.energy.consume(type.energy);
+      const item = this.target, type = consumableDetails(item);
+      if (item.permanent) player.energy.refill();
+      else { this.items.delete(item.id); player.energy.consume(type.energy); }
       events.push({ kind: 'consume', item, energy: type.energy });
       // A fresh press is required for the next item, even if the button stays down.
       this.cancel();

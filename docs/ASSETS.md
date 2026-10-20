@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | Three.js 0.180.0 | Official npm package `https://registry.npmjs.org/three/-/three-0.180.0.tgz` | MIT; full notice retained in `vendor/THREE-LICENSE.txt` |
 | Shidan model and procedural animation | Original project geometry in `src/model.js`, informed by the user's photographs | Project Apache-2.0 license |
-| Nine consumable models and golden disappearance particles | Original procedural geometry in `src/consumables.js` | Project Apache-2.0 license |
+| Nine consumable models, permanent den hay with dish and bow, and golden particles | Original procedural geometry in `src/consumables.js` | Project Apache-2.0 license |
 | House, furniture, den, props, plants and wall art | Original project geometry in `src/house.js` | Project Apache-2.0 license |
 | Interface, rabbit icon and canvas-generated labels | Original project code | Project Apache-2.0 license |
 | Hop, landing, footstep and discovery sounds | Original Web Audio synthesis in `src/audio.js` | Project Apache-2.0 license |

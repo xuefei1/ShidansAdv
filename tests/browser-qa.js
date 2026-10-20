@@ -8,7 +8,7 @@ const check = (label, passed, detail = '') => {
   const li = document.createElement('li'); li.className = passed ? 'pass' : 'fail'; li.textContent = `${passed ? 'PASS' : 'FAIL'}: ${label}${detail ? ` (${detail})` : ''}`; results.append(li);
   if (!passed) throw new Error(label);
 };
-const disableRunners = disabled => ['run', 'energy', 'route', 'stairs'].forEach(id => { document.getElementById(id).disabled = disabled; });
+const disableRunners = disabled => ['run', 'energy', 'hay', 'route', 'stairs'].forEach(id => { document.getElementById(id).disabled = disabled; });
 async function waitForScene(canvas) {
   const deadline = performance.now() + 15000;
   while (canvas.dataset.ready !== 'true') {
@@ -165,6 +165,57 @@ async function walkRoute(stairOnly = false) {
 document.getElementById('route').addEventListener('click', () => walkRoute());
 document.getElementById('stairs').addEventListener('click', () => walkRoute(true));
 
+// Wait for visible simulation state, not wall-clock frame assumptions: embedded
+// browsers can throttle rendering. Inputs still go through the real game handlers.
+document.getElementById('hay').addEventListener('click', async () => {
+  results.replaceChildren(); disableRunners(true);
+  await new Promise(resolve => { frame.addEventListener('load',resolve,{once:true}); frame.src='/'; });
+  const w=frame.contentWindow, d=frame.contentDocument, canvas=d.getElementById('game');
+  const key=(type,code)=>canvas.dispatchEvent(new w.KeyboardEvent(type,{code,bubbles:true}));
+  const mouse=type=>canvas.dispatchEvent(new w.MouseEvent(type,{button:0,clientX:300,clientY:400,bubbles:true}));
+  const energy=()=>Number(canvas.dataset.energy), progress=()=>Number(canvas.dataset.consumeProgress);
+  const until=async (condition,label) => {
+    const deadline=performance.now()+90000;
+    while(!condition()) {
+      if(performance.now()>deadline || !d.getElementById('fatal').hidden) throw new Error(`Timed out: ${label}`);
+      await wait(50);
+    }
+  };
+  const jump=async () => {
+    key('keydown','Space'); await until(()=>!d.getElementById('charge').hidden && d.getElementById('charge-percent').textContent==='100%','charge jump');
+    key('keyup','Space'); await until(()=>energy()<99 && canvas.dataset.grounded==='true','land after spending energy');
+  };
+  const originalLock=canvas.requestPointerLock;
+  try {
+    await waitForScene(canvas);
+    canvas.requestPointerLock=()=>Promise.reject(new w.DOMException('QA fallback','NotAllowedError'));
+    d.getElementById('play').click();
+    await until(()=>canvas.dataset.consumeTarget==='den-hay','hay prompt');
+    check('Special hay is reachable from the starting position',d.getElementById('consume-name').textContent==='Special den hay');
+    check('The prompt explains the full, unlimited refill',d.getElementById('consume-energy').textContent==='100% · unlimited');
+    await jump(); check('A charged jump spends energy before the refill',energy()<91);
+    mouse('mousedown'); await until(()=>progress()>=.3,'partial eating hold'); mouse('mouseup');
+    await until(()=>progress()===0,'cancelled hold');
+    check('Releasing early grants no refill',energy()<91);
+    mouse('mousedown'); await until(()=>progress()>=.3,'hold before pause');
+    d.getElementById('menu-button').click(); d.getElementById('resume').click();
+    await until(()=>progress()===0,'resume after cancellation');
+    check('Opening the menu cancels the hay hold',energy()<91);
+    mouse('mousedown'); await until(()=>energy()===100,'full refill'); mouse('mouseup');
+    check('Completed hold restores exactly 100%',canvas.dataset.lastConsumedId==='den-hay' && canvas.dataset.energyRecovering==='false');
+    check('The special stack remains available without consuming house snacks',canvas.dataset.consumeTarget==='den-hay' && canvas.dataset.consumableCount==='41');
+    d.getElementById('home').click();
+    d.getElementById('menu-button').click(); d.getElementById('back-title').click(); d.getElementById('play').click();
+    await jump(); mouse('mousedown'); await until(()=>energy()===100,'repeat refill'); mouse('mouseup');
+    check('The same stack refills again after home and title navigation',canvas.dataset.consumeTarget==='den-hay' && canvas.dataset.consumableCount==='41');
+    check('No fatal browser error',d.getElementById('fatal').hidden);
+  } catch(error) { checkFailure(error); }
+  finally { mouse('mouseup'); key('keyup','Space'); canvas.requestPointerLock=originalLock; disableRunners(false); }
+  function checkFailure(error) {
+    const li=document.createElement('li'); li.className='fail'; li.textContent=`FAIL: ${error.message}`; results.append(li); console.error(error);
+  }
+});
+
 document.getElementById('energy').addEventListener('click', async () => {
   results.replaceChildren(); disableRunners(true);
   // A new loaded session gives this test its authored population and full bar.
@@ -179,7 +230,7 @@ document.getElementById('energy').addEventListener('click', async () => {
     canvas.requestPointerLock=()=>Promise.reject(new w.DOMException('QA fallback','NotAllowedError'));
     d.getElementById('play').click(); await wait(200);
     check('Energy starts at exactly 100.00%',d.getElementById('energy-value').textContent==='100.00%');
-    check('The house starts with 41 snacks, all outside Shidan’s den',count()===41 && !canvas.dataset.consumeTarget);
+    check('The house starts with 41 snacks plus permanent hay in the den',count()===41 && canvas.dataset.consumeTarget==='den-hay');
     key('keydown','Space'); key('keyup','Space'); await wait(750);
     check('A tap hop costs no energy',energy()===100);
     key('keydown','ShiftLeft'); key('keydown','KeyD'); await wait(300); key('keyup','KeyD'); key('keyup','ShiftLeft'); await wait(100);

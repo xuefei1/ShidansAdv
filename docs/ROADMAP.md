@@ -44,6 +44,7 @@ Scope updated on 2026-10-15 to the requested energy/consumable loop.
 - [x] Disappearance particles and one-second energy recovery, capped at 100.
 - [x] One new item per minute below two remaining, with inverse-energy probabilities.
 - [x] Menus/background freeze resource timers; home/title preserve the session.
+- [x] Permanent special den hay restores full energy, allowing exhausted rabbits to escape again.
 - [x] Unit coverage and an actual-game browser energy/eating runner.
 
 Acceptance: sprint and charged leaps use the displayed energy; all nine items can be found, consumed and depleted; cancelled holds grant nothing; low supplies replenish at the specified rate. User playtesting remains the final tuning step.
