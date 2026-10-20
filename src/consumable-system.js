@@ -34,10 +34,10 @@ export class ConsumableSystem {
     // Both the initial population and restocking use this pool. Leave enough
     // clearance that an item's geometry cannot overlap the den fence either.
     this.slots = slots.filter(slot => Math.hypot(slot.x - DEN.x, slot.z - DEN.z) >= DEN.radius + .4);
-    this.items = new Map(this.slots.map(slot => [slot.id, { ...slot }]));
     this.denHay = DEN_HAY;
-    this.target = null; this.progress = 0; this.restockTime = 0;
+    this.reset();
   }
+  reset() { this.items = new Map(this.slots.map(slot => [slot.id, { ...slot }])); this.restockTime = 0; this.cancel(); }
   get count() { return this.items.size; }
   *availableItems() { yield this.denHay; yield* this.items.values(); }
   nearest(player) {

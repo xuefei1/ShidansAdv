@@ -52,7 +52,7 @@ Gravity is 16 m/s², normal jump impulse 4.2 m/s, fully charged impulse 8.25 m/s
 
 ### Poop balls (milestone 1 revision)
 
-Right-click the game, or press P on a trackpad, to drop one 0.065 m radius brown ball behind Shidan. There is no cooldown or timed disappearance. Balls collide with the room, furniture, ceilings, den fence, stairs, other balls and Shidan's heavier capsule; Shidan can push them. They remain through pause, return-home and title navigation. The current page session holds 10,000 balls, replacing only the oldest when a new ball would exceed the cap. Reloading starts a new session; disk persistence is not part of this prototype.
+Right-click the game, or press P on a trackpad, to drop one 0.065 m radius brown ball behind Shidan. There is no cooldown or timed disappearance. Balls collide with the room, furniture, ceilings, den fence, stairs, other balls and Shidan's heavier capsule; Shidan can push them. They remain through pause, return-home and title navigation. The current page session holds 10,000 balls, replacing only the oldest when a new ball would exceed the cap. Bedtime or reloading starts a new session; disk persistence is not part of this prototype.
 
 The balls use a fixed-capacity instance pool, spatial collision grids, and sleeping bodies that wake on contact. Sleeping preserves collision and rendering. They are rendered in one instanced draw instead of creating 10,000 independent meshes. The sphere solver is intentionally separate from the rabbit's kinematic controller.
 
@@ -64,11 +64,21 @@ The requested second milestone adds an energy loop to the exploration foundation
 
 Permanent special hay is a separate recovery point inside the den, reachable from the reset position. The same one-second hold refills energy immediately to exactly 100 and clears pending food recovery. Interrupted holds grant nothing. The hay requires grounded reach inside the den and obeys obstruction checks; it never disappears, never enters the finite snack count or random pool, and requires a fresh press for each use. An exhausted rabbit can therefore recover and perform a charged escape after returning home.
 
-While fewer than two finite items remain, each 60 seconds of active play adds one item. The kind is sampled with weight `1 / energy`, before choosing a vacant place associated with that kind. If the single cake spot is occupied, another vacant food spot is used. At two remaining the timer stops and resets. Counts and exact rewards are listed in README.md. Pauses, maps, tours, title, and hidden tabs freeze resource time; home/title navigation retains energy, pending rewards and remaining items until page reload.
+While fewer than two finite items remain, each 60 seconds of active play adds one item. The kind is sampled with weight `1 / energy`, before choosing a vacant place associated with that kind. If the single cake spot is occupied, another vacant food spot is used. At two remaining the timer stops and resets. Counts and exact rewards are listed in README.md. Pauses, maps, tours, title, and hidden tabs freeze resource time; home/title navigation retains energy, pending rewards and remaining items until bedtime or page reload.
 
 `consumables.js` gives each kind original procedural geometry. Hay is a cylindrical sheaf of fine, bent grass blades with uneven tips and a thin twine tie. The larger special bundle has a cream dish and mint bow, merged into one extra drawing batch. Each finite kind/floor shares an instanced mesh, limiting all food objects to 19 drawing submissions plus a nearby-item ring and particle batch. Selected items wiggle during eating. Finite snacks then lift, shrink, and release golden particles, becoming unavailable immediately; their visual effect lasts 0.65 seconds. The permanent stack releases particles while staying visible. Neither consumables nor particles cast into the cached sunlight map. The upper collectible layer follows the house cutaway.
 
 Happiness points, drinking, cardboard/wire interactions, and AI noise events from the earlier milestone sketch remain future work.
+
+## Daylight and bedtime (0.4.0)
+
+`day-cycle.js` owns a 600-second active-play clock, independent of the capped physics step. It settles elapsed time whenever play is paused or resumed, preventing pause intervals from being charged on the next frame. Pause, title, map, house view and hidden-tab states stop it; returning to the den does not restart it. Full night starts at 480 seconds elapsed, leaving 120 seconds of lamplit exploration. The HUD shows time until bedtime and the current phase.
+
+`day-lighting.js` smoothly blends blue noon, warm dusk and cool night sky/ambient/direct lighting, with stars and a moon fading in. The sun direction remains fixed to reuse the cached sunlight shadow map. Eighteen authored ceiling/floor fixtures have physical collision; two instanced diffuser meshes share one animated emissive material. Four constant, unshadowed point lights follow the nearest lamp locations by rabbit position, preserving shader variants and fading replacements rather than switching on camera turns. This approximates local lighting without adding per-lamp shadow passes. The sky is one low-detail gradient dome plus star and moon draws.
+
+At expiry, the game clears held input, closes overlays and returns to the title. `adventure-session.js` resets energy/recovery, snacks/restock/visual effects, and the ball pool/colliders; discoveries, camera and clock also reset. The house and renderer are reused. Manual title navigation continues to preserve the current round. `start.js` supplies normal real time; the development-only daylight preview injects a controlled clock to verify the same game code.
+
+Happiness points, a target score, leaderboard and cotton-cover animation are still future work.
 
 ## Planned stealth and happiness systems
 
@@ -76,7 +86,7 @@ The mistress initially reclines on the couch using her phone. She occasionally l
 
 Future enemy states: distracted, laughing, suspicious, pursuing, searching, returning and capture. Navigation must understand furniture, floors and stairs. Sound effects and AI noise events must be separate so muting audio never changes difficulty.
 
-Food and chewing award configurable happiness points. Each interaction should have a readable prompt, duration, sound profile and depletion state. Clean water may become a small safe activity. Values and round duration are intentionally undecided until traversal and capture are fun.
+Food and chewing will award configurable happiness points. Each interaction should have a readable prompt, duration, sound profile and depletion state. Clean water may become a small safe activity. Happiness values remain undecided; the current round lasts ten minutes.
 
 Bedtime ends the round, places the cotton cover over the den and records the final score with the entered name. Start with a local leaderboard with clear persistence behavior; an online leaderboard needs a separate backend and validation decision.
 

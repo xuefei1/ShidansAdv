@@ -13,6 +13,9 @@ import { renderPixelRatio } from './render-quality.js';
 import { createConsumables } from './consumables.js';
 import { consumableDetails } from './consumable-data.js';
 import { highJumpCost } from './energy.js';
+import { DayClock, DAY_SECONDS, formatCountdown } from './day-cycle.js';
+import { createDayLighting } from './day-lighting.js';
+import { resetAdventure } from './adventure-session.js';
 
 const elements = new Map();
 const $ = id => { if (!elements.has(id)) elements.set(id, document.getElementById(id)); return elements.get(id); };
@@ -28,9 +31,9 @@ window.addEventListener('error', event => {
   if (source.startsWith(new URL('./src/', location.href).href) || source.startsWith(new URL('./vendor/', location.href).href)) fatal(`The game could not continue: ${event.message}`);
 });
 
-boot().catch(error => { console.error(error); fatal(error.message); });
-
-async function boot() {
+// The QA entry point supplies a controllable monotonic clock. Normal play always
+// uses real time through start.js; there are no time cheats in the game controls.
+export async function boot({clockNow=()=>performance.now()}={}) {
   $('play').disabled = $('tour').disabled = true;
   $('load-status').hidden = false;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -44,15 +47,17 @@ async function boot() {
   const scene = new THREE.Scene(); scene.background = new THREE.Color(0xe3e6d6);
   scene.fog = new THREE.Fog(0xe3e6d6, 140, 260);
   const camera = new THREE.PerspectiveCamera(46, innerWidth / innerHeight, .04, 260);
-  scene.add(new THREE.HemisphereLight(0xfff6db, 0x99aca1, 2.0));
+  const hemisphere = new THREE.HemisphereLight(0xfff6db, 0x99aca1, 2.0); scene.add(hemisphere);
   const sun = new THREE.DirectionalLight(0xffe8b9, 3.3); sun.position.set(-18, 42, 22); sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -44, right: 44, top: 44, bottom: -44, near: 1, far: 130 });
   sun.shadow.normalBias = .025; sun.shadow.bias = -.00008; sun.shadow.radius = 3; scene.add(sun);
   const fill = new THREE.DirectionalLight(0xc9e5f0, 1.1); fill.position.set(7, 8, -4); scene.add(fill);
   const stage = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0xe1e4d2, roughness: 1 }));
   stage.rotation.x = -Math.PI / 2; stage.position.y = -.56; stage.receiveShadow = true; scene.add(stage);
-  const { world, layers, upper, ceiling } = createHouse(scene);
+  const { world, layers, upper, ceiling, lamps } = createHouse(scene);
   layers.forEach(batchStaticGeometry);
+  const daylight = createDayLighting(scene,{sun,fill,hemisphere},lamps);
+  const dayClock = new DayClock(clockNow());
   const rabbit = createRabbit(); scene.add(rabbit.root);
   // Shidan already has an animated contact shadow. Keep her and the tiny balls
   // out of the cached sun map, so they never leave a frozen shadow behind.
@@ -81,7 +86,10 @@ async function boot() {
     onLockDenied: () => { $('camera-hint').hidden = false; setText('camera-hint', 'Drag to look · hold left-click near food to eat · scroll to zoom'); },
     onLockChange: (locked, lostLock) => { $('camera-hint').hidden = locked; if (lostLock && mode === 'play' && !overview && !mapOpen) pause(); },
   });
-  function clearInput() { keys.clear(); mouse.clear(); consumables.system.cancel(); setHidden('consume-prompt', true); queuedHop = false; jumpSeen = false; controller.releaseInput(); }
+  function clearInput() {
+    keys.clear(); mouse.clear(); consumables.system.cancel(); setHidden('consume-prompt', true); queuedHop = false; jumpSeen = false; controller.releaseInput();
+    dayClock.setActive(mode==='play' && !overview && !mapOpen && !document.hidden,clockNow());
+  }
   const { lock, unlock } = mouse;
   function showGame() {
     document.body.classList.add('playing'); document.body.classList.remove('touring');
@@ -111,6 +119,7 @@ async function boot() {
     $('view').innerHTML = overview ? '<kbd>V</kbd> Follow Shidan' : '<kbd>V</kbd> House view';
   }
   $('play').addEventListener('click', () => {
+    setHidden('day-ended',true);
     escaped = upstairs = false; discovered.clear();
     ['step-den', 'step-upstairs', 'step-window'].forEach(id => $(id).classList.remove('done'));
     setText('quest-title', 'The world beyond the fence');
@@ -118,20 +127,31 @@ async function boot() {
     reset(); showGame(); lock(); toast('Hold left-click near a snack to eat. Shift and charged leaps use energy.', 6);
   });
   $('tour').addEventListener('click', () => {
-    mode = 'tour'; overview = true; surveyFloor = 0; renderAtlas(); document.body.classList.add('touring');
+    mode = 'tour'; overview = true; clearInput(); surveyFloor = 0; renderAtlas(); document.body.classList.add('touring');
     $('welcome').hidden = true; $('intro-caption').hidden = true; $('menu-button').hidden = false;
     $('menu-button').innerHTML = 'Explore as Shidan <kbd>Enter</kbd>';
   });
   $('menu-button').addEventListener('click', () => { if (mode === 'tour') { $('menu-button').innerHTML = 'Pause <kbd>Esc</kbd>'; showGame(); } else pause(); });
   $('resume').addEventListener('click', resume);
   $('reset').addEventListener('click', () => { reset(); showGame(); });
-  $('back-title').addEventListener('click', () => {
+  function returnToTitle() {
     mode = 'title'; overview = false; mapOpen = false; $('atlas').hidden = true; clearInput(); unlock(); controller.reset(); cameraInitialized = false;
     document.body.classList.remove('playing', 'touring');
     $('pause').hidden = true; $('welcome').hidden = false; $('intro-caption').hidden = false; $('intro-footer').hidden = false;
     $('hud').hidden = true; $('menu-button').hidden = true; $('menu-button').innerHTML = 'Pause <kbd>Esc</kbd>';
     $('play').focus();
-  });
+  }
+  $('back-title').addEventListener('click', returnToTitle);
+  function finishDay() {
+    returnToTitle();
+    resetAdventure({clock:dayClock,controller,consumables,poop},clockNow());
+    escaped=upstairs=false; discovered.clear(); upperApproach=false;
+    yaw=-.45; pitch=.43; distance=5.2; cameraInitialized=false;
+    ['step-den','step-upstairs','step-window'].forEach(id=>$(id).classList.remove('done'));
+    setData('lastConsumed',''); setData('lastConsumedId',''); setData('lastPoopPosition','');
+    setText('poop-count','0'); setHidden('day-ended',false); setHidden('toast',true); toastUntil=0;
+    updateHUD(); drawMap(); renderDirty=true;
+  }
   $('home').addEventListener('click', () => { reset(); canvas.focus(); });
   $('view').addEventListener('click', setOverview);
   function toggleMap() {
@@ -220,6 +240,14 @@ async function boot() {
   }
 
   function updateHUD() {
+    setText('day-countdown',formatCountdown(dayClock.remaining));
+    setText('day-phase',daylight.state.phase);
+    setText('day-caption',daylight.state.night===1 ? 'The house is lit' : 'Night falls at 2:00');
+    $('day-clock').dataset.night=String(daylight.state.night===1);
+    $('day-clock').dataset.paused=String(!dayClock.active);
+    $('day-fill').style.width=`${dayClock.remaining/DAY_SECONDS*100}%`;
+    setData('dayRemaining',dayClock.remaining.toFixed(2)); setData('dayPhase',daylight.state.phase);
+    setData('lamps',daylight.state.lamps.toFixed(3));
     const energy = controller.energy.value.toFixed(2), nearby = consumables.system.target || consumables.system.nearest(controller);
     setText('energy-value', `${energy}%`); $('energy-fill').style.width = `${energy}%`;
     $('energy-meter').setAttribute('aria-valuenow', energy);
@@ -299,12 +327,14 @@ async function boot() {
     const frameMs = now - previousTime;
     requestAnimationFrame(frame);
     const dt = Math.min((now - previousTime) / 1000, .05); previousTime = now;
+    dayClock.update(clockNow());
+    if(dayClock.finished) finishDay();
     const frozen = mode === 'pause' || mapOpen || document.hidden;
     if (frozen && wasFrozen && !renderDirty) return;
     wasFrozen = frozen; renderDirty = false;
     if (!document.hidden) frameTimes.push(frameMs);
     if (!frozen) time += dt;
-    if (mode === 'play' && !overview && !mapOpen) {
+    if (mode === 'play' && !overview && !frozen) {
       const forward = Number(keys.has('KeyW') || keys.has('ArrowUp')) - Number(keys.has('KeyS') || keys.has('ArrowDown'));
       const right = Number(keys.has('KeyD') || keys.has('ArrowRight')) - Number(keys.has('KeyA') || keys.has('ArrowLeft'));
       const input = { x: -Math.sin(yaw) * forward + Math.cos(yaw) * right, z: -Math.cos(yaw) * forward - Math.sin(yaw) * right, run: keys.has('ShiftLeft') || keys.has('ShiftRight'), jump: keys.has('Space') };
@@ -326,7 +356,6 @@ async function boot() {
       const speed = Math.hypot(controller.vx, controller.vz);
       if (controller.grounded && speed > .6 && time - lastStep > .2) { sound.step(controller.surface === 'wood'); lastStep = time; }
       poop.update(dt, controller);
-      if (time - hudTick >= .05) { updateHUD(); hudTick = time; }
     } else consumables.sync(0);
     poop.sync();
     rabbit.root.position.set(controller.x, controller.y, controller.z);
@@ -334,6 +363,8 @@ async function boot() {
     const speed = mode === 'play' ? Math.hypot(controller.vx, controller.vz) : 0;
     rabbit.animate(time, speed, controller.grounded, controller.charge / .8, world.support(controller.x, controller.z, controller.y + .01).y);
     updateCamera(dt);
+    daylight.update(dayClock.elapsed,controller,camera,frozen?0:dt,overview||mode==='tour');
+    if (time - hudTick >= .05 || frozen) { updateHUD(); hudTick = time; }
     if (mode === 'play' && !overview && !mapOpen && time - mapTick > .12) { drawMap(); mapTick = time; }
     const surveying = overview || mode === 'tour' || (mode === 'pause' && previousMode === 'tour');
     upperApproach = upperRoomsVisible(controller, upperApproach);
@@ -351,6 +382,7 @@ async function boot() {
     if (renderer.shadowMap.needsUpdate) setData('shadowRevision', String(++shadowRevision));
     renderProfile.begin();
     renderer.render(scene, camera);
+    setData('shaderPrograms',String(renderer.info.programs.length));
     renderProfile.end(frameMs, performance.now() - cpuStart);
     if (!document.hidden) cpuTimes.push(performance.now() - cpuStart);
     if (now - profileTime >= 2000 && frameTimes.length) {
@@ -359,7 +391,7 @@ async function boot() {
       frameTimes.length = cpuTimes.length = 0; profileTime = now;
     }
   }
-  updateHUD(); drawMap(); updateCamera(0);
+  updateCamera(0); daylight.update(0,controller,camera); updateHUD(); drawMap();
   // Compile the upstairs and window variants too, before any camera turn can
   // reveal them. compileAsync uses parallel shader compilation when available.
   await renderer.compileAsync(scene, camera);

@@ -48,6 +48,10 @@ export class PoopPhysics {
     }
   }
   get count() { return this.balls.length; }
+  reset() {
+    this.balls.length = 0; this.cursor = this.sequence = 0;
+    this.active.clear(); this.grid.cells.clear(); this.dirty.clear();
+  }
   spawn({ x, y, z, vx = 0, vy = 0, vz = 0 }) {
     const slot = this.count < this.capacity ? this.count : this.cursor;
     const old = this.balls[slot];

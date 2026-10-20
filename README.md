@@ -1,6 +1,6 @@
 # Shidan’s Adventure
 
-A cozy third-person 3D action adventure starring Shidan, a black rabbit with a white nose patch and white paws. **Milestone 2 adds energy, snacks, and chewing to the playable house.**
+A cozy third-person 3D action adventure starring Shidan, a black rabbit with a white nose patch and white paws. **Explore, snack and recharge during a ten-minute day, from bright noon to a cozy, lamplit night.**
 
 ## Screenshots
 
@@ -71,6 +71,14 @@ Inside the den, **special hay in a cream dish with a mint bow** is within reach 
 
 The 41 finite snacks and their restocks stay outside the den. The loose collectible books are separate from solid climbing steps. While fewer than **two** finite items remain, one appears every **60 seconds of active play**, stopping at two. The choice of kind is weighted by **1 / energy reward**, then placed in a vacant appropriate spot. Pause, map, house tour, title, and background tabs freeze resource timers. Home/title navigation preserves supplies, energy, and pending food recovery; reloading starts a fresh session.
 
+## Noon to bedtime (0.4.0)
+
+Each adventure lasts **10 minutes of active play**. The **Until bedtime** clock starts at **10:00**, with bright blue daylight. The sky and household lighting gradually move through afternoon and a peach-and-lavender dusk. By **2:00 remaining** (eight minutes elapsed), the sky is fully night: stars and a moon appear, and ceiling pendants and floor lamps cast warm light throughout the house.
+
+Menus, the map, house view, the title screen, and inactive tabs pause the clock. Returning home or manually visiting the title preserves the remaining time. The timer uses real elapsed time independently of the physics frame cap. At **0:00**, the game returns to the main screen and resets the day, energy, snacks, discoveries and poop balls. The next adventure starts fresh at noon. Happiness points and scoring will be added later.
+
+The 18 fixtures have solid bases, stems and shades. Their glowing diffusers use two instanced batches; four reusable local lights illuminate the nearby rooms without casting extra shadow maps. The day cycle retains the existing cached sun direction and shadows.
+
 ## Included in milestone 1
 
 - A rebuilt **48 × 40 m house**, an **8 m diameter den**, and a **52 × 18 m backyard**. Shidan remains her original size; the pen fence is 1.1 m high.
@@ -86,10 +94,10 @@ The 41 finite snacks and their restocks stay outside the den. The loose collecti
 - Third-person orbit camera, running, tap jumps, charged jumps, furniture/ceiling collision, stair traversal and floor-dependent traction.
 - Pause/resume, reset, exploration guidance, and optional synthesized sound effects.
 - Right-click poop balls with gravity, rolling, bounce and collisions against the house, fence, stairs, Shidan and one another. Resting balls can be nudged awake by Shidan.
-- Up to **10,000 balls** persist for the loaded session, including through pause, return-home and title navigation. There is no timed despawn. Each additional ball replaces only the oldest; reloading the page starts a fresh session.
+- Up to **10,000 balls** persist during the adventure, including through pause, return-home and manual title navigation. Each additional ball replaces only the oldest. Bedtime or reloading the page starts a fresh session.
 - Local source control, automated physics checks, browser integration checks, and a static distribution build.
 
-**Later milestones:** happiness points and more interaction types; the mistress, her phone/laughter, noise and line-of-sight detection, pursuit and capture; a day/bedtime timer and cotton cover; player names and a persistent leaderboard. These are planned, not implemented in this build. No player name is collected yet.
+**Later milestones:** happiness points and more interaction types; the mistress, her phone/laughter, noise and line-of-sight detection, pursuit and capture; the cotton cover; player names and a persistent leaderboard. No player name is collected yet.
 
 ## Develop and verify
 
@@ -112,11 +120,18 @@ The build writes `dist/`, which can be served by any static HTTP host. It has no
 
 The browser QA page also has **Run energy and eating checks**. It starts a fresh session, exercises sprint/jump costs, interrupted and completed holds, gradual recovery, and home/title persistence. **Check permanent den hay** tests cancelled holds, full refills and repeated use through the actual game controls. Unit tests simulate exhaustion, a refill followed by escape, 30-second sprinting and restocking without waiting in real time.
 
+Open **http://localhost:4173/tests/day-cycle.html** to preview noon/dusk/night or run the countdown checks. This test entry supplies a manually advanced clock to the actual game, verifying menu pauses, night at 2:00, timeout, and a clean restart without waiting ten minutes. Normal play uses the real monotonic clock; preview controls are excluded from the distribution build.
+
 ## Project map
 
 | Path | Purpose |
 | --- | --- |
 | `src/main.js` | Scene, input, orbit camera, game state and tutorial UI |
+| `src/start.js` | Production entry point with the real-time clock |
+| `src/day-cycle.js` | Ten-minute clock, phase progression and countdown formatting |
+| `src/day-lighting.js` | Sky, stars, moon, daylight and fixed local-light pool |
+| `src/house-lamps.js` | Ceiling/floor fixtures, collision and instanced glowing diffusers |
+| `src/adventure-session.js` | Clean resource reset at bedtime |
 | `src/physics.js` | Independent character controller, collision, stairs and traction |
 | `src/layout.js` | Room, wall, opening, ramp, and discovery data |
 | `src/level-map.js` | Shared minimap and full floor plan |

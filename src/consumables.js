@@ -165,5 +165,12 @@ export function createConsumables(scene, world) {
     sparks.instanceMatrix.needsUpdate = true;
   }
   sync();
-  return { system, handle, sync, setUpperVisible(visible) { upperVisible = visible; floors[1].visible = visible; } };
+  return { system, handle, sync,
+    reset() {
+      system.reset(); visuals.clear(); particles.length = 0; time = 0;
+      for (const item of system.availableItems()) visuals.set(item.id,{item,age:1,state:'idle'});
+      sync();
+    },
+    setUpperVisible(visible) { upperVisible = visible; floors[1].visible = visible; }
+  };
 }

@@ -53,6 +53,18 @@ Deferred from the earlier sketch: drinking, cardboard/wire interactions, happine
 
 ## Milestone 3 — the mistress
 
+### Daylight foundation (0.4.0, delivered ahead of pursuit)
+
+- [x] Ten-minute active-play countdown, with full night at two minutes remaining.
+- [x] Smooth noon/afternoon/dusk/night sky and room lighting, stars and moon.
+- [x] Ceiling and floor lamps on both floors, with bounded rendering cost and collisions.
+- [x] Pause-aware clock and automatic bedtime return to title with a clean next run.
+- [x] Simulation coverage and an actual-game browser preview/check runner.
+
+Happiness accumulation, the required score and end-of-round scoring remain deferred.
+
+### Pursuit (planned)
+
 - Character model reclining on the couch, phone and random laughter.
 - Line of sight, view cone, action-noise hearing and laughter masking.
 - Pursuit, searching, loss of target, and return-to-couch behavior.
@@ -63,7 +75,7 @@ Acceptance: cover, distance and laughter timing create predictable stealth choic
 
 ## Milestone 4 — before bedtime
 
-- Round clock and an understandable bedtime warning.
+- [x] Round clock and day-to-night progression (implemented in 0.4.0).
 - Cotton cover and end-of-round sequence.
 - Player name entry, final score and persistent local leaderboard.
 - Restart flow, score ordering, ties and invalid-input handling.

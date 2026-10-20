@@ -9,6 +9,7 @@ export function createPoopBalls(scene, world) {
   const transform = new THREE.Object3D();
   return {
     physics,
+    reset() { physics.reset(); mesh.count = 0; mesh.instanceMatrix.clearUpdateRanges(); },
     drop(rabbit) { return physics.dropBehind(rabbit); },
     update(dt, rabbit) { physics.update(dt, rabbit); },
     sync() {

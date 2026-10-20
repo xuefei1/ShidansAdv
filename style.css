@@ -7,6 +7,16 @@
 
 #load-status{font-size:11px;color:#68775b}button:disabled{cursor:wait;opacity:.55}
 
+.day-clock{position:fixed;left:50%;top:92px;transform:translateX(-50%);width:248px;padding:13px 17px;pointer-events:none}
+.day-clock>div:first-child{display:flex;align-items:center;justify-content:space-between;gap:18px}
+#day-countdown{font:26px Georgia;font-variant-numeric:tabular-nums;color:#526744}
+.day-track{height:4px;background:#dedfc9;border-radius:6px;overflow:hidden;margin:9px 0}
+#day-fill{display:block;width:100%;height:100%;background:#bdac71;transition:width .2s linear}
+.day-caption{display:flex;justify-content:space-between;font-size:9px;color:#7b846c}
+.day-paused{display:none}.day-clock[data-paused=true] .day-paused{display:inline}.day-clock[data-paused=true] .day-running{display:none}
+.day-clock[data-night=true]{background:#26334bef;border-color:#a3acc15c}.day-clock[data-night=true] .eyebrow,.day-clock[data-night=true] .day-caption{color:#d0d9e8}.day-clock[data-night=true] #day-countdown{color:#ffe7af}.day-clock[data-night=true] .day-track{background:#485268}
+.welcome .day-ended{color:#637d51;font-size:12px;margin:0 0 16px}
+
 .energy{position:fixed;left:30px;top:230px;width:226px;padding:16px 18px;pointer-events:none}
 .energy-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .energy-heading>span{font-size:8px;letter-spacing:1.5px;color:#6e805e;font-weight:700}
@@ -22,3 +32,6 @@
 .charge{bottom:235px;width:285px}.toast{bottom:310px;pointer-events:none}
 @media(max-width:1100px){.controls{gap:10px;max-width:96%;flex-wrap:wrap;justify-content:center;width:max-content}}
 @media(max-width:700px){.energy{left:15px;top:225px;width:170px;padding:13px}.energy-heading{flex-wrap:wrap;gap:5px}.energy-heading>span{font-size:7px}.consume{bottom:142px;width:255px}.charge{bottom:250px;width:255px}.toast{bottom:320px;max-width:85%}}
+
+@media(max-width:850px){.day-clock{top:78px;width:220px}.day-clock .eyebrow{font-size:8px}.location,.quest{top:190px}.energy{top:320px}}
+@media(max-width:700px){.day-clock{top:69px;width:210px;padding:9px 14px}.location,.quest{top:167px}.energy{top:292px}}

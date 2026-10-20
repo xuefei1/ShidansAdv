@@ -3,6 +3,7 @@ import { World } from './physics.js';
 import { DEN, FLOOR_HEIGHT as H, RAMPS, WALLS, ROOMS } from './layout.js';
 import { cube, cylinder, beam, mat } from './model.js';
 import { furnishHouse } from './furnishings.js';
+import { createHouseLamps } from './house-lamps.js';
 
 // The house is a set of connected spaces, authored at rabbit scale. Ground and
 // upper art are batched separately for a readable floor-by-floor cutaway.
@@ -126,7 +127,8 @@ export function createHouse(scene) {
   label(ground, 'SHIDAN', DEN.x, .65, DEN.z + DEN.radius + .023, 1.25, .35, '#f7edcb', '#71825e');
   const art = { group, ground, upper, outside, solid, detail, world, label };
   furnishHouse(art);
-  return { group, world, layers: [ground, upper, outside], upper, ceiling };
+  const lamps = createHouseLamps(art);
+  return { group, world, layers: [ground, upper, outside], upper, ceiling, lamps };
 }
 
 export function label(parent, text, x, y, z, w, h, background = '#f8efda', foreground = '#6b7b5c') {

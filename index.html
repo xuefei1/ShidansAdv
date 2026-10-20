@@ -14,7 +14,7 @@
   <div class="vignette"></div>
   <header class="topbar">
     <div class="wordmark"><img src="./favicon.svg" alt=""><span>SHIDAN’S <b>ADVENTURE</b></span></div>
-    <div class="build-label"><span></span> LITTLE JOYS IN CLOVER HOUSE <i>v0.3.1</i></div>
+    <div class="build-label"><span></span> LITTLE JOYS IN CLOVER HOUSE <i>v0.4.0</i></div>
     <div class="toolbar"><button id="sound" aria-label="Enable sound" title="Sound">Sound off</button><button id="menu-button" hidden>Pause <kbd>Esc</kbd></button></div>
   </header>
 
@@ -24,13 +24,19 @@
     <p>Meet Shidan. Professional loaf.<br>Amateur escape artist. Your next adventure.</p>
     <div class="welcome-actions"><button id="play" disabled class="primary">Let’s explore <span>↗</span></button><button id="tour" disabled class="text-button">Take a house tour <span>→</span></button></div>
     <p id="load-status" role="status">Preparing your home…</p>
-    <div class="milestone-note"><span>02</span><div><b>A little snack. A little more adventure.</b><small>Nibble, recharge, and explore every corner.</small></div></div>
+    <p id="day-ended" class="day-ended" role="status" hidden>The house is asleep. Ready for another little adventure?</p>
+    <div class="milestone-note"><span>02</span><div><b>Ten minutes. A house full of possibilities.</b><small>Explore from bright noon to a cozy, lamplit night.</small></div></div>
   </main>
 
   <div id="intro-caption" class="intro-caption"><span>MEET YOUR LITTLE EXPLORER</span><b>Shidan</b><small>Black coat. White nose. Big plans.</small></div>
   <div id="intro-footer" class="intro-footer"><span>AN EXPLORATION PROTOTYPE</span><span>Made for one very loved rabbit <i>♡</i></span><span>KEYBOARD + MOUSE</span></div>
 
   <section id="hud" hidden>
+    <div id="day-clock" class="day-clock panel" data-night="false" data-paused="true">
+      <div><span class="eyebrow">UNTIL BEDTIME</span><strong id="day-countdown" role="timer" aria-label="Time until bedtime" aria-live="off">10:00</strong></div>
+      <div class="day-track"><i id="day-fill"></i></div>
+      <div class="day-caption"><span id="day-phase">Noon</span><span id="day-caption" class="day-running">Night falls at 2:00</span><span class="day-paused">Clock paused</span></div>
+    </div>
     <div id="energy-panel" class="energy panel">
       <div class="energy-heading"><span>SHIDAN’S ENERGY</span><strong id="energy-value">100.00%</strong></div>
       <div id="energy-meter" class="energy-track" role="progressbar" aria-label="Shidan’s energy" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100.00"><i id="energy-fill"></i></div>
@@ -59,9 +65,9 @@
   </section>
 
   <section id="pause" class="modal-backdrop" hidden>
-    <div class="modal"><span class="eyebrow">TAKE A LITTLE BREATHER</span><h2>Paused, little one.</h2><p>Your cozy home will be right here.</p><button id="resume" class="primary">Back to exploring <span>↗</span></button><button id="reset" class="secondary">Return to the den</button><button id="back-title" class="text-button">Back to title</button><div class="menu-notes"><b>Little joys, big adventures</b><p>Hold left-click near a snack for one full second to eat. Shift uses energy for sprinting; charged leaps cost 5–10 energy. Ordinary movement and tap hops are free.</p><p>The special hay inside your den always refills energy to 100% after a one-second hold. It never runs out. Energy also slowly recovers on its own. Snacks restore energy over one second. When fewer than two remain, one new snack appears every minute. Menus pause these timers; returning home preserves supplies.</p><p>Hold Space for a longer leap on bedding, carpet, or outdoors. Indoor wood permits only a small hop. The mistress, happiness scores, and bedtime are coming later.</p></div></div>
+    <div class="modal"><span class="eyebrow">TAKE A LITTLE BREATHER</span><h2>Paused, little one.</h2><p>Your cozy home will be right here.</p><button id="resume" class="primary">Back to exploring <span>↗</span></button><button id="reset" class="secondary">Return to the den</button><button id="back-title" class="text-button">Back to title</button><div class="menu-notes"><b>Little joys, big adventures</b><p>Hold left-click near a snack for one full second to eat. Shift uses energy for sprinting; charged leaps cost 5–10 energy. Ordinary movement and tap hops are free.</p><p>The special hay inside your den always refills energy to 100% after a one-second hold. It never runs out. Energy also slowly recovers on its own. Snacks restore energy over one second. When fewer than two remain, one new snack appears every minute. Menus pause these timers; returning home preserves supplies.</p><p>Hold Space for a longer leap on bedding, carpet, or outdoors. Indoor wood permits only a small hop. Your day lasts ten minutes, reaching full night with two minutes left. Menus, maps and house view pause the clock. At bedtime, return to the title and start a fresh day. Happiness scores and the mistress are coming later.</p></div></div>
   </section>
   <div id="fatal" class="modal-backdrop" hidden><div class="modal"><h2>A small hiccup.</h2><p id="fatal-text"></p><p>Use the launcher for your computer and a browser with WebGL 2 enabled.</p><button onclick="location.reload()" class="primary">Try again</button></div></div>
-  <script type="module" src="./src/main.js"></script>
+  <script type="module" src="./src/start.js"></script>
 </body>
 </html>

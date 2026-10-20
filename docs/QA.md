@@ -1,5 +1,14 @@
 # Verification
 
+## Daylight and bedtime — 0.4.0
+
+Verified locally on 2026-10-19 with Node.js 24.19.0 and the Codex in-app browser on Windows.
+
+- All 113 Node tests pass. Clock tests cover the exact 600-second deadline, 480-second night threshold, delayed/stale timestamps, pause transitions, reset and countdown formatting. Lighting tests cover smooth progression, both fixture types/floors, colliders, batching, a fixed four-light pool and selection independent of camera direction. A complete resource reset is tested without rebuilding the house or renderer. All existing movement, climbing, collision, snack and poop regressions still pass with the lamps installed.
+- All 19 day-cycle browser checks pass against the actual game with an injected test clock: start, real elapsed-time deltas, menu/map/overview/title pause and resume, home preservation, dusk/lamps, full night at 2:00, cached shadow and shader reuse, automatic timeout, reset and a new day. Normal production play was also checked separately: the displayed clock tracked about 19 seconds of real elapsed time, independently of the preview’s rendering throttle.
+- Noon, dusk and night are available in `/tests/day-cycle.html` for visual inspection. The playable night view shows warm lamp pools and diffusers against cooler rooms and a dark starry sky. No new runtime/shader error was logged in the successful checks. Preview time controls exist only in the test entry and are excluded from the build.
+- JavaScript parsing, static build and local HTTP smoke checks pass, including the new entry point and daylight modules. There are no new downloads, packages or network dependencies.
+
 ## Permanent den hay — 0.3.1
 
 Verified locally on 2026-10-19 with Node.js 24.19.0 and the Codex in-app browser on Windows.
@@ -132,12 +141,12 @@ Inspect title screen, Shidan's nose/paws/ears, open-topped den, the house-tour o
 - Desktop keyboard/mouse prototype; no touch or gamepad support yet.
 - Intended light cartoon style uses procedural geometry, not a final rigged character or detailed anime assets.
 - Original short sound effects only; no background music.
-- No enemy, happiness scoring, player names, leaderboard, round timer or bedtime behavior yet. Milestone 2 implements eating/chewing for energy.
+- No enemy, happiness scoring, player names, leaderboard or cotton-cover sequence yet. The ten-minute day currently ends by returning to the title and resetting the run.
 - Clover House has real walls and open door/window apertures. The missing roof and automatic upper-floor cutaway are presentation choices; physical walls, floors and ceilings remain solid.
 - Shidan can push dynamic poop spheres. Furniture is still static; there is no general-purpose rigid-body furniture simulation.
-- Poop persistence is scoped to the loaded page session, not a saved game across browser reloads.
+- Poop persistence is scoped to the current adventure, not a saved game across bedtime or browser reloads.
 - Only the new loose snack/book models are consumable. Original scenery books, climbing steps and decorative fruit remain part of the static level.
-- Energy and consumables persist only in the loaded page session. Reloading starts with a full bar and the fixed 41 items; menus freeze all resource timers.
+- Energy and consumables persist until bedtime or page reload. A fresh day starts with a full bar, the fixed 41 items and permanent den hay; menus freeze all resource timers.
 
 ## Release checks
 
