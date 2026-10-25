@@ -24,7 +24,7 @@ document.getElementById('run').addEventListener('click', async () => {
   try {
     await waitForScene(canvas);
     check('WebGL scene initialized', canvas.dataset.ready === 'true');
-    d.getElementById('play').click(); await wait(150);
+    d.getElementById('player-name').value='Gameplay QA'; d.getElementById('play').click(); await wait(150);
     if (!d.getElementById('pause').hidden) d.getElementById('resume').click();
     check('Play enters game', !d.getElementById('hud').hidden && d.getElementById('welcome').hidden);
     check('The ceiling slab is visible during downstairs play', canvas.dataset.ceilingVisible === 'true');
@@ -128,7 +128,7 @@ async function walkRoute(stairOnly = false) {
   try {
     await waitForScene(canvas);
     canvas.requestPointerLock = () => Promise.reject(new w.DOMException('Use QA drag fallback', 'NotAllowedError'));
-    d.getElementById('play').click(); await wait(200); if (!d.getElementById('pause').hidden) d.getElementById('resume').click();
+    d.getElementById('player-name').value='Gameplay QA'; d.getElementById('play').click(); await wait(200); if (!d.getElementById('pause').hidden) d.getElementById('resume').click();
     const yaw = Number(canvas.dataset.camera.split(',')[0]);
     canvas.dispatchEvent(new w.MouseEvent('mousedown', { button: 0, clientX: 200, clientY: 200, bubbles: true }));
     w.dispatchEvent(new w.MouseEvent('mousemove', { clientX: 200 + yaw / .003, clientY: 200 }));
@@ -189,10 +189,10 @@ document.getElementById('hay').addEventListener('click', async () => {
   try {
     await waitForScene(canvas);
     canvas.requestPointerLock=()=>Promise.reject(new w.DOMException('QA fallback','NotAllowedError'));
-    d.getElementById('play').click();
+    d.getElementById('player-name').value='Gameplay QA'; d.getElementById('play').click();
     await until(()=>canvas.dataset.consumeTarget==='den-hay','hay prompt');
     check('Special hay is reachable from the starting position',d.getElementById('consume-name').textContent==='Special den hay');
-    check('The prompt explains the full, unlimited refill',d.getElementById('consume-energy').textContent==='100% · unlimited');
+    check('The prompt explains the full, unlimited refill',d.getElementById('consume-energy').textContent==='100% energy · unlimited');
     await jump(); check('A charged jump spends energy before the refill',energy()<91);
     mouse('mousedown'); await until(()=>progress()>=.3,'partial eating hold'); mouse('mouseup');
     await until(()=>progress()===0,'cancelled hold');
@@ -205,7 +205,7 @@ document.getElementById('hay').addEventListener('click', async () => {
     check('Completed hold restores exactly 100%',canvas.dataset.lastConsumedId==='den-hay' && canvas.dataset.energyRecovering==='false');
     check('The special stack remains available without consuming house snacks',canvas.dataset.consumeTarget==='den-hay' && canvas.dataset.consumableCount==='41');
     d.getElementById('home').click();
-    d.getElementById('menu-button').click(); d.getElementById('back-title').click(); d.getElementById('play').click();
+    d.getElementById('menu-button').click(); d.getElementById('back-title').click(); d.getElementById('player-name').value='Gameplay QA'; d.getElementById('play').click();
     await jump(); mouse('mousedown'); await until(()=>energy()===100,'repeat refill'); mouse('mouseup');
     check('The same stack refills again after home and title navigation',canvas.dataset.consumeTarget==='den-hay' && canvas.dataset.consumableCount==='41');
     check('No fatal browser error',d.getElementById('fatal').hidden);
@@ -228,7 +228,7 @@ document.getElementById('energy').addEventListener('click', async () => {
   try {
     await waitForScene(canvas);
     canvas.requestPointerLock=()=>Promise.reject(new w.DOMException('QA fallback','NotAllowedError'));
-    d.getElementById('play').click(); await wait(200);
+    d.getElementById('player-name').value='Gameplay QA'; d.getElementById('play').click(); await wait(200);
     check('Energy starts at exactly 100.00%',d.getElementById('energy-value').textContent==='100.00%');
     check('The house starts with 41 snacks plus permanent hay in the den',count()===41 && canvas.dataset.consumeTarget==='den-hay');
     key('keydown','Space'); key('keyup','Space'); await wait(750);
@@ -256,12 +256,12 @@ document.getElementById('energy').addEventListener('click', async () => {
     check('Resume requires a fresh press to consume',Number(canvas.dataset.consumeProgress)===0 && count()===41);
     const before=energy(); mouse('mousedown'); await wait(1300);
     check('One second consumes one hay stack',count()===40 && canvas.dataset.lastConsumed==='hay');
-    check('Energy is restored gradually after consumption',energy()>before+1 && energy()<before+9 && canvas.dataset.energyRecovering==='true');
+    check('Energy is restored gradually after consumption',energy()>before+1 && energy()<before+24 && canvas.dataset.energyRecovering==='true');
     await wait(900); mouse('mouseup');
-    check('Hay finishes restoring 10 energy after a further second',Math.abs(energy()-before-10)<.15 && canvas.dataset.energyRecovering==='false');
+    check('Hay restores 25 energy after a further second, capped at 100',Math.abs(energy()-Math.min(100,before+25))<.15 && canvas.dataset.energyRecovering==='false');
     check('The held button does not chain into another snack',count()===40);
     d.getElementById('home').click(); await wait(100); check('Return home preserves consumed items',count()===40 && canvas.dataset.consumeTarget!=='hay-0');
-    d.getElementById('menu-button').click(); d.getElementById('back-title').click(); await wait(100); d.getElementById('play').click(); await wait(150);
+    d.getElementById('menu-button').click(); d.getElementById('back-title').click(); await wait(100); d.getElementById('player-name').value='Gameplay QA'; d.getElementById('play').click(); await wait(150);
     check('Title navigation preserves food and energy',count()===40 && energy()<100);
     check('Energy always shows two decimal places',/^\d+\.\d{2}%$/.test(d.getElementById('energy-value').textContent));
     check('No fatal browser error',d.getElementById('fatal').hidden);

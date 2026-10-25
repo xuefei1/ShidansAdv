@@ -95,6 +95,11 @@ export function furnishHouse({ ground: g, upper: u, outside: o, solid: s, detail
   label(g, 'SUNNY LOUNGE', -11, 2.3, 2.14, 2.8, .5);
 
   // Entrance: wide circulation on the west of the stairs and a front-door porch.
+  // Appliance landmarks for the fixed chewable cable coils.
+  chest(g,-22.7,0,8.1,1.2,.7,2.2,0xc6b296,'tv-console');
+  s(g,0x525969,-22.7,1.35,8.1,.13,1.1,1.9,'wood','television');
+  d(g,0x9cbfc4,-22.628,1.35,8.1,.012,.92,1.7);
+  d(g,0xd8e4ca,-22.618,1.24,8.1,.008,.3,1.5);
   chest(g, -3.2, 0, 9, 1.5, .55, 2.4, 0xb2c3a5, 'hall-bench');
   blanket(g, -3.2, .55, 9, 1.4, 1.4, P.peach, 'hall-bench-blanket');
   for (let i = 0; i < 10; i++) paw(g, -10.5 + i * 1.1, 0, 17 + Math.sin(i) * .2, Math.PI / 2);
@@ -106,6 +111,10 @@ export function furnishHouse({ ground: g, upper: u, outside: o, solid: s, detail
   s(g, 0xaac4a4, 22.7, .66, 11, 1.6, 1.32, 9, 'wood', 'kitchen-cabinets');
   s(g, 0xf6e9cf, 22.7, 1.38, 11, 1.75, .12, 9.15, 'wood', 'kitchen-counter');
   for (let z = 7; z < 16; z += 1.3) d(g, 0x728e6c, 21.87, .75, z, .04, .07, .32);
+  d(g,0x5c6368,21.87,.67,10.5,.025,.85,1.25);
+  d(g,0xa8b7bc,21.85,.64,10.5,.012,.55,.99);
+  d(g,0xe4d7be,21.81,1.07,10.5,.07,.055,1);
+  for(const z of [10.15,10.85]) cylinder(g,0x5c6368,22.6,1.447,z,.25,.012,.25,12);
   s(g, 0xe2e9d6, 22.6, 1.35, 4.6, 1.9, 2.7, 1.5, 'wood', 'fridge');
   d(g, 0xb4c3b0, 21.63, 1.6, 4.2, .04, .8, .07);
   s(g, 0xc4d0ab, 14, .67, 7, 4.8, 1.34, 2.7, 'wood', 'kitchen-island');
@@ -191,6 +200,10 @@ export function furnishHouse({ ground: g, upper: u, outside: o, solid: s, detail
   stool(u, 14, H, -9.6, 1.3, 1.2, .65, P.blue, 'carpet', 'desk-stool');
   chest(u, 14, H, -10.65, 1.4, 1.06, .9, 0xc7b893, 'desk-trunk');
   book(u, 14.2, H + 1.46, -12, .8, .11, .9, P.blue);
+  s(u,0x596573,15.5,H+1.91,-12.6,1.1,.74,.12,'wood','computer-screen');
+  d(u,0xafd0d0,15.5,H+1.91,-12.533,.96,.6,.01);
+  s(u,0x7c8993,15.5,H+1.52,-12.6,.5,.12,.35,'wood','computer-base');
+  s(u,0xc7d3d0,15.5,H+1.49,-11.9,.8,.06,.3,'wood','keyboard');
   for (const z of [-13.8, -10]) {
     s(u, 0xc1d0c5, 20.4, H + 1.35, z, 1, 2.7, 3);
     for (let i = 0; i < 4; i++) d(u, 0x9fb9ac, 19.88, H + .5 + i * .58, z, .02, .03, 2.8);

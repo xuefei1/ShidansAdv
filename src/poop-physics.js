@@ -3,6 +3,8 @@ import { DEN, STAIRS, BOUNDS } from './layout.js';
 
 export const MAX_POOP_BALLS = 10_000;
 export const POOP_RADIUS = .065;
+const boundsOf=b=>({minX:b.minX,maxX:b.maxX,minY:b.minY,maxY:b.maxY,minZ:b.minZ,maxZ:b.maxZ});
+const sameBounds=(a,b)=>a && a.minX===b.minX && a.maxX===b.maxX && a.minY===b.minY && a.maxY===b.maxY && a.minZ===b.minZ && a.maxZ===b.maxZ;
 
 class SphereGrid {
   constructor() { this.size = POOP_RADIUS * 4; this.cells = new Map(); }
@@ -36,7 +38,10 @@ export class PoopPhysics {
     this.world = world; this.capacity = capacity; this.balls = []; this.cursor = 0; this.sequence = 0;
     this.active = new Set(); this.grid = new SphereGrid(); this.dirty = new Set();
     this.staticGrid = new Map(); this.staticCellSize = 1.5;
+    this.dynamicRevision=world.dynamicRevision; this.dynamicBoxes=new Set(world.dynamicBoxes);
+    this.dynamicBounds=new Map([...world.dynamicBoxes].map(b=>[b,boundsOf(b)]));
     for (const box of world.solids) {
+      if(world.dynamicBoxes.has(box)) continue;
       const s = this.staticCellSize;
       for (let x = Math.floor(box.minX / s); x <= Math.floor(box.maxX / s); x++)
         for (let y = Math.floor(box.minY / s); y <= Math.floor(box.maxY / s); y++)
@@ -95,14 +100,18 @@ export class PoopPhysics {
       ball.vx *= friction; ball.vz *= friction;
     }
   }
-  resolveBox(ball, b, dt) {
+  resolveBox(ball, b, dt, dynamic = false) {
     let dx = ball.x - clamp(ball.x, b.minX, b.maxX), dy = ball.y - clamp(ball.y, b.minY, b.maxY), dz = ball.z - clamp(ball.z, b.minZ, b.maxZ);
     const length = Math.hypot(dx, dy, dz);
     if (length >= ball.radius) return;
     if (length > .000001) this.bounce(ball, dx / length, dy / length, dz / length, ball.radius - length, dt);
     else {
       const faces = [[ball.x - b.minX, -1, 0, 0], [b.maxX - ball.x, 1, 0, 0], [ball.y - b.minY, 0, -1, 0], [b.maxY - ball.y, 0, 1, 0], [ball.z - b.minZ, 0, 0, -1], [b.maxZ - ball.z, 0, 0, 1]];
-      let closest = faces[0]; for (const face of faces) if (face[0] < closest[0]) closest = face;
+      // A movable prop can arrive over a sleeping pellet. Its lower face may
+      // be closest, but pushing down through the supporting floor cannot solve
+      // that contact; choose a side or its top instead.
+      const floorBlocked=dynamic && b.minY<=this.world.support(ball.x,ball.z,b.minY+.001,true).y+ball.radius*2+.01;
+      let closest = faces[0]; for (const face of faces) if (!(floorBlocked && face[2]===-1) && face[0] < closest[0]) closest = face;
       this.bounce(ball, closest[1], closest[2], closest[3], closest[0] + ball.radius, dt);
     }
   }
@@ -120,6 +129,9 @@ export class PoopPhysics {
           const boxes = this.staticGrid.get(`${x},${y},${z}`);
           if (boxes) for (const box of boxes) if (!seen.has(box)) { seen.add(box); this.resolveBox(ball, box, dt); }
         }
+    for(const b of this.world.queryDynamic(ball.x-r,ball.z-r,ball.x+r,ball.z+r)) {
+      if(ball.x+r>b.minX && ball.x-r<b.maxX && ball.z+r>b.minZ && ball.z-r<b.maxZ && ball.y+r>b.minY && ball.y-r<b.maxY) this.resolveBox(ball,b,dt,true);
+    }
     const ramp = this.world.rampHeight(ball.x, ball.z);
     if (ramp !== null) {
       const stairs = this.world.rampAt(ball.x, ball.z);
@@ -193,6 +205,25 @@ export class PoopPhysics {
     }
   }
   update(dt, rabbit) {
+    if(this.dynamicRevision!==this.world.dynamicRevision) {
+      const next=new Map();
+      const wakeBounds=b=>{
+        const x=(b.minX+b.maxX)/2,y=(b.minY+b.maxY)/2,z=(b.minZ+b.maxZ)/2;
+        const reach=Math.max(b.maxX-b.minX,b.maxY-b.minY,b.maxZ-b.minZ)/2+POOP_RADIUS*2+.03;
+        for(const ball of this.grid.near(x,y,z,reach)) this.wake(ball);
+      };
+      // A pushed collectible retains its collider identity. Compare stored
+      // bounds once per changed frame, then wake only its old/new neighbourhoods.
+      for(const [b,old] of this.dynamicBounds) {
+        if(!this.world.dynamicBoxes.has(b) || !sameBounds(old,b)) wakeBounds(old);
+      }
+      for(const b of this.world.dynamicBoxes) {
+        if(!sameBounds(this.dynamicBounds.get(b),b)) wakeBounds(b);
+        next.set(b,boundsOf(b));
+      }
+      this.dynamicBounds=next;
+      this.dynamicBoxes=new Set(this.world.dynamicBoxes); this.dynamicRevision=this.world.dynamicRevision;
+    }
     this.collideRabbit(rabbit);
     const duration = clamp(dt, 0, .1), steps = Math.max(1, Math.ceil(duration * 180)), step = duration / steps;
     for (let i = 0; i < steps; i++) {

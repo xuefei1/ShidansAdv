@@ -1,14 +1,19 @@
-import test from 'node:test';
+import test, {afterEach} from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from '../vendor/three.module.js';
 import { Energy, PASSIVE_REGEN, highJumpCost } from '../src/energy.js';
 import { RabbitController, World, DEN } from '../src/physics.js';
 import { createHouse } from '../src/house.js';
-import { CONSUMABLE_TYPES, CONSUMABLE_SLOTS, DEN_HAY, randomConsumableType } from '../src/consumable-data.js';
-import { ConsumableSystem, canReachConsumable } from '../src/consumable-system.js';
+import { CONSUMABLE_TYPES, CONSUMABLE_SLOTS, DEN_HAY, SNACK_TYPES, consumptionSeconds, randomConsumableType } from '../src/consumable-data.js';
+import { ConsumableSystem as FullConsumableSystem, canReachConsumable } from '../src/consumable-system.js';
 import { createConsumables } from '../src/consumables.js';
+class ConsumableSystem extends FullConsumableSystem { constructor(world,options={}) { super(world,{wires:[],randomLimits:{},...options}); } }
 const close = (a,b,epsilon=1e-7) => assert.ok(Math.abs(a-b)<epsilon, `${a} ≠ ${b}`);
 const { world } = createHouse(new THREE.Scene());
+// The furnished map is shared only within this file; remove each test's collectible fixtures.
+afterEach(()=>{for(const collider of [...world.dynamicBoxes]) world.removeBox(collider);});
+function removeItem(system,id) { const item=system.items.get(id); if(item?.collider) system.world.removeBox(item.collider); system.items.delete(id); }
+function clearItems(system) {for(const id of [...system.items.keys()]) removeItem(system,id);}
 function tick(r,seconds,input={}) { for(let i=0;i<Math.round(seconds*120);i++) r.update(1/120,input); }
 function player() { return { x:0,y:0,z:0,grounded:true,energy:new Energy(20) }; }
 const snack = (id='snack',type='hay',x=.6,y=0,z=0) => ({id,type,x,y,z});
@@ -68,8 +73,8 @@ test('returning home preserves energy, exhaustion and pending food recovery', ()
   tick(r,1); close(r.energy.value,22.01);
 });
 test('all nine consumables restore the requested amounts over one second, capped at 100', () => {
-  assert.deepEqual(Object.fromEntries(Object.entries(CONSUMABLE_TYPES).map(([id,t])=>[id,t.energy])),{hay:10,carrot:5,rabbitFood:20,bread:25,apple:15,banana:20,book:2,cake:50,noodles:30});
-  for(const type of Object.values(CONSUMABLE_TYPES)) {
+  assert.deepEqual(Object.fromEntries([...SNACK_TYPES,'cake'].map(id=>[id,CONSUMABLE_TYPES[id].energy])),{hay:25,carrot:20,rabbitFood:20,bread:30,apple:25,banana:20,book:10,noodles:30,cake:50});
+  for(const type of [...SNACK_TYPES,'cake'].map(id=>CONSUMABLE_TYPES[id])) {
     const e=new Energy(10); e.consume(type.energy); assert.equal(e.value,10);
     e.update(.5); close(e.value,10+type.energy/2+.005); assert.equal(e.recovering,true);
     e.update(.5); close(e.value,10+type.energy+.01); assert.equal(e.recovering,false);
@@ -80,13 +85,10 @@ test('food recovery remains correct across overlapping rewards and uneven frames
   const e=new Energy(0); e.consume(10); e.update(.3); e.consume(20); e.update(.4); e.update(.9);
   close(e.value,30+1.6*PASSIVE_REGEN); assert.equal(e.recovering,false);
 });
-test('initial population is fixed, includes every kind, and larger rewards are scarcer', () => {
+test('initial snack population remains 41 with the authored counts', () => {
   assert.equal(CONSUMABLE_SLOTS.length,41); assert.equal(new Set(CONSUMABLE_SLOTS.map(s=>s.id)).size,41);
   const counts={}; for(const s of CONSUMABLE_SLOTS) counts[s.type]=(counts[s.type]||0)+1;
-  for(const [a,ta] of Object.entries(CONSUMABLE_TYPES)) for(const [b,tb] of Object.entries(CONSUMABLE_TYPES)) {
-    if(ta.energy<tb.energy) assert.ok(counts[a]>=counts[b]);
-    if(ta.energy===tb.energy) assert.equal(counts[a],counts[b]);
-  }
+  assert.deepEqual(counts,{book:12,carrot:8,hay:6,apple:4,rabbitFood:3,banana:3,bread:2,noodles:2,cake:1});
   assert.ok(CONSUMABLE_SLOTS.some(s=>s.y>=4.2));
 });
 test('every authored snack is supported and reachable on the real furnished map', () => {
@@ -111,7 +113,7 @@ test('finite snacks stay outside the den at startup and during random restocking
   const s=new ConsumableSystem(world,{slots}), p=player();
   assert.equal(s.count,41); assert.ok([...s.items.values()].every(outside));
   for(let i=0;i<200;i++) {
-    s.items.clear(); s.random=()=>(i+.5)/200;
+    clearItems(s); s.random=()=>(i+.5)/200;
     const [event]=s.update(60,p);
     assert.equal(event.kind,'spawn'); assert.ok(outside(event.item));
   }
@@ -146,31 +148,32 @@ test('walls, ceilings and the den fence prevent eating through obstacles', () =>
 });
 test('restock waits 60 seconds below two, generates one per minute, and stops at two', () => {
   const s=new ConsumableSystem(new World(),{random:()=>0}), p=player();
-  s.update(600,p); assert.equal(s.count,41); s.items.clear();
+  s.update(600,p); assert.equal(s.count,41); clearItems(s);
   s.update(59.9,p); assert.equal(s.count,0); s.update(.1,p); assert.equal(s.count,1);
   s.update(59.9,p); assert.equal(s.count,1); s.update(.1,p); assert.equal(s.count,2);
   s.update(600,p); assert.equal(s.count,2);
-  s.items.delete(s.items.keys().next().value); s.update(59,p); assert.equal(s.count,1); s.update(1,p); assert.equal(s.count,2);
+  removeItem(s,s.items.keys().next().value); s.update(59,p); assert.equal(s.count,1); s.update(1,p); assert.equal(s.count,2);
 });
-test('every respawn kind remains possible even when its original slot is occupied', () => {
-  const s=new ConsumableSystem(world,{random:()=>.95}), p=player();
-  const cake=CONSUMABLE_SLOTS.find(s=>s.type==='cake'); s.items=new Map([[cake.id,cake]]);
-  // Select the centre of the cake's weighted interval.
-  const entries=Object.entries(CONSUMABLE_TYPES), total=entries.reduce((n,[,t])=>n+1/t.energy,0);
-  let before=0; for(const [id,t] of entries) { if(id==='cake') break; before+=1/t.energy; }
-  s.random=()=> (before+1/100)/total;
-  const [event]=s.update(60,p); assert.equal(s.count,2); assert.equal(event.item.type,'cake'); assert.notEqual(event.item.id,cake.id);
+test('a regular respawn kind remains possible when its original slots are occupied', () => {
+  const s=new ConsumableSystem(world), p=player();
+  const bread=[...s.items.values()].find(s=>s.type==='bread');
+  s.slots=s.slots.filter(slot=>slot.type!=='bread' || slot.id===bread.id);
+  for(const id of [...s.items.keys()]) if(id!==bread.id) removeItem(s,id);
+  const entries=SNACK_TYPES.map(id=>[id,CONSUMABLE_TYPES[id]]), total=entries.reduce((n,[,t])=>n+1/t.energy,0);
+  let before=0; for(const [id,t] of entries) { if(id==='bread') break; before+=1/t.energy; }
+  s.random=()=> (before+1/60)/total;
+  const [event]=s.update(60,p); assert.equal(s.count,2); assert.equal(event.item.type,'bread'); assert.notEqual(event.item.id,bread.id);
 });
 test('respawn probabilities are inversely proportional to energy', () => {
   const samples=100000, counts={};
   for(let i=0;i<samples;i++) { const type=randomConsumableType(()=>(i+.5)/samples); counts[type]=(counts[type]||0)+1; }
-  const sum=Object.values(CONSUMABLE_TYPES).reduce((n,t)=>n+1/t.energy,0);
-  for(const [id,t] of Object.entries(CONSUMABLE_TYPES)) close(counts[id]/samples,(1/t.energy)/sum,2/samples);
+  const sum=SNACK_TYPES.map(id=>CONSUMABLE_TYPES[id]).reduce((n,t)=>n+1/t.energy,0);
+  for(const [id,t] of SNACK_TYPES.map(id=>[id,CONSUMABLE_TYPES[id]])) close(counts[id]/samples,(1/t.energy)/sum,2/samples);
 });
 test('collectible renderer batches all kinds and removes consumed geometry after its effect', () => {
-  const scene=new THREE.Scene(), view=createConsumables(scene,world);
+  const scene=new THREE.Scene(), view=createConsumables(scene,world,{wires:[],randomLimits:{}});
   let total=()=>scene.children.slice(0,2).flatMap(g=>g.children).reduce((n,m)=>n+m.count,0);
-  assert.equal(total(),42); assert.equal(scene.children[0].children.length,10);
+  assert.equal(total(),42); assert.equal(scene.children[0].children.length,13);
   const item=CONSUMABLE_SLOTS[0]; view.handle([{kind:'consume',item}]); view.sync(.3); assert.equal(total(),42);
   view.sync(.4); assert.equal(total(),41); view.setUpperVisible(false); assert.equal(scene.children[1].visible,false);
 });
@@ -179,7 +182,7 @@ test('special hay refills an exhausted rabbit at home and permits an actual den 
   const r=new RabbitController(world), s=new ConsumableSystem(world);
   r.energy.value=0; r.sprintExhausted=true; r.reset();
   assert.equal(s.nearest(r).id,DEN_HAY.id);
-  s.begin(r); assert.equal(s.update(.99,r).length,0); assert.equal(r.energy.value,0);
+  s.begin(r); assert.equal(s.update(consumptionSeconds(s.denHay)-.01,r).length,0); assert.equal(r.energy.value,0);
   const [event]=s.update(.01,r);
   assert.equal(event.item.id,DEN_HAY.id); assert.equal(r.energy.value,100);
   tick(r,.75,{jump:true}); r.update(1/120,{x:1}); assert.equal(r.lastJump,'long');
@@ -191,7 +194,7 @@ test('special hay remains available across repeated uses, full energy, and retur
   const r=new RabbitController(world), s=new ConsumableSystem(world);
   for(const startingEnergy of [0,37,99,100,0]) {
     r.reset(); r.energy.value=startingEnergy; r.energy.consume(10);
-    s.begin(r); const [event]=s.update(1,r);
+    s.begin(r); const [event]=s.update(consumptionSeconds(s.denHay),r);
     assert.equal(event.item.id,DEN_HAY.id); assert.equal(r.energy.value,100);
     assert.equal(r.energy.recovering,false); assert.equal(s.count,41);
     assert.equal(s.nearest(r).id,DEN_HAY.id);
@@ -205,8 +208,8 @@ test('interrupted special-hay holds grant no energy and restart from zero', () =
     const r=new RabbitController(world), s=new ConsumableSystem(world); r.energy.value=0;
     s.begin(r); s.update(.6,r); interrupt(r,s); s.update(.4,r);
     assert.equal(r.energy.value,0); assert.equal(s.progress,0);
-    r.reset(); s.begin(r); s.update(.5,r); assert.equal(r.energy.value,0);
-    s.update(.5,r); assert.equal(r.energy.value,100);
+    r.reset(); s.begin(r); s.update(consumptionSeconds(s.denHay)/2,r); assert.equal(r.energy.value,0);
+    s.update(consumptionSeconds(s.denHay)/2,r); assert.equal(r.energy.value,100);
   }
 });
 
@@ -226,8 +229,8 @@ test('special hay requires grounded reach inside the den and respects obstructio
 
 test('permanent den hay never suppresses the finite-snack restock timer', () => {
   const r=new RabbitController(world), s=new ConsumableSystem(world,{random:()=>0});
-  s.items.clear(); s.update(59,r); s.begin(r);
-  const events=s.update(1,r);
+  clearItems(s); s.update(59,r); s.begin(r);
+  const events=s.update(consumptionSeconds(s.denHay),r);
   assert.deepEqual(events.map(e=>e.kind),['spawn','consume']);
   assert.equal(s.count,1); assert.equal(s.nearest(r).id,DEN_HAY.id);
   s.update(60,r); assert.equal(s.count,2); assert.equal([...s.availableItems()].length,3);
@@ -235,16 +238,16 @@ test('permanent den hay never suppresses the finite-snack restock timer', () => 
 });
 
 test('special hay stays rendered after eating and uses only one additional drawing batch', () => {
-  const scene=new THREE.Scene(), view=createConsumables(scene,world), r=new RabbitController(world);
+  const scene=new THREE.Scene(), view=createConsumables(scene,world,{wires:[],randomLimits:{}}), r=new RabbitController(world);
   const hay=scene.getObjectByName('Special den hay'); assert.equal(hay.count,1);
   const original=new THREE.Matrix4(); hay.getMatrixAt(0,original);
   for(let i=0;i<3;i++) {
-    view.system.begin(r); view.handle(view.system.update(1,r));
+    view.system.begin(r); view.handle(view.system.update(consumptionSeconds(view.system.denHay),r));
     view.sync(.3); assert.equal(hay.count,1); view.sync(1); assert.equal(hay.count,1);
     assert.equal(view.system.count,41);
   }
   const matrix=new THREE.Matrix4(); hay.getMatrixAt(0,matrix);
   close(matrix.elements[0],original.elements[0]); close(matrix.elements[12],DEN_HAY.x,1e-6);
   view.setUpperVisible(false); assert.equal(hay.parent.visible,true);
-  assert.equal(scene.children[0].children.length+scene.children[1].children.length,19);
+  assert.equal(scene.children[0].children.length+scene.children[1].children.length,25);
 });

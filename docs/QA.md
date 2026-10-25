@@ -141,12 +141,12 @@ Inspect title screen, Shidan's nose/paws/ears, open-topped den, the house-tour o
 - Desktop keyboard/mouse prototype; no touch or gamepad support yet.
 - Intended light cartoon style uses procedural geometry, not a final rigged character or detailed anime assets.
 - Original short sound effects only; no background music.
-- No enemy, happiness scoring, player names, leaderboard or cotton-cover sequence yet. The ten-minute day currently ends by returning to the title and resetting the run.
-- Clover House has real walls and open door/window apertures. The missing roof and automatic upper-floor cutaway are presentation choices; physical walls, floors and ceilings remain solid.
-- Shidan can push dynamic poop spheres. Furniture is still static; there is no general-purpose rigid-body furniture simulation.
+- No enemy or cotton-cover sequence yet. Happiness, player names and a browser-local leaderboard are implemented; the day saves its score before returning to the title.
+- Clover House has a complete pitched roof and physical ceilings. Normal play keeps them visible; house view provides Show roof / Look inside to switch between the exterior and floor cutaways.
+- Shidan can push consumables and poop spheres. Structural furniture stays static and climbable; loose consumables yield and are not stable platforms.
 - Poop persistence is scoped to the current adventure, not a saved game across bedtime or browser reloads.
 - Only the new loose snack/book models are consumable. Original scenery books, climbing steps and decorative fruit remain part of the static level.
-- Energy and consumables persist until bedtime or page reload. A fresh day starts with a full bar, the fixed 41 items and permanent den hay; menus freeze all resource timers.
+- Energy and consumables persist until bedtime or page reload. A fresh day starts with a full bar, 41 snacks, 22 chewables and permanent den hay; menus freeze all resource timers.
 
 ## Release checks
 
@@ -156,3 +156,39 @@ Inspect title screen, Shidan's nose/paws/ears, open-topped den, the house-tour o
 4. `node scripts/build.mjs`, then smoke-test the `--dist` server.
 5. Confirm `pic/`, `.env`, credentials and build output are absent from staged files.
 6. Commit and push without rewriting existing history.
+
+
+## Happiness revision (0.5.0, local only)
+
+- 125 Node tests pass, including eleven new reward/respawn/persistence checks plus a simultaneous-cooldown/reserved-location regression. They cover full versus interrupted holds, all five score values, 3-second chewables, zero-energy items, repeatable non-scoring hay, all wire locations, random clear placement across the level, independent 30/60/90-second cooldowns, caps, removable box collision and waking supported poop balls, renderer resets, names, saved/reloaded scores, zero scores, ties, duplicate saves and blocked/corrupt storage.
+- `/tests/happiness.html`: 17 browser checks passed against the real game. The runner enters a name, escapes the den through actual inputs, walks to a carrot, cancels/restarts eating, verifies +10 happiness, resumes the same named round from title, advances to night/bedtime, verifies the saved result, reloads the game and checks score persistence, then records a second player's zero-score round. The runner uses actual localStorage with unique test-only keys, and cleans up its own records without touching the real leaderboard.
+- `/tests/day-cycle.html`: all 19 countdown/pause/lighting/reset checks still pass. Shader count and cached sunlight shadow revision stay unchanged at night.
+- JavaScript checks, static build and the built-server HTTP smoke check pass. Screenshot `artifacts/happiness-leaderboard.png` shows the verified test results in the leaderboard.
+- Collectible draw submissions remain bounded at 25 (six more possible batches for the three new types on two floors). Random spawn candidate generation runs only at system creation; selection runs only at reset/respawn. The existing cached shadow/light strategy remains unchanged.
+- Changes intentionally stay local, with no GitHub upload for this playtest.
+
+
+## Food balance and independent cake respawn
+
+All 128 Node tests pass after the revised food rewards. The reward checks now cover every item, including energy and happiness only after complete consumption. Three cake regressions verify its 120-second active-play cooldown with other food still present, fixed location, maximum of one, exclusion from random restocking, reservation of its spawn point, new-day reset, and rendered disappearance/return. The special den hay still restores energy to 100%. JavaScript checks and the static build pass. Existing browser runners now expect carrot +20 energy and ordinary hay +25 energy; these runners were updated but were not rerun for this balance change. Changes remain local at the user's request.
+
+
+## Free first den jump, reward-based holds and solid consumables
+
+139 Node tests pass, including first outward charged jump at zero energy, stationary/inward/outside jump costs, reset protection and a new-day allowance. The formula is max(1, E/25 + H/50), rounded up to the next tenth. All item rewards are checked at the exact new completion threshold. Every consumable is solid; tests verify rendered bounds, approachability on the real furnished level, rabbit and ball support, removal on consumption, permanent hay collision and restored cake collision. Repeated resets retain exactly 64 live collectible colliders. A separate dynamic collision index keeps ball contacts local and avoids scanning all 64 props each substep.
+
+The 21 happiness browser checks pass with no browser errors, including the four-second special-hay prompt, an actual free den escape at full energy, preservation of the spent allowance through home/title, and renewal after bedtime. The browser uses isolated test storage. Hold progress, score saving and reload persistence continue to work. Source checks pass; the build is refreshed for local testing. No GitHub upload is requested.
+
+
+## Pushable consumables and complete roof
+
+155 Node tests pass. New coverage includes moving collider identity and both spatial indexes, nearby sleeping-ball wakeup at old and new positions, walking and sprinting through hay/boxes/slippers with modest slowdown, sideways wall contact, falling off furniture, renderer/collider alignment, original cake/wire respawns after displacement, body cleanup/reset, den fence and lot constraints. Previous wall-like rabbit support expectations were replaced by actual push behavior; poop-ball contacts remain solid.
+
+Roof tests check every covered room, upward ceiling contact, clear stairs, downward ray coverage over the footprint, outward face normals for both ridge directions, and unchanged window/floor collision. Ceilings and exterior shell use five additional draw calls and 676 triangles. Exterior roof shadow acne found during visual review was fixed with correct face winding and back-face shadow casting.
+
+25 actual-game browser checks pass, including nudging the carrot before eating, roof/ceiling visibility during normal play, the room cutaway and Show roof mode, plus existing energy/score/bedtime behavior. All 19 daylight checks also pass with stable precompiled shaders and cached sun shadows. The enclosed nighttime lounge remains visibly lit by its lamps. Browser logs show no errors. Actual exterior screenshot: artifacts/house-with-roof.png. Source checks, build and HTTP smoke checks pass. Changes remain local.
+
+
+## Publication approval
+
+The user approved uploading the complete 0.5.0 version after the local playtest revisions above. The release includes happiness scoring, food balance and timing, the free first den jump, pushable consumables, and the complete roof/ceilings. Validation remains 155 automated tests and 44 browser checks, plus source/build/HTTP checks. Personal photos, keys, local test artifacts and generated distribution files remain excluded from source control.

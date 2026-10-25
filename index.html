@@ -14,7 +14,7 @@
   <div class="vignette"></div>
   <header class="topbar">
     <div class="wordmark"><img src="./favicon.svg" alt=""><span>SHIDAN’S <b>ADVENTURE</b></span></div>
-    <div class="build-label"><span></span> LITTLE JOYS IN CLOVER HOUSE <i>v0.4.0</i></div>
+    <div class="build-label"><span></span> LITTLE JOYS IN CLOVER HOUSE <i>v0.5.0</i></div>
     <div class="toolbar"><button id="sound" aria-label="Enable sound" title="Sound">Sound off</button><button id="menu-button" hidden>Pause <kbd>Esc</kbd></button></div>
   </header>
 
@@ -22,10 +22,12 @@
     <div class="eyebrow"><span class="tiny-star">✦</span> HOME IS JUST THE BEGINNING</div>
     <h1>A little rabbit.<br>A <em>very big</em><br>adventure.</h1>
     <p>Meet Shidan. Professional loaf.<br>Amateur escape artist. Your next adventure.</p>
+    <div class="player-entry"><label for="player-name">YOUR NAME</label><input id="player-name" maxlength="24" autocomplete="nickname" placeholder="What should we call you?" aria-describedby="name-hint" required><small id="name-hint">Your completed score will be saved under this name.</small></div>
     <div class="welcome-actions"><button id="play" disabled class="primary">Let’s explore <span>↗</span></button><button id="tour" disabled class="text-button">Take a house tour <span>→</span></button></div>
+    <button id="show-leaderboard" class="text-button">Happiness leaderboard <span>→</span></button>
     <p id="load-status" role="status">Preparing your home…</p>
     <p id="day-ended" class="day-ended" role="status" hidden>The house is asleep. Ready for another little adventure?</p>
-    <div class="milestone-note"><span>02</span><div><b>Ten minutes. A house full of possibilities.</b><small>Explore from bright noon to a cozy, lamplit night.</small></div></div>
+    <div class="milestone-note"><span>♡</span><div><b>Ten minutes. A house full of little joys.</b><small>Eat, chew and collect happiness before bedtime.</small></div></div>
   </main>
 
   <div id="intro-caption" class="intro-caption"><span>MEET YOUR LITTLE EXPLORER</span><b>Shidan</b><small>Black coat. White nose. Big plans.</small></div>
@@ -36,6 +38,7 @@
       <div><span class="eyebrow">UNTIL BEDTIME</span><strong id="day-countdown" role="timer" aria-label="Time until bedtime" aria-live="off">10:00</strong></div>
       <div class="day-track"><i id="day-fill"></i></div>
       <div class="day-caption"><span id="day-phase">Noon</span><span id="day-caption" class="day-running">Night falls at 2:00</span><span class="day-paused">Clock paused</span></div>
+      <div class="happiness-heading"><span>♡ HAPPINESS</span><strong id="happiness-value">0</strong></div><small id="score-player">Your little adventure</small>
     </div>
     <div id="energy-panel" class="energy panel">
       <div class="energy-heading"><span>SHIDAN’S ENERGY</span><strong id="energy-value">100.00%</strong></div>
@@ -43,7 +46,7 @@
       <p id="energy-status">Restoring 0.01% per second</p><small id="food-count">41 snacks left in the house</small>
     </div>
     <div id="consume-prompt" class="consume panel" hidden>
-      <div><strong id="consume-name">Hay stack</strong><span id="consume-energy">+10 energy</span></div>
+      <div><strong id="consume-name">Hay stack</strong><span id="consume-energy">+25 energy</span></div>
       <p id="consume-action">Nibble · hold left mouse for 1 second</p>
       <div id="consume-meter" class="consume-track" role="progressbar" aria-label="Hold to consume" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="consume-fill"></i></div>
     </div>
@@ -57,7 +60,7 @@
     <div id="camera-hint">Click the world to look around · drag to look if pointer lock is unavailable</div>
   </section>
 
-  <div id="survey" class="panel survey" hidden><span>HOUSE TOUR</span><button data-floor="0" aria-pressed="true">Ground floor</button><button data-floor="1" aria-pressed="false">Upstairs & balcony</button><button id="garden-view">Garden view</button></div>
+  <div id="survey" class="panel survey" hidden><span>HOUSE TOUR</span><button data-floor="0" aria-pressed="true">Ground floor</button><button data-floor="1" aria-pressed="false">Upstairs & balcony</button><button id="garden-view">Garden view</button><button id="roof-view">Show roof</button></div>
   <section id="atlas" class="modal-backdrop" hidden aria-label="Clover House map">
     <div class="atlas-panel"><div class="atlas-heading"><div><span class="eyebrow">EVERY ROOM HAS ANOTHER WAY OUT</span><h2>Clover House</h2></div><button id="close-atlas" class="secondary">Back to Shidan <kbd>M</kbd></button></div>
       <div class="atlas-body"><canvas id="atlas-canvas" width="680" height="740" aria-label="Detailed floor plan with open doors, jump windows, passages, stairs, and discoveries"></canvas><aside><h3 id="atlas-floor-name">Ground floor & garden</h3><div class="floor-switch"><button data-floor="0" aria-pressed="true">Ground floor</button><button data-floor="1" aria-pressed="false">Upstairs</button></div><p>Wide doors lead between rooms. Blue openings are jump-through windows; pale blue panes are closed glass. Warm brown openings lead into low passages.</p><h4>Seven little discoveries</h4><ol id="discovery-list"></ol><p>The indoor stairs and garden stairs connect both floors. Look for books, stools, and trunks to climb onto furniture.</p><small>Exploration pauses while this map is open.</small></aside></div>
@@ -65,7 +68,10 @@
   </section>
 
   <section id="pause" class="modal-backdrop" hidden>
-    <div class="modal"><span class="eyebrow">TAKE A LITTLE BREATHER</span><h2>Paused, little one.</h2><p>Your cozy home will be right here.</p><button id="resume" class="primary">Back to exploring <span>↗</span></button><button id="reset" class="secondary">Return to the den</button><button id="back-title" class="text-button">Back to title</button><div class="menu-notes"><b>Little joys, big adventures</b><p>Hold left-click near a snack for one full second to eat. Shift uses energy for sprinting; charged leaps cost 5–10 energy. Ordinary movement and tap hops are free.</p><p>The special hay inside your den always refills energy to 100% after a one-second hold. It never runs out. Energy also slowly recovers on its own. Snacks restore energy over one second. When fewer than two remain, one new snack appears every minute. Menus pause these timers; returning home preserves supplies.</p><p>Hold Space for a longer leap on bedding, carpet, or outdoors. Indoor wood permits only a small hop. Your day lasts ten minutes, reaching full night with two minutes left. Menus, maps and house view pause the clock. At bedtime, return to the title and start a fresh day. Happiness scores and the mistress are coming later.</p></div></div>
+    <div class="modal"><span class="eyebrow">TAKE A LITTLE BREATHER</span><h2>Paused, little one.</h2><p>Your cozy home will be right here.</p><button id="resume" class="primary">Back to exploring <span>↗</span></button><button id="reset" class="secondary">Return to the den</button><button id="back-title" class="text-button">Back to title</button><div class="menu-notes"><b>Little joys, big adventures</b><p>Hold left-click near an item for the time shown in its prompt. Time grows with energy and happiness rewards, with a one-second minimum. Finish the whole hold to earn its rewards. Carrots give 10 happiness, apples 50, rabbit food 80, bananas 40, bread 20, noodles 10, cake 150 and books 20. Cardboard gives 100, wires 150 and slippers 200.</p><p>Wires return to their original place after 30 seconds, even if pushed away. Up to eight boxes return in new places after 60 seconds; up to four pairs of slippers return after 90. Cake returns to its original location after 120 seconds, even if pushed away, with at most one available. When fewer than two other snacks remain, one random regular snack appears every minute. Menus pause all timers.</p><p>Shift and charged leaps use energy. Your first outward charged jump from inside the den is free each day; stationary jumps still use energy. The special hay in your den restores energy to 100% after a four-second hold, but gives no happiness. Returning home preserves supplies, time, score and whether your free jump has been used. Walk into consumables to push them with a slight slowdown. They slide and can fall off furniture; the special hay stays inside the den. Loose items move instead of serving as steps.</p><p>The roof and ceilings stay visible while playing. Use V or a house tour to inspect the rooms with the roof and ceilings hidden. Show roof closes the house; Look inside opens it again.</p><p>Your day lasts ten minutes, reaching full night with two minutes left. At bedtime your happiness score is saved under your name in this browser, and the game returns to the title. The mistress is coming later.</p></div></div>
+  </section>
+  <section id="leaderboard" class="modal-backdrop" hidden role="dialog" aria-modal="true" aria-labelledby="leaderboard-title">
+    <div class="modal leaderboard-panel"><span class="eyebrow">LITTLE JOYS, REMEMBERED</span><h2 id="leaderboard-title">Happiness leaderboard</h2><p id="leaderboard-storage">Saved in this browser · top 10 completed adventures</p><div class="leaderboard-scroll"><table><thead><tr><th scope="col">Rank</th><th scope="col">Player</th><th scope="col">Happiness</th></tr></thead><tbody id="leaderboard-rows"></tbody></table><p id="leaderboard-empty">Your first adventure belongs here. Collect happiness until bedtime to record a score.</p></div><button id="close-leaderboard" class="secondary">Back to the house</button></div>
   </section>
   <div id="fatal" class="modal-backdrop" hidden><div class="modal"><h2>A small hiccup.</h2><p id="fatal-text"></p><p>Use the launcher for your computer and a browser with WebGL 2 enabled.</p><button onclick="location.reload()" class="primary">Try again</button></div></div>
   <script type="module" src="./src/start.js"></script>

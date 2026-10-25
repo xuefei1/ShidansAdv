@@ -29,3 +29,7 @@ These packs were researched but **not imported**. Record exact versions, downloa
 - [WebGLRenderer documentation](https://threejs.org/docs/pages/WebGLRenderer.html)
 
 The engine is pinned at 0.180.0 for a reproducible first milestone; upgrading it is an explicit maintenance task, not a runtime download.
+
+The 0.5.0 expansion adds original procedural cable coils with plugs, taped cardboard parcels, bunny slippers, and TV/oven/computer details. They use the same code-authored geometry and existing project license; no external assets or downloads were added.
+
+The covered-house revision adds original code-authored pitched roof prisms, cream fascia, ceiling slabs and high stair-hall enclosure. No third-party assets or textures were added.

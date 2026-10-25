@@ -3,7 +3,7 @@ import { createHouse, batchStaticGeometry } from './house.js';
 import { createRabbit } from './model.js';
 import { RabbitController, DEN, clamp } from './physics.js';
 import { Sound } from './audio.js';
-import { FLOOR_HEIGHT, BOUNDS, LANDMARKS, roomAt } from './layout.js';
+import { FLOOR_HEIGHT, BOUNDS, HOUSE, LANDMARKS, roomAt } from './layout.js';
 import { drawLevelMap } from './level-map.js';
 import { bindMouseControls } from './mouse.js';
 import { createPoopBalls } from './poop.js';
@@ -11,11 +11,11 @@ import { upperRoomsVisible } from './visibility.js';
 import { createRenderProfile } from './render-profile.js';
 import { renderPixelRatio } from './render-quality.js';
 import { createConsumables } from './consumables.js';
-import { consumableDetails } from './consumable-data.js';
-import { highJumpCost } from './energy.js';
+import { consumableDetails, consumptionSeconds } from './consumable-data.js';
 import { DayClock, DAY_SECONDS, formatCountdown } from './day-cycle.js';
 import { createDayLighting } from './day-lighting.js';
 import { resetAdventure } from './adventure-session.js';
+import { Leaderboard, HappinessRun } from './happiness.js';
 
 const elements = new Map();
 const $ = id => { if (!elements.has(id)) elements.set(id, document.getElementById(id)); return elements.get(id); };
@@ -33,7 +33,7 @@ window.addEventListener('error', event => {
 
 // The QA entry point supplies a controllable monotonic clock. Normal play always
 // uses real time through start.js; there are no time cheats in the game controls.
-export async function boot({clockNow=()=>performance.now()}={}) {
+export async function boot({clockNow=()=>performance.now(),scoreStorage}={}) {
   $('play').disabled = $('tour').disabled = true;
   $('load-status').hidden = false;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -54,10 +54,13 @@ export async function boot({clockNow=()=>performance.now()}={}) {
   const fill = new THREE.DirectionalLight(0xc9e5f0, 1.1); fill.position.set(7, 8, -4); scene.add(fill);
   const stage = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0xe1e4d2, roughness: 1 }));
   stage.rotation.x = -Math.PI / 2; stage.position.y = -.56; stage.receiveShadow = true; scene.add(stage);
-  const { world, layers, upper, ceiling, lamps } = createHouse(scene);
+  const { world, layers, upper, ceiling, lamps, roof } = createHouse(scene);
   layers.forEach(batchStaticGeometry);
   const daylight = createDayLighting(scene,{sun,fill,hemisphere},lamps);
   const dayClock = new DayClock(clockNow());
+  let storage=scoreStorage; if(storage===undefined) try { storage=window.localStorage; } catch { /* Private browser settings can deny storage. */ }
+  const leaderboard=new Leaderboard(storage), happiness=new HappinessRun(leaderboard);
+  $('player-name').value=leaderboard.name;
   const rabbit = createRabbit(); scene.add(rabbit.root);
   // Shidan already has an animated contact shadow. Keep her and the tiny balls
   // out of the cached sun map, so they never leave a frozen shadow behind.
@@ -68,14 +71,34 @@ export async function boot({clockNow=()=>performance.now()}={}) {
   const sound = new Sound();
   const keys = new Set();
   let mode = 'title', previousMode = 'play', overview = false, mapOpen = false, surveyFloor = 0, gardenView = false;
+  let roofView=false;
   const discovered = new Set();
   let yaw = -.45, pitch = .43, distance = 5.2, time = 0, previousTime = performance.now();
   let toastUntil = 0, lastStep = 0, mapTick = 0, hudTick = 0;
   let escaped = false, upstairs = false, cameraInitialized = false, jumpSeen = false, queuedHop = false;
   let renderDirty = true, wasFrozen = false;
+  let resourceElapsed=0;
   const target = new THREE.Vector3(), desiredCamera = new THREE.Vector3(), lookAt = new THREE.Vector3();
   const cameraRay = new THREE.Ray(), collisionPoint = new THREE.Vector3();
-  const collisionBoxes = new Map(world.solids.map(b => [b, new THREE.Box3(new THREE.Vector3(b.minX - .12, b.minY - .12, b.minZ - .12), new THREE.Vector3(b.maxX + .12, b.maxY + .12, b.maxZ + .12))]));
+  const collisionBoxes = new WeakMap();
+
+  function renderLeaderboard() {
+    $('leaderboard-rows').replaceChildren(...leaderboard.entries.slice(0,10).map((entry,index)=>{
+      const row=document.createElement('tr');
+      if(entry.id===happiness.lastResult?.id) row.className='latest-score';
+      for(const value of [String(index+1),entry.name,entry.score.toLocaleString()]) {
+        const cell=document.createElement('td'); cell.textContent=value; row.append(cell);
+      }
+      return row;
+    }));
+    setHidden('leaderboard-empty',leaderboard.entries.length>0);
+    setText('leaderboard-storage',leaderboard.saved ? 'Saved in this browser · top 10 completed adventures' : 'Storage unavailable. Scores are kept only while this page stays open.');
+  }
+  renderLeaderboard();
+  $('show-leaderboard').addEventListener('click',()=>{
+    renderLeaderboard(); setHidden('leaderboard',false); $('close-leaderboard').focus();
+  });
+  $('close-leaderboard').addEventListener('click',()=>{setHidden('leaderboard',true); $('show-leaderboard').focus();});
 
   function toast(text, seconds = 4) { setText('toast', text); $('toast').hidden = false; toastUntil = time + seconds; }
   const mouse = bindMouseControls({
@@ -113,43 +136,59 @@ export async function boot({clockNow=()=>performance.now()}={}) {
   }
   function setOverview() {
     if (mode !== 'play') return;
-    overview = !overview; mapOpen = false; $('atlas').hidden = true; surveyFloor = controller.y >= FLOOR_HEIGHT - .25 ? 1 : 0; clearInput(); renderAtlas();
+    overview = !overview; roofView=false;setText('roof-view','Show roof');mapOpen = false; $('atlas').hidden = true; surveyFloor = controller.y >= FLOOR_HEIGHT - .25 ? 1 : 0; clearInput(); renderAtlas();
     if (overview) { unlock(); toast('House view · press V to return to Shidan', 3); }
     else { cameraInitialized = false; canvas.focus(); }
     $('view').innerHTML = overview ? '<kbd>V</kbd> Follow Shidan' : '<kbd>V</kbd> House view';
   }
-  $('play').addEventListener('click', () => {
+  function startAdventure() {
+    if(!happiness.start($('player-name').value)) {
+      returnToTitle(); $('player-name').setCustomValidity('Enter your name to start your adventure.'); $('player-name').reportValidity(); $('player-name').focus(); return;
+    }
+    $('player-name').value=happiness.name; $('player-name').disabled=true;
     setHidden('day-ended',true);
     escaped = upstairs = false; discovered.clear();
     ['step-den', 'step-upstairs', 'step-window'].forEach(id => $(id).classList.remove('done'));
     setText('quest-title', 'The world beyond the fence');
     setText('quest-text', 'Hold Space to charge, then release while moving to leap out of your den.');
-    reset(); showGame(); lock(); toast('Hold left-click near a snack to eat. Shift and charged leaps use energy.', 6);
-  });
+    reset(); showGame(); lock(); toast('Eat and chew for happiness! Hold times depend on the rewards; check each item’s prompt.', 6);
+  }
+  $('play').addEventListener('click',startAdventure);
+  $('player-name').addEventListener('input',()=>{$('player-name').setCustomValidity('');});
+  $('player-name').addEventListener('keydown',event=>{if(event.key==='Enter' && !$('play').disabled) startAdventure();});
   $('tour').addEventListener('click', () => {
-    mode = 'tour'; overview = true; clearInput(); surveyFloor = 0; renderAtlas(); document.body.classList.add('touring');
+    mode = 'tour'; overview = true;roofView=false;setText('roof-view','Show roof');clearInput(); surveyFloor = 0; renderAtlas(); document.body.classList.add('touring');
     $('welcome').hidden = true; $('intro-caption').hidden = true; $('menu-button').hidden = false;
     $('menu-button').innerHTML = 'Explore as Shidan <kbd>Enter</kbd>';
   });
-  $('menu-button').addEventListener('click', () => { if (mode === 'tour') { $('menu-button').innerHTML = 'Pause <kbd>Esc</kbd>'; showGame(); } else pause(); });
+  $('menu-button').addEventListener('click', () => { if (mode === 'tour') startAdventure(); else pause(); });
   $('resume').addEventListener('click', resume);
-  $('reset').addEventListener('click', () => { reset(); showGame(); });
+  $('reset').addEventListener('click', () => { if(!happiness.active) startAdventure(); else { reset(); showGame(); } });
   function returnToTitle() {
     mode = 'title'; overview = false; mapOpen = false; $('atlas').hidden = true; clearInput(); unlock(); controller.reset(); cameraInitialized = false;
     document.body.classList.remove('playing', 'touring');
     $('pause').hidden = true; $('welcome').hidden = false; $('intro-caption').hidden = false; $('intro-footer').hidden = false;
     $('hud').hidden = true; $('menu-button').hidden = true; $('menu-button').innerHTML = 'Pause <kbd>Esc</kbd>';
+    $('player-name').disabled=happiness.active;
+    setText('play',happiness.active ? 'Continue adventure ↗' : 'Let’s explore ↗');
+    setText('name-hint',happiness.active ? `Continuing as ${happiness.name} · your score and time are kept.` : 'Your completed score will be saved under this name.');
     $('play').focus();
   }
   $('back-title').addEventListener('click', returnToTitle);
   function finishDay() {
+    const result=happiness.finish(dayClock);
     returnToTitle();
     resetAdventure({clock:dayClock,controller,consumables,poop},clockNow());
+    resourceElapsed=0;
     escaped=upstairs=false; discovered.clear(); upperApproach=false;
     yaw=-.45; pitch=.43; distance=5.2; cameraInitialized=false;
     ['step-den','step-upstairs','step-window'].forEach(id=>$(id).classList.remove('done'));
     setData('lastConsumed',''); setData('lastConsumedId',''); setData('lastPoopPosition','');
     setText('poop-count','0'); setHidden('day-ended',false); setHidden('toast',true); toastUntil=0;
+    if(result) {
+      setText('day-ended',`${result.name} earned ${result.score.toLocaleString()} happiness! ${leaderboard.saved ? 'Your score is saved.' : 'Your score is kept for this session; browser storage is unavailable.'}`);
+      setData('lastScore',String(result.score)); setData('lastPlayer',result.name); renderLeaderboard();
+    }
     updateHUD(); drawMap(); renderDirty=true;
   }
   $('home').addEventListener('click', () => { reset(); canvas.focus(); });
@@ -172,14 +211,20 @@ export async function boot({clockNow=()=>performance.now()}={}) {
   $('map-button').addEventListener('click', toggleMap); $('close-atlas').addEventListener('click', toggleMap);
   document.querySelectorAll('[data-floor]').forEach(button => button.addEventListener('click', () => { surveyFloor = Number(button.dataset.floor); renderAtlas(); }));
   $('garden-view').addEventListener('click', () => { gardenView = !gardenView; setText('garden-view', gardenView ? 'Front view' : 'Garden view'); });
+  $('roof-view').addEventListener('click',()=>{roofView=!roofView;setText('roof-view',roofView?'Look inside':'Show roof');renderDirty=true;});
   $('sound').addEventListener('click', () => {
     const enabled = sound.toggle(); setText('sound', enabled ? 'Sound on' : 'Sound off');
     $('sound').setAttribute('aria-label', enabled ? 'Disable sound' : 'Enable sound');
   });
   addEventListener('keydown', event => {
+    if(!$('leaderboard').hidden) {
+      if(event.code==='Escape') $('close-leaderboard').click();
+      if(event.code==='Tab') { event.preventDefault(); $('close-leaderboard').focus(); }
+      return;
+    }
     if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code) && mode === 'play' && event.target === canvas) event.preventDefault();
     if (event.code === 'Escape') { if (mapOpen) { toggleMap(); return; } if (mode === 'pause') resume(); else pause(); return; }
-    if (event.code === 'Enter' && mode === 'tour') { $('menu-button').innerHTML = 'Pause <kbd>Esc</kbd>'; showGame(); return; }
+    if (event.code === 'Enter' && mode === 'tour') { startAdventure(); return; }
     if (mode === 'play' && ['KeyM', 'KeyV'].includes(event.code)) {
       event.preventDefault(); if (!event.repeat) { if (event.code === 'KeyM') toggleMap(); else setOverview(); } return;
     }
@@ -226,7 +271,9 @@ export async function boot({clockNow=()=>performance.now()}={}) {
       cameraRay.origin.copy(target); cameraRay.direction.copy(desiredCamera).sub(target).normalize();
       let nearest = desiredCamera.distanceTo(target);
       for (const solid of world.query(Math.min(target.x, desiredCamera.x) - .12, Math.min(target.z, desiredCamera.z) - .12, Math.max(target.x, desiredCamera.x) + .12, Math.max(target.z, desiredCamera.z) + .12)) {
-        const b = collisionBoxes.get(solid);
+        if(solid.pushable)continue;
+        let b = collisionBoxes.get(solid);
+        if(!b) { b=new THREE.Box3(new THREE.Vector3(solid.minX-.12,solid.minY-.12,solid.minZ-.12),new THREE.Vector3(solid.maxX+.12,solid.maxY+.12,solid.maxZ+.12)); collisionBoxes.set(solid,b); }
         if (b.containsPoint(target)) continue;
         if (cameraRay.intersectBox(b, collisionPoint)) nearest = Math.min(nearest, target.distanceTo(collisionPoint) - .12);
       }
@@ -240,6 +287,8 @@ export async function boot({clockNow=()=>performance.now()}={}) {
   }
 
   function updateHUD() {
+    setText('happiness-value',happiness.score.toLocaleString()); setText('score-player',happiness.name || 'Your little adventure');
+    setData('happiness',String(happiness.score));
     setText('day-countdown',formatCountdown(dayClock.remaining));
     setText('day-phase',daylight.state.phase);
     setText('day-caption',daylight.state.night===1 ? 'The house is lit' : 'Night falls at 2:00');
@@ -254,18 +303,22 @@ export async function boot({clockNow=()=>performance.now()}={}) {
     $('energy-panel').dataset.low = String(controller.energy.value < 10);
     $('energy-panel').dataset.recovering = String(controller.energy.recovering);
     setText('energy-status', controller.energy.recovering ? 'Restoring energy…' : controller.sprintExhausted ? 'Rest to recover · release Shift to sprint' : controller.sprinting ? 'Sprinting · using energy' : 'Restoring 0.01% per second');
-    setText('food-count', `${consumables.system.count} snacks left in the house`);
+    setText('food-count', `${consumables.system.count} snacks · ${consumables.system.chewableCount} chewables`);
     setHidden('consume-prompt', !nearby || mode !== 'play' || overview || mapOpen);
     if (nearby) {
-      const type = consumableDetails(nearby), progress = Math.min(1,consumables.system.progress);
-      setText('consume-name', type.name); setText('consume-energy', nearby.permanent ? '100% · unlimited' : `+${type.energy} energy`);
-      setText('consume-action', `${type.verb} · hold left mouse for 1 second`);
+      const type = consumableDetails(nearby), progress = consumables.system.fraction, seconds=consumptionSeconds(nearby);
+      setText('consume-name', type.name); setText('consume-energy', nearby.permanent ? '100% energy · unlimited' : [type.energy ? `+${type.energy} energy` : '',type.happiness ? `+${type.happiness} happiness` : ''].filter(Boolean).join(' · '));
+      setText('consume-action', `${type.verb} · hold left mouse for ${seconds} ${seconds>1 ? 'seconds' : 'second'}`);
       $('consume-fill').style.width = `${progress*100}%`;
       $('consume-meter').setAttribute('aria-valuenow', (progress*100).toFixed(0));
     }
     setData('energy', energy); setData('sprinting', String(controller.sprinting));
+    setData('freeDenJump',String(controller.hasFreeDenJump));setData('pushing',String(controller.pushing));
+    setData('lastPushedId',controller.lastPushedId||'');
     setData('consumableCount', String(consumables.system.count));
+    setData('chewableCount',String(consumables.system.chewableCount));
     setData('consumeTarget', nearby?.id || ''); setData('consumeProgress', consumables.system.progress.toFixed(2));
+    setData('consumePosition',nearby?[nearby.x,nearby.y,nearby.z].map(v=>v.toFixed(3)).join(','):'');
     setData('energyRecovering', String(controller.energy.recovering));
     const distFromDen = Math.hypot(controller.x - DEN.x, controller.z - DEN.z);
     const high = controller.y > FLOOR_HEIGHT - .3;
@@ -281,8 +334,10 @@ export async function boot({clockNow=()=>performance.now()}={}) {
     if (controller.charging) {
       const power = Math.round(Math.min(1, controller.charge / .65) * 100);
       $('charge-fill').style.width = `${power}%`; setText('charge-percent', `${power}%`);
-      const cost = highJumpCost(controller.charge);
-      setText('charge-label', controller.surface === 'wood' || controller.surface === 'stairs' ? 'Slippery floor · free small hop' : controller.energy.value < cost ? 'Low energy · free small hop' : `${power >= 100 ? 'Release!' : 'Crouch & spring'} · −${cost.toFixed(2)} energy`);
+      const forward=Number(keys.has('KeyW') || keys.has('ArrowUp'))-Number(keys.has('KeyS') || keys.has('ArrowDown'));
+      const right=Number(keys.has('KeyD') || keys.has('ArrowRight'))-Number(keys.has('KeyA') || keys.has('ArrowLeft'));
+      const cost = controller.jumpCost(controller.charge,{x:-Math.sin(yaw)*forward+Math.cos(yaw)*right,z:-Math.cos(yaw)*forward-Math.sin(yaw)*right});
+      setText('charge-label', controller.surface === 'wood' || controller.surface === 'stairs' ? 'Slippery floor · free small hop' : cost===0 ? 'First den escape · no energy cost' : controller.energy.value < cost ? 'Low energy · free small hop' : `${power >= 100 ? 'Release!' : 'Crouch & spring'} · −${cost.toFixed(2)} energy`);
     }
     if (!escaped && distFromDen > DEN.radius + .36 && controller.grounded) {
       escaped = true; $('step-den').classList.add('done');
@@ -329,6 +384,10 @@ export async function boot({clockNow=()=>performance.now()}={}) {
     const dt = Math.min((now - previousTime) / 1000, .05); previousTime = now;
     dayClock.update(clockNow());
     if(dayClock.finished) finishDay();
+    const resourceDt=Math.max(0,dayClock.elapsed-resourceElapsed); resourceElapsed=dayClock.elapsed;
+    // Restock uses the same active-play seconds as the day, even after a slow
+    // frame. Eating and movement keep their bounded simulation steps.
+    consumables.handle(consumables.system.update(0,controller,resourceDt));
     const frozen = mode === 'pause' || mapOpen || document.hidden;
     if (frozen && wasFrozen && !renderDirty) return;
     wasFrozen = frozen; renderDirty = false;
@@ -340,11 +399,13 @@ export async function boot({clockNow=()=>performance.now()}={}) {
       const input = { x: -Math.sin(yaw) * forward + Math.cos(yaw) * right, z: -Math.cos(yaw) * forward - Math.sin(yaw) * right, run: keys.has('ShiftLeft') || keys.has('ShiftRight'), jump: keys.has('Space') };
       if (queuedHop) { controller.update(.0001, { ...input, jump: true }); queuedHop = false; }
       controller.update(dt, input);
-      const resourceEvents = consumables.system.update(dt, controller);
+      const resourceEvents = consumables.system.update(dt, controller,0);
       consumables.handle(resourceEvents);
       for (const event of resourceEvents) if (event.kind === 'consume') {
         const type = consumableDetails(event.item);
-        toast(event.item.permanent ? 'Energy fully restored! Your special hay is always here.' : `${type.name} · +${type.energy} energy over 1 second`, 2.2); sound.chime();
+        happiness.consume(event);
+        const rewards=[type.happiness ? `+${type.happiness} happiness` : '',type.energy ? `+${type.energy} energy` : ''].filter(Boolean).join(' · ');
+        toast(event.item.permanent ? 'Energy fully restored! Your special hay is always here.' : `${type.name} · ${rewards}`, 2.2); sound.chime();
         setData('lastConsumed', event.item.type);
         setData('lastConsumedId', event.item.id);
       }
@@ -361,23 +422,27 @@ export async function boot({clockNow=()=>performance.now()}={}) {
     rabbit.root.position.set(controller.x, controller.y, controller.z);
     rabbit.root.rotation.y = mode === 'title' ? .43 : controller.facing;
     const speed = mode === 'play' ? Math.hypot(controller.vx, controller.vz) : 0;
-    rabbit.animate(time, speed, controller.grounded, controller.charge / .8, world.support(controller.x, controller.z, controller.y + .01).y);
+    rabbit.animate(time, speed, controller.grounded, controller.charge / .8, world.support(controller.x, controller.z, controller.y + .01,true).y);
     updateCamera(dt);
     daylight.update(dayClock.elapsed,controller,camera,frozen?0:dt,overview||mode==='tour');
     if (time - hudTick >= .05 || frozen) { updateHUD(); hudTick = time; }
     if (mode === 'play' && !overview && !mapOpen && time - mapTick > .12) { drawMap(); mapTick = time; }
     const surveying = overview || mode === 'tour' || (mode === 'pause' && previousMode === 'tour');
     upperApproach = upperRoomsVisible(controller, upperApproach);
-    const showUpper = surveying ? surveyFloor === 1 : upperApproach;
-    const showCeiling = !surveying || surveyFloor === 1;
+    const outside=controller.x<HOUSE.minX||controller.x>HOUSE.maxX||controller.z<HOUSE.minZ||controller.z>HOUSE.maxZ;
+    const showUpper = surveying ? surveyFloor === 1||roofView : upperApproach||outside;
+    const showCeiling = !surveying || surveyFloor === 1||roofView;
     consumables.setUpperVisible(showUpper);
-    if (upper.visible !== showUpper || ceiling.visible !== showCeiling) {
-      upper.visible = showUpper; ceiling.visible = showCeiling; renderer.shadowMap.needsUpdate = true;
+    const showRoof=!surveying||roofView;
+    if (upper.visible !== showUpper || ceiling.visible !== showCeiling || roof.shell.visible!==showRoof || roof.ceilings.visible!==showRoof) {
+      upper.visible = showUpper; ceiling.visible = showCeiling;
+      roof.shell.visible=roof.ceilings.visible=showRoof; renderer.shadowMap.needsUpdate = true;
     }
     setHidden('survey', !surveying || mode === 'pause');
     setData('mode', mode);
     setData('visibleFloor', upper.visible ? '1' : '0');
     setData('ceilingVisible', String(ceiling.visible));
+    setData('roofVisible',String(roof.shell.visible));setData('interiorCeilingsVisible',String(roof.ceilings.visible));
     setData('discoveries', String(discovered.size));
     if (renderer.shadowMap.needsUpdate) setData('shadowRevision', String(++shadowRevision));
     renderProfile.begin();

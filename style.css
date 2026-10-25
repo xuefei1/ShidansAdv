@@ -35,3 +35,28 @@
 
 @media(max-width:850px){.day-clock{top:78px;width:220px}.day-clock .eyebrow{font-size:8px}.location,.quest{top:190px}.energy{top:320px}}
 @media(max-width:700px){.day-clock{top:69px;width:210px;padding:9px 14px}.location,.quest{top:167px}.energy{top:292px}}
+
+.welcome{top:16%;max-height:calc(100vh - 170px);overflow-y:auto;padding-right:10px}
+.welcome h1{font-size:clamp(44px,5vw,68px);margin:18px 0 14px}
+.welcome-actions{margin:20px 0 10px}.welcome .milestone-note{margin-top:18px}
+.player-entry{margin-top:20px;max-width:330px;display:grid;gap:7px}
+.player-entry label{font-size:9px;letter-spacing:2px;font-weight:700;color:#657c57}
+.player-entry input{font:inherit;font-size:15px;color:#344538;background:#fffcf0;border:1px solid #aab394;border-radius:6px;padding:11px 12px;width:100%}
+.player-entry input:focus-visible{outline:2px solid #8da472;outline-offset:2px}
+.player-entry input:disabled{color:#6c795f;background:#e8eadb}
+.player-entry small{font-size:10px;color:#77836d;line-height:1.5}
+.happiness-heading{display:flex;align-items:center;justify-content:space-between;border-top:1px solid #85956b44;padding-top:9px;margin-top:10px;color:#92733a}
+.happiness-heading span{font-size:9px;letter-spacing:1.6px;font-weight:700}
+#happiness-value{font:26px Georgia;font-variant-numeric:tabular-nums}
+#score-player{display:block;text-align:right;font-size:9px;color:#7b846c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.day-clock[data-night=true] .happiness-heading{color:#f4d294}.day-clock[data-night=true] #score-player{color:#d0d9e8}
+.consume{width:330px}.consume>div:first-child{align-items:flex-start;gap:10px}.consume span{text-align:right;max-width:155px;line-height:1.6}
+.leaderboard-panel{width:min(550px,92vw);max-height:85vh;overflow:auto}
+.leaderboard-scroll{max-height:45vh;overflow:auto}.leaderboard-panel table{width:100%;border-collapse:collapse;font-size:13px;text-align:left}
+.leaderboard-panel th{font-size:10px;color:#7e896f;padding:10px 8px;border-bottom:1px solid #b2bb9d}
+.leaderboard-panel td{padding:12px 8px;border-bottom:1px solid #d9dec9;overflow-wrap:anywhere}
+.leaderboard-panel td:last-child,.leaderboard-panel th:last-child{text-align:right;font-variant-numeric:tabular-nums}
+.latest-score{background:#e5ebd3;color:#4e6b3b}.leaderboard-panel #leaderboard-empty{font-size:13px;line-height:1.8;color:#79836c}
+.welcome .day-ended{padding:12px 0 0;max-width:360px}
+@media(max-width:850px){.location,.quest{top:255px}.energy{top:385px}}
+@media(max-width:700px){.welcome{top:100px;max-height:calc(100vh - 160px)}.welcome h1{font-size:44px}.welcome .milestone-note{display:none}.location,.quest{top:230px}.energy{top:350px}.consume{width:290px}.day-clock{width:230px}.welcome-actions{flex-wrap:wrap;gap:10px}}

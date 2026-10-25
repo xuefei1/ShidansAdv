@@ -4,9 +4,10 @@ import { batchStaticGeometry } from './render-batching.js';
 import { ConsumableSystem } from './consumable-system.js';
 import { CONSUMABLE_TYPES, CONSUMABLE_SLOTS } from './consumable-data.js';
 import { FLOOR_HEIGHT } from './layout.js';
+import { consumableRotation } from './consumable-collision.js';
 
 // One small original model per food, instanced by kind/floor. Shared vertex colours
-// keep the props to at most 19 draws, including the permanent den hay.
+// keep the props to at most 25 draws, including the permanent den hay.
 function model(type, permanent = false) {
   const group = new THREE.Group(), color = CONSUMABLE_TYPES[type].color;
   const ball = (c,x,y,z,sx,sy,sz) => ellipsoid(group,c,x,y,z,sx,sy,sz);
@@ -84,6 +85,28 @@ function model(type, permanent = false) {
     box(0x658996,-.21,.10,0,.035,.16,.5);
     box(0xe5c782,.04,.202,0,.16,.008,.20);
     for (const y of [.07,.11,.14]) box(0xcbbda2,.201,y,0,.004,.006,.4);
+  } else if (type === 'wire') {
+    const points=Array.from({length:17},(_,i)=>{
+      const a=i/16*Math.PI*3;
+      return new THREE.Vector3(Math.cos(a)*(.29-i*.007),.055,Math.sin(a)*.22);
+    });
+    group.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points),40,.028,6,false),new THREE.MeshStandardMaterial({color,roughness:1})));
+    box(0xebe2cb,.34,.06,0,.15,.09,.12);
+    for(const z of [-.035,.035]) box(0x999c9f,.44,.06,z,.075,.025,.02);
+  } else if (type === 'cardboard') {
+    box(color,0,.25,0,.8,.5,.66);
+    box(0xe5c58e,0,.504,0,.14,.008,.66);
+    box(0xad8153,-.21,.505,0,.006,.009,.63);
+    box(0xefdcba,.23,.28,.333,.22,.16,.008);
+    for(const x of [.17,.23,.29]) box(0x94784f,x,.28,.339,.018,.095,.004);
+    box(0xb38a5f,0,.03,.334,.8,.035,.008);
+  } else if (type === 'slippers') {
+    for(const x of [-.16,.16]) {
+      ball(0xbe8589,x,.055,0,.135,.05,.29);
+      ball(color,x,.13,-.08,.135,.10,.20);
+      ball(0xf4d9cf,x,.16,.04,.105,.025,.08);
+      for(const dx of [-.04,.04]) ball(0xf4d9cf,x+dx,.24,-.16,.025,.08,.025);
+    }
   } else if (type === 'cake') {
     cylinder(group,0xf6ead9,0,.025,0,.35,.04,.35,24);
     cylinder(group,0xe4be87,0,.16,0,.26,.25,.26,24);
@@ -97,8 +120,8 @@ function model(type, permanent = false) {
   return group.children[0];
 }
 
-export function createConsumables(scene, world) {
-  const system = new ConsumableSystem(world), visuals = new Map(), batches = new Map();
+export function createConsumables(scene, world, options) {
+  const system = new ConsumableSystem(world, options), visuals = new Map(), batches = new Map();
   const floors = [new THREE.Group(), new THREE.Group()];
   floors.forEach((g,i) => { g.name = `Consumables floor ${i}`; scene.add(g); });
   for (const type of Object.keys(CONSUMABLE_TYPES)) {
@@ -143,9 +166,8 @@ export function createConsumables(scene, world) {
       const { item, age, state } = visual, floor = item.y >= FLOOR_HEIGHT-.1 ? 1 : 0;
       const t = state === 'consume' ? age/.65 : state === 'spawn' ? Math.min(1,age/.6) : 1;
       const scale = state === 'consume' ? (1-t)*(1+.35*Math.sin(t*Math.PI)) : state === 'spawn' ? 1-(1-t)**3 : 1;
-      const bob = .02+Math.sin(time*2+item.x)*.016;
-      transform.position.set(item.x,item.y+bob+(state==='consume' ? t*.65 : 0),item.z);
-      transform.rotation.set(0, Math.sin(item.x*3+item.z)*.5+(state==='consume' ? t*2 : 0), target?.id===id && interacting ? Math.sin(time*35)*.045 : 0);
+      transform.position.set(item.x,item.y+(state==='consume' ? t*.65 : 0),item.z);
+      transform.rotation.set(0, consumableRotation(item)+(state==='consume' ? t*2 : 0), target?.id===id && interacting ? Math.sin(time*35)*.045 : 0);
       transform.scale.setScalar(scale * (item.permanent ? 1.35 : 1)); transform.updateMatrix();
       const mesh = batches.get(item.permanent ? 'den-hay' : `${item.type}:${floor}`); mesh.setMatrixAt(mesh.count++,transform.matrix);
     }

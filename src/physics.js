@@ -18,15 +18,69 @@ export function box(x, y, z, w, h, d, surface = 'wood') {
 export function inside(x, z, b, margin = 0) { return x > b.minX - margin && x < b.maxX + margin && z > b.minZ - margin && z < b.maxZ + margin; }
 
 export class World {
-  constructor() { this.solids = []; this.ramps = RAMPS; this.cells = new Map(); this.queryCache = new Map(); this.order = new WeakMap(); }
+  constructor() { this.solids = []; this.ramps = RAMPS; this.cells = new Map(); this.queryCache = new Map(); this.order = new WeakMap(); this.nextOrder = 0; this.dynamicBoxes = new Set(); this.dynamicCells = new Map(); this.dynamicQueryCache = new Map(); this.dynamicRevision = 0; }
+  addDynamicBox(...args) {
+    const b=this.addBox(...args); this.dynamicBoxes.add(b); this.dynamicRevision++;
+    for(let x=Math.floor(b.minX/4);x<=Math.floor(b.maxX/4);x++) for(let z=Math.floor(b.minZ/4);z<=Math.floor(b.maxZ/4);z++) {
+      const key=`${x},${z}`;
+      if(!this.dynamicCells.has(key)) this.dynamicCells.set(key,[]);
+      this.dynamicCells.get(key).push(b);
+    }
+    this.dynamicQueryCache.clear(); return b;
+  }
+  moveDynamicBox(b,dx,dy,dz) {
+    if(!this.dynamicBoxes.has(b) || !Number.isFinite(dx+dy+dz) || !(dx || dy || dz)) return b;
+    const old=[Math.floor(b.minX/4),Math.floor(b.maxX/4),Math.floor(b.minZ/4),Math.floor(b.maxZ/4)];
+    b.minX+=dx; b.maxX+=dx; b.minY+=dy; b.maxY+=dy; b.minZ+=dz; b.maxZ+=dz;
+    const next=[Math.floor(b.minX/4),Math.floor(b.maxX/4),Math.floor(b.minZ/4),Math.floor(b.maxZ/4)];
+    if(old.some((value,index)=>value!==next[index])) {
+      // Retain collider identity and insertion order: render/camera references
+      // and contact snapshots can follow a prop without allocating a new box.
+      for(const index of [this.cells,this.dynamicCells]) {
+        for(let x=old[0];x<=old[1];x++) for(let z=old[2];z<=old[3];z++) {
+          const key=`${x},${z}`,cell=index.get(key),at=cell?.indexOf(b) ?? -1;
+          if(at>=0) cell.splice(at,1);
+          if(!cell?.length) index.delete(key);
+        }
+        for(let x=next[0];x<=next[1];x++) for(let z=next[2];z<=next[3];z++) {
+          const key=`${x},${z}`;
+          if(!index.has(key)) index.set(key,[]);
+          const cell=index.get(key),order=this.order.get(b);
+          let at=cell.findIndex(other=>this.order.get(other)>order);
+          if(at<0) at=cell.length;
+          cell.splice(at,0,b);
+        }
+      }
+      this.queryCache.clear(); this.dynamicQueryCache.clear();
+    }
+    this.dynamicRevision++; return b;
+  }
   addBox(...args) {
-    const b = box(...args); this.order.set(b, this.solids.length); this.solids.push(b);
+    const b = box(...args); this.order.set(b, this.nextOrder++); this.solids.push(b);
     for (let x = Math.floor(b.minX / 4); x <= Math.floor(b.maxX / 4); x++) for (let z = Math.floor(b.minZ / 4); z <= Math.floor(b.maxZ / 4); z++) {
       const key = `${x},${z}`;
       if (!this.cells.has(key)) this.cells.set(key, []);
       this.cells.get(key).push(b);
     }
     this.queryCache.clear(); return b;
+  }
+  removeBox(b) {
+    const index=this.solids.indexOf(b); if(index<0) return;
+    this.solids.splice(index,1);
+    const dynamic=this.dynamicBoxes.delete(b);
+    if(dynamic) { this.dynamicRevision++; this.dynamicQueryCache.clear(); }
+    for(let x=Math.floor(b.minX/4);x<=Math.floor(b.maxX/4);x++) for(let z=Math.floor(b.minZ/4);z<=Math.floor(b.maxZ/4);z++) {
+      const key=`${x},${z}`, cell=this.cells.get(key);
+      if(dynamic) {
+        const dynamicCell=this.dynamicCells.get(key),at=dynamicCell?.indexOf(b) ?? -1;
+        if(at>=0) dynamicCell.splice(at,1);
+        if(!dynamicCell?.length) this.dynamicCells.delete(key);
+      }
+      if(!cell) continue;
+      const at=cell.indexOf(b); if(at>=0) cell.splice(at,1);
+      if(!cell.length) this.cells.delete(key);
+    }
+    this.queryCache.clear();
   }
   query(minX, minZ, maxX = minX, maxZ = minZ) {
     const x0 = Math.floor(minX / 4), x1 = Math.floor(maxX / 4), z0 = Math.floor(minZ / 4), z1 = Math.floor(maxZ / 4);
@@ -40,15 +94,29 @@ export class World {
     }
     return this.queryCache.get(key);
   }
+  // Consumables use the same 4m horizontal cells as scenery, but a separate
+  // index keeps tiny ball contacts from scanning every collectible in the house.
+  queryDynamic(minX,minZ,maxX=minX,maxZ=minZ) {
+    const x0=Math.floor(minX/4),x1=Math.floor(maxX/4),z0=Math.floor(minZ/4),z1=Math.floor(maxZ/4);
+    if(x0===x1 && z0===z1) return this.dynamicCells.get(`${x0},${z0}`) || [];
+    const key=`${x0},${z0},${x1},${z1}`;
+    if(!this.dynamicQueryCache.has(key)) {
+      const found=new Set();
+      for(let x=x0;x<=x1;x++) for(let z=z0;z<=z1;z++) for(const b of this.dynamicCells.get(`${x},${z}`) || []) found.add(b);
+      if(this.dynamicQueryCache.size>=128) this.dynamicQueryCache.clear();
+      this.dynamicQueryCache.set(key,[...found].sort((a,b)=>this.order.get(a)-this.order.get(b)));
+    }
+    return this.dynamicQueryCache.get(key);
+  }
   rampAt(x, z) { return this.ramps.find(r => x >= r.minX && x <= r.maxX && z >= Math.min(r.startZ, r.endZ) && z <= Math.max(r.startZ, r.endZ)); }
   rampHeight(x, z) {
     const r = this.rampAt(x, z);
     return r ? (r.startZ - z) / (r.startZ - r.endZ) * r.height : null;
   }
-  support(x, z, maxHeight = Infinity) {
+  support(x, z, maxHeight = Infinity, ignorePushables = false) {
     const outdoors = x < HOUSE.minX || x > HOUSE.maxX || z < HOUSE.minZ || z > HOUSE.maxZ;
     let y = 0, surface = Math.hypot(x - DEN.x, z - DEN.z) < DEN.radius ? 'bedding' : outdoors ? 'grass' : 'wood';
-    for (const b of this.query(x, z)) if (b.maxY <= maxHeight + .001 && b.maxY > y && inside(x, z, b)) { y = b.maxY; surface = b.surface; }
+    for (const b of this.query(x, z)) if ((!ignorePushables || !b.pushable) && b.maxY <= maxHeight + .001 && b.maxY > y && inside(x, z, b)) { y = b.maxY; surface = b.surface; }
     // Outdoor benches, stone paths and deck furniture have the same firm grip.
     if (outdoors) surface = y >= FLOOR_HEIGHT - .3 ? 'deck' : 'grass';
     const ramp = this.rampHeight(x, z);
@@ -58,23 +126,35 @@ export class World {
 }
 
 export class RabbitController {
-  constructor(world) { this.world = world; this.radius = .22; this.height = .68; this.energy = new Energy(); this.sprintExhausted = false; this.reset(); }
+  constructor(world) { this.world = world; this.radius = .22; this.height = .68; this.energy = new Energy(); this.sprintExhausted = false; this.freeDenJumpAvailable = true; this.reset(); }
   reset() {
     this.x = DEN.x; this.y = 0; this.z = DEN.z; this.vx = 0; this.vy = 0; this.vz = 0;
     this.facing = Math.PI; this.grounded = true; this.surface = 'bedding'; this.charge = 0;
-    this.charging = false; this.jumpHeld = false; this.lastJump = null; this.lastLanding = false; this.longJumping = false;
-    this.sprinting = false; this.jumpEnergyBlocked = false;
+    this.charging = false; this.jumpHeld = false; this.lastJump = null; this.lastJumpFree = false; this.lastLanding = false; this.longJumping = false;
+    this.sprinting = false; this.jumpEnergyBlocked = false; this.pushing=false;this.lastPushedId='';
   }
+  // Home/title navigation resets position only. A new day restores the single
+  // free outward launch, so returning to the den cannot manufacture free jumps.
+  resetDay() { this.freeDenJumpAvailable = true; this.reset(); }
+  get hasFreeDenJump() { return this.freeDenJumpAvailable; }
+  isFreeDenJump(input = {}) {
+    if(!this.freeDenJumpAvailable || !this.grounded || this.y >= DEN.fenceHeight) return false;
+    const x=this.x-DEN.x,z=this.z-DEN.z,distance=Math.hypot(x,z);
+    const dx=input.x || 0,dz=input.z || 0;
+    return distance<DEN.radius && Math.hypot(dx,dz)>.05 && (distance<1e-6 || x*dx+z*dz>0);
+  }
+  jumpCost(charge = this.charge,input = {}) { return this.isFreeDenJump(input) ? 0 : highJumpCost(charge); }
   releaseInput() { this.jumpHeld = false; this.charging = false; this.charge = 0; }
   update(dt, input = {}) {
     // Small substeps prevent tunnelling at low framerates, including the circular fence.
     const duration = clamp(dt, 0, .1), n = Math.max(1, Math.ceil(duration / (1 / 120)));
-    this.lastJump = null; this.lastLanding = false; this.jumpEnergyBlocked = false;
+    this.lastJump = null; this.lastJumpFree = false; this.lastLanding = false; this.jumpEnergyBlocked = false;
     for (let i = 0; i < n; i++) this.step(duration / n, input);
   }
   step(dt, input) {
     const oldX = this.x, oldY = this.y, oldZ = this.z;
-    const ground = this.world.support(this.x, this.z, this.y + .24);
+    this.pushing=false;
+    const ground = this.world.support(this.x, this.z, this.y + .24,true);
     if (this.grounded && this.y - ground.y > .26) this.grounded = false;
     if (this.grounded) this.surface = ground.surface;
     const tuning = SURFACES[this.surface];
@@ -91,7 +171,9 @@ export class RabbitController {
     if (!input.jump && this.jumpHeld && this.charging) {
       if (this.grounded) {
         const wantsLong = this.charge + 1e-9 >= HIGH_JUMP_THRESHOLD && tuning.longJump;
-        const long = wantsLong && this.energy.spend(highJumpCost(this.charge));
+        const free = wantsLong && this.isFreeDenJump(input);
+        const long = wantsLong && (free || this.energy.spend(highJumpCost(this.charge)));
+        if(free && long) { this.freeDenJumpAvailable = false; this.lastJumpFree = true; }
         this.jumpEnergyBlocked = wantsLong && !long;
         const power = clamp(this.charge / .65, 0, 1);
         this.vy = long ? 6 + power * 2.25 : 4.2;
@@ -106,7 +188,13 @@ export class RabbitController {
     if (!input.run) this.sprintExhausted = false;
     else if (this.energy.value === 0) this.sprintExhausted = true;
     const sprint = !!input.run && moving && !this.charging && !this.sprintExhausted && this.energy.value > 0;
-    const speed = (sprint ? tuning.run : tuning.walk) * (this.charging ? .25 : 1);
+    let friction=0;
+    if(this.grounded) for(const b of this.world.queryDynamic(this.x-this.radius-.08,this.z-this.radius-.08,this.x+this.radius+.08,this.z+this.radius+.08)) {
+      if(!b.pushable||this.y>=b.maxY-.01||this.y+this.height<=b.minY+.01)continue;
+      const x=clamp(this.x,b.minX,b.maxX),z=clamp(this.z,b.minZ,b.maxZ);
+      if(Math.hypot(x-this.x,z-this.z)<this.radius+.06)friction=Math.max(friction,b.pushFriction||.1);
+    }
+    const speed = (sprint ? tuning.run : tuning.walk) * (this.charging ? .25 : 1)*(1-friction);
     if (this.grounded) {
       if (moving) {
         this.vx = tuning.grip ? dx * speed : approach(this.vx, dx * speed, tuning.acceleration * dt);
@@ -147,6 +235,10 @@ export class RabbitController {
     }
     // Resolve circle vs. AABB horizontally; jumping on furniture remains possible.
     for (let pass = 0; pass < 2; pass++) for (const b of this.world.query(this.x - this.radius, this.z - this.radius, this.x + this.radius, this.z + this.radius)) {
+      if(b.pushable) {
+        if(this.y<b.maxY-.01 && this.y+this.height>b.minY+.01)b.onRabbitPush?.(this,dt);
+        continue;
+      }
       if (this.y >= b.maxY - .01 || this.y + this.height <= b.minY + .01 || (this.grounded && b.maxY - this.y <= .24)) continue;
       const nx = clamp(this.x, b.minX, b.maxX), nz = clamp(this.z, b.minZ, b.maxZ);
       let ox = this.x - nx, oz = this.z - nz, distance = Math.hypot(ox, oz);
@@ -165,11 +257,12 @@ export class RabbitController {
     this.y += this.vy * dt;
     // Head collisions under the upper floor and tabletops.
     if (this.vy > 0) for (const b of this.world.query(this.x - this.radius, this.z - this.radius, this.x + this.radius, this.z + this.radius)) {
+      if(b.pushable)continue;
       if (inside(this.x, this.z, b, this.radius * .65) && oldY + this.height <= b.minY + .01 && this.y + this.height >= b.minY) {
         this.y = b.minY - this.height; this.vy = 0;
       }
     }
-    const below = this.world.support(this.x, this.z, Math.max(oldY, this.y) + (this.grounded ? .25 : .01));
+    const below = this.world.support(this.x, this.z, Math.max(oldY, this.y) + (this.grounded ? .25 : .01),true);
     if (this.vy <= 0 && this.y <= below.y + .001) {
       this.lastLanding ||= !this.grounded;
       this.y = below.y; this.vy = 0; this.grounded = true; this.surface = below.surface; this.longJumping = false;

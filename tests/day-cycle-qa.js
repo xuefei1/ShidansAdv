@@ -17,13 +17,14 @@ async function loadGame() {
     import {boot} from '/src/main.js';
     let offset=0;
     document.addEventListener('qa-advance',event=>{offset+=Math.max(0,Number(event.detail)||0)*1000;});
-    boot({clockNow:()=>offset}).catch(error=>{console.error(error); document.getElementById('fatal').hidden=false;});
+    boot({clockNow:()=>offset,scoreStorage:{getItem:()=>null,setItem:()=>{}}}).catch(error=>{console.error(error); document.getElementById('fatal').hidden=false;});
   <\/script>`;
   const loaded=new Promise(resolve=>frame.addEventListener('load',resolve,{once:true}));
   frame.srcdoc=html.replace('<head>','<head><base href="/">').replace('<script type="module" src="./src/start.js"></script>',entry);
   await loaded; await until(()=>canvas()?.dataset.ready==='true','scene preparation');
   // Deterministic drag fallback; tests still exercise real input/menu handlers.
   canvas().requestPointerLock=()=>Promise.reject(new frame.contentWindow.DOMException('QA fallback','NotAllowedError'));
+  game().getElementById('player-name').value='Daylight QA';
   game().getElementById('play').click(); await until(()=>canvas().dataset.mode==='play','play');
 }
 async function preview(seconds) {

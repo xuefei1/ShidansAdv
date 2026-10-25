@@ -4,6 +4,7 @@ import { DEN, FLOOR_HEIGHT as H, RAMPS, WALLS, ROOMS } from './layout.js';
 import { cube, cylinder, beam, mat } from './model.js';
 import { furnishHouse } from './furnishings.js';
 import { createHouseLamps } from './house-lamps.js';
+import { createHouseRoof } from './house-roof.js';
 
 // The house is a set of connected spaces, authored at rabbit scale. Ground and
 // upper art are batched separately for a readable floor-by-floor cutaway.
@@ -128,7 +129,8 @@ export function createHouse(scene) {
   const art = { group, ground, upper, outside, solid, detail, world, label };
   furnishHouse(art);
   const lamps = createHouseLamps(art);
-  return { group, world, layers: [ground, upper, outside], upper, ceiling, lamps };
+  const roof = createHouseRoof(art);
+  return { group, world, layers: [ground, upper, outside,...roof.layers], upper, ceiling, lamps, roof };
 }
 
 export function label(parent, text, x, y, z, w, h, background = '#f8efda', foreground = '#6b7b5c') {

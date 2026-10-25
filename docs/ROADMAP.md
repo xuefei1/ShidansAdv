@@ -39,8 +39,8 @@ Scope updated on 2026-10-15 to the requested energy/consumable loop.
 
 - [x] 100.00% meter; 30-second sprint capacity; charged jumps cost 5–10.
 - [x] Free ordinary movement/tap hops, low-energy fallback, and passive recovery.
-- [x] Nine consumable kinds, the requested rewards, and 41 fixed initial items on both floors.
-- [x] One-second left-click hold with progress, reach and obstruction checks.
+- [x] Nine consumable kinds, the requested rewards, and 41 authored starting items on both floors.
+- [x] Reward-scaled left-click holds with progress, a one-second minimum, reach and obstruction checks.
 - [x] Disappearance particles and one-second energy recovery, capped at 100.
 - [x] One new item per minute below two remaining, with inverse-energy probabilities.
 - [x] Menus/background freeze resource timers; home/title preserve the session.
@@ -49,7 +49,7 @@ Scope updated on 2026-10-15 to the requested energy/consumable loop.
 
 Acceptance: sprint and charged leaps use the displayed energy; all nine items can be found, consumed and depleted; cancelled holds grant nothing; low supplies replenish at the specified rate. User playtesting remains the final tuning step.
 
-Deferred from the earlier sketch: drinking, cardboard/wire interactions, happiness scoring, and AI noise events. These are outside the current energy-focused milestone.
+At the energy release, drinking, cardboard/wire interactions, happiness scoring and AI noise events were deferred. Cardboard/wires and happiness are now implemented in the 0.5.0 expansion below; drinking and AI noise remain future work.
 
 ## Milestone 3 — the mistress
 
@@ -61,7 +61,7 @@ Deferred from the earlier sketch: drinking, cardboard/wire interactions, happine
 - [x] Pause-aware clock and automatic bedtime return to title with a clean next run.
 - [x] Simulation coverage and an actual-game browser preview/check runner.
 
-Happiness accumulation, the required score and end-of-round scoring remain deferred.
+Happiness accumulation and end-of-round scoring are implemented in 0.5.0. A required target score remains a later balancing decision.
 
 ### Pursuit (planned)
 
@@ -77,8 +77,8 @@ Acceptance: cover, distance and laughter timing create predictable stealth choic
 
 - [x] Round clock and day-to-night progression (implemented in 0.4.0).
 - Cotton cover and end-of-round sequence.
-- Player name entry, final score and persistent local leaderboard.
-- Restart flow, score ordering, ties and invalid-input handling.
+- [x] Player name entry, final happiness score and persistent local leaderboard (0.5.0).
+- [x] Restart flow, score ordering, ties and invalid-input handling (0.5.0).
 - Decide separately whether scores should be shared online.
 
 Acceptance: a full timed round can be played, ended, saved and restarted; scores persist through reload and remain associated with the right name.
@@ -92,3 +92,25 @@ Acceptance: a full timed round can be played, ended, saved and restarted; scores
 - Packaged desktop build or hosted browser release, chosen with the user.
 
 Each milestone should be a tested Git commit or release, with screenshots, updated documentation and a short playtest before increasing scope.
+
+## Happiness expansion (0.5.0)
+
+- [x] Carrot/book happiness, revised book energy, and live happiness HUD.
+- [x] Ten authored wire starts, eight random boxes, four random slipper pairs, independent cooldowns and reward-scaled chewing times.
+- [x] Movable consumables with mild contact slowdown, momentum, friction, gravity, and collisions with the house, fence, boundaries, other loose props and poop balls.
+- [x] Named completed runs, local persistence, top-ten display and graceful storage failure.
+- [x] Item population/reward table and regression checks.
+- [x] Approved for GitHub publication after local playtesting.
+
+
+## Consumable physics and complete house shell
+
+- [x] First outward charged den jump each day uses no energy; home/title navigation preserves the used allowance.
+- [x] Consumption time follows `max(1, energy / 25 + happiness / 50)`, rounded upward to 0.1 second, with a one-second minimum.
+- [x] All consumables can be pushed with about 10% slowdown, or 18% for boxes, while contact lasts. Props yield instead of becoming fixed walls.
+- [x] Pushed items retain momentum, settle with friction, fall from tables, and collide with scenery, den fencing, lot bounds, loose props and poop balls.
+- [x] Permanent refill hay can be nudged inside the den; pushed cake and wires respawn at their original authored locations.
+- [x] Loose consumables are movable bodies rather than climbing platforms; structural furnishings keep their climbable routes.
+- [x] Complete pitched pastel roof and ceilings across the house, using two ceiling batches and three exterior drawing batches.
+- [x] Front-wing ceilings at 3.9 m; upper rear and central stair-hall ceilings at 8.1 m leave stairs clear.
+- [x] Roof/ceilings stay visible in ordinary play; V and house tours initially hide both for inspection, with Show roof / Look inside switching the survey shell; exterior play reveals the upper facade.

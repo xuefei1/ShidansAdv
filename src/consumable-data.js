@@ -1,16 +1,20 @@
 import { DEN, FLOOR_HEIGHT as H } from './layout.js';
 
 export const CONSUMABLE_TYPES = Object.freeze({
-  hay: { name: 'Hay stack', energy: 10, color: 0xd6b85c, verb: 'Nibble' },
-  carrot: { name: 'Carrot', energy: 5, color: 0xef984d, verb: 'Nibble' },
-  rabbitFood: { name: 'Rabbit food', energy: 20, color: 0x97b583, verb: 'Eat' },
-  bread: { name: 'Bread', energy: 25, color: 0xd5a267, verb: 'Nibble' },
-  apple: { name: 'Apple', energy: 15, color: 0xd87566, verb: 'Nibble' },
-  banana: { name: 'Banana', energy: 20, color: 0xe9ca65, verb: 'Nibble' },
-  book: { name: 'Book', energy: 2, color: 0x8eafbb, verb: 'Chew' },
-  cake: { name: 'Cake', energy: 50, color: 0xe6a7b6, verb: 'Eat' },
-  noodles: { name: 'Noodles', energy: 30, color: 0xe6cb93, verb: 'Eat' },
+  hay: { name: 'Hay stack', energy: 25, color: 0xd6b85c, verb: 'Nibble' },
+  carrot: { name: 'Carrot', energy: 20, happiness: 10, color: 0xef984d, verb: 'Nibble' },
+  rabbitFood: { name: 'Rabbit food', energy: 20, happiness: 80, color: 0x97b583, verb: 'Eat' },
+  bread: { name: 'Bread', energy: 30, happiness: 20, color: 0xd5a267, verb: 'Nibble' },
+  apple: { name: 'Apple', energy: 25, happiness: 50, color: 0xd87566, verb: 'Nibble' },
+  banana: { name: 'Banana', energy: 20, happiness: 40, color: 0xe9ca65, verb: 'Nibble' },
+  book: { name: 'Book', energy: 10, happiness: 20, color: 0x8eafbb, verb: 'Chew' },
+  cake: { name: 'Cake', energy: 50, happiness: 150, respawn: 120, color: 0xe6a7b6, verb: 'Eat' },
+  noodles: { name: 'Noodles', energy: 30, happiness: 10, color: 0xe6cb93, verb: 'Eat' },
+  wire: { name: 'Wire / cable', energy: 0, happiness: 150, respawn: 30, color: 0x565a70, verb: 'Chew' },
+  cardboard: { name: 'Cardboard box', energy: 20, happiness: 100, respawn: 60, color: 0xc69a68, verb: 'Chew' },
+  slippers: { name: 'Slippers', energy: 0, happiness: 200, respawn: 90, color: 0xdb9f9e, verb: 'Chew' },
 });
+export const SNACK_TYPES = Object.freeze(Object.keys(CONSUMABLE_TYPES).filter(id => !CONSUMABLE_TYPES[id].respawn));
 
 // A permanent recovery point, separate from the finite snacks and their restock pool.
 // Reachable from the reset position without sprinting or jumping.
@@ -19,6 +23,12 @@ export const DEN_HAY = Object.freeze({
 });
 const DEN_HAY_DETAILS = Object.freeze({ name: 'Special den hay', energy: 100, color: 0xd6b85c, verb: 'Nibble' });
 export const consumableDetails = item => item.permanent ? DEN_HAY_DETAILS : CONSUMABLE_TYPES[item.type];
+// Use the full listed reward, regardless of the rabbit's current energy. Round
+// upward so the prompt, progress meter and completion threshold always agree.
+export function consumptionSeconds(item) {
+  const {energy,happiness=0}=consumableDetails(item);
+  return Math.ceil(Math.max(1,energy/25+happiness/50)*10-1e-9)/10;
+}
 
 // Fixed, reachable places on both floors. Books here are loose chewable props;
 // the large structural book steps in furnishings.js remain solid climbing aids.
@@ -38,7 +48,7 @@ export const CONSUMABLE_SLOTS = Object.freeze(Object.entries(places).flatMap(([t
 
 // Choosing the kind before its location keeps P(kind) exactly proportional to 1/energy.
 export function randomConsumableType(random = Math.random) {
-  const entries = Object.entries(CONSUMABLE_TYPES);
+  const entries = SNACK_TYPES.map(id => [id, CONSUMABLE_TYPES[id]]);
   let pick = random() * entries.reduce((sum, [, type]) => sum + 1 / type.energy, 0);
   for (const [id, type] of entries) { pick -= 1 / type.energy; if (pick < 0) return id; }
   return entries.at(-1)[0];
