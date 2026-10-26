@@ -8,7 +8,7 @@ import { consumableRotation } from './consumable-collision.js';
 
 // One small original model per food, instanced by kind/floor. Shared vertex colours
 // keep the props to at most 25 draws, including the permanent den hay.
-function model(type, permanent = false) {
+export function createConsumableModel(type, permanent = false) {
   const group = new THREE.Group(), color = CONSUMABLE_TYPES[type].color;
   const ball = (c,x,y,z,sx,sy,sz) => ellipsoid(group,c,x,y,z,sx,sy,sz);
   const box = (c,x,y,z,w,h,d) => cube(group,c,x,y,z,w,h,d);
@@ -82,7 +82,9 @@ function model(type, permanent = false) {
   } else if (type === 'book') {
     box(0xf2e4c7,0,.10,0,.39,.13,.46);
     for (const y of [.025,.18]) box(color,0,y,0,.45,.035,.5);
-    box(0x658996,-.21,.10,0,.035,.16,.5);
+    // Keep the binding inside the cover ends. Flush, overlapping end faces
+    // previously let blue binding and cover colours compete for the same depth.
+    box(0x658996,-.21,.10,0,.035,.16,.44);
     box(0xe5c782,.04,.202,0,.16,.008,.20);
     for (const y of [.07,.11,.14]) box(0xcbbda2,.201,y,0,.004,.006,.4);
   } else if (type === 'wire') {
@@ -125,7 +127,7 @@ export function createConsumables(scene, world, options) {
   const floors = [new THREE.Group(), new THREE.Group()];
   floors.forEach((g,i) => { g.name = `Consumables floor ${i}`; scene.add(g); });
   for (const type of Object.keys(CONSUMABLE_TYPES)) {
-    const source = model(type);
+    const source = createConsumableModel(type);
     for (const floor of [0,1]) {
       const mesh = new THREE.InstancedMesh(source.geometry, source.material, CONSUMABLE_SLOTS.length);
       mesh.name = `${type} collectibles`; mesh.count = 0; mesh.receiveShadow = true;
@@ -133,7 +135,7 @@ export function createConsumables(scene, world, options) {
       floors[floor].add(mesh); batches.set(`${type}:${floor}`, mesh);
     }
   }
-  const denSource = model('hay', true);
+  const denSource = createConsumableModel('hay', true);
   const denMesh = new THREE.InstancedMesh(denSource.geometry, denSource.material, 1);
   denMesh.name = 'Special den hay'; denMesh.receiveShadow = true; denMesh.frustumCulled = false;
   denMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -151,7 +153,8 @@ export function createConsumables(scene, world, options) {
       const { item } = event;
       if (event.kind === 'spawn') visuals.set(item.id,{item,age:0,state:'spawn'});
       else {
-        const visual = visuals.get(item.id); visual.age = 0; visual.state = item.permanent ? 'idle' : 'consume';
+        const visual = visuals.get(item.id);
+        if(visual) { visual.age = 0; visual.state = item.permanent ? 'idle' : 'consume'; }
         for (let i = 0; i < 12; i++) particles.push({x:item.x,y:item.y+.2,z:item.z,age:0,angle:i*Math.PI/6,speed:.3+(i%3)*.12});
       }
     }
@@ -190,7 +193,7 @@ export function createConsumables(scene, world, options) {
   return { system, handle, sync,
     reset() {
       system.reset(); visuals.clear(); particles.length = 0; time = 0;
-      for (const item of system.availableItems()) visuals.set(item.id,{item,age:1,state:'idle'});
+      for (const item of system.availableItems()) if(item.type!=='poop') visuals.set(item.id,{item,age:1,state:'idle'});
       sync();
     },
     setUpperVisible(visible) { upperVisible = visible; floors[1].visible = visible; }

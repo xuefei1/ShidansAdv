@@ -1,5 +1,49 @@
 # Verification
 
+## Current fountain capacity and cooldown revision
+
+Verified for version **0.6.0** with Node.js 24.19.0 and the in-app browser on Windows. **All 258 Node tests pass**, including exact water conservation, partial/independent reservoirs, full-bladder headroom, depletion, reset/collider identity, water/stream rendering and one-/sixty-second cooldown boundaries. Fountain surface audits at full, half and empty states found no exposed coplanar color conflicts.
+
+**All 33 actual-game browser checks pass** in `/tests/body-resources.html?actions`: a 0.1-second drink leaves 99% in the station, a full bladder empties exactly one station, cooldown expiry does not refill it, another room retains its own water, and Restart game refills all fourteen. It also checks 0.999/1.000-second poop timing, the 59.9/60-second pee restriction, computed cooldown text sizes of at least 14 pixels, action animation/locks, paused timers, resource resets and the existing HUD. Source parsing, static build and local HTTP smoke checks pass. Personal reference photos and local test artifacts remain excluded from source control.
+
+The 255-Node / 28-browser verification below is a historical snapshot that predates these changes.
+
+- Poop uses a one-second active-play cooldown, including the boundary immediately before and at one second. Pee/drinking use sixty seconds from pee-action start. Pauses freeze both timers; rejected inputs must not spend supply or extend a deadline.
+- Each of the fourteen fountains begins with exactly 100 bladder percentage points of water. Verify independent reservoirs, exact 0.1-second / 1-point transfer, irregular frame intervals, a partial 25-point drink leaving 75, and resuming later from the remaining reserve. Bladder headroom must limit transferred water without discarding the rest. Empty fountains must stay empty through R/Home, title and cooldown expiration, while bedtime and Restart game refill them all.
+- Check the remaining-water and empty-fountain prompt text through actual controls. Drinking is capacity-based, so ending a hold early must not exhaust a fountain. Full bladders cannot waste water. Drinking keeps its nibbling motion, and the one-second pee action still drains gradually while locking gameplay actions.
+- Inspect both cooldown values at a computed 14-pixel semibold size and confirm `Pee ready in 59.5s` fits without clipping or panel overlap at 1280 × 720 and 850 × 720, including the visible pee-progress bar. Preserve map access, restart/reset state and completed leaderboard rows.
+
+## Animation, HUD and Restart game — prior verification snapshot
+
+Verified locally with Node.js 24.19.0 and the in-app browser on Windows. **All 255 Node tests pass**, including animation pose/reset/surface checks, exact one-second pee timing, overlapping puddle blending, physics with actions locked and complete restart during a partial pee.
+
+**All 28 actual-game checks pass** in `/tests/body-resources.html?actions`, with no browser warnings or errors: drinking/eating animations, decimal cooldowns, linear drain at half a second, locking through 0.999 seconds, completing at 1 second, pause/resume, the 30-second drinking boundary, removed curiosity panel, retained map access and restart from an interrupted pee. Restart restored the name, zero happiness, full energy, original items, free escape and ten carried balls, and cleared bladder, puddles and cooldowns. The tests use an isolated score store and controllable active clock, without changing saved player data. Source parsing, static build and local HTTP smoke checks also pass.
+
+The 229-Node / 22-browser results below are a prior verification snapshot, preceding these changes.
+
+- Check drinking's nibbling motion, precise bladder filling and stopping, then Q's one-second animation and gradual drain. Movement, jumping, eating, drinking and pooping must remain blocked until the action finishes. The thirty-second pee/drink cooldown begins at action start, with correct behavior on both sides of the deadline. Empty or cooldown Q presses must not create another puddle or extend the timer.
+- Check visible decimal-seconds poop and pee timers, the pee progress bar and full/empty/ready status. Inspect 1280 × 720 and 850 × 720 layouts with a pee action in progress. The curiosity panel and its six quest/step IDs must be absent. Map/discoveries must remain reachable from the minimap or its compact button.
+- The Escape menu must say **Restart game** and explain a complete reset. Starting from a changed round, restart must restore the same player name, 10:00/noon, zero happiness, full energy, ten carried balls, an empty bladder, fresh item placements and the free first den jump. Clear dropped balls, puddles, discoveries, pending recovery, interactions and cooldowns. Completed leaderboard rows must remain unchanged, and the abandoned partial score must never be saved. R/Home and manual title navigation must retain their existing preservation behavior.
+
+## Poop supply, drinking and HUD — prior verification snapshot
+
+This initial resource revision replaced the former unlimited poop drops and 10,000-ball map limit. Its original expectations and verified results are retained below; the current revision above supersedes its instantaneous pee and HUD guidance behavior.
+
+- Start each day with ten carried balls, cap food grants at fifty, enforce a 0.5-second active-play drop cooldown and block empty-supply drops. On-map count is independent from carried supply and never exceeds 1,000; overflow replaces the oldest live ball.
+- Verify all item grants in README.md, including zero for wires, boxes, slippers and eaten poop. Incomplete/cancelled holds grant nothing. Den hay gives ten balls on the initial visit, once per stay, and again only after leaving and landing back inside. Vertical jumps, repeated holds, title/home navigation while staying inside and a full carried supply cannot bank another grant; its energy refill remains reusable.
+- Eat an actual dropped ball with a one-second hold: recover five energy, remove its collider and rendered instance, retain other ball identities and counts, and preserve happiness and carried supply. Check wall/floor/fence obstruction, cancellation and a moving target.
+- Confirm fourteen fountain placements cover every authored room/area, the balcony and both yards. Check grounded reach and obstruction, immutable bodies, clear routes and persistent water. At the pure-state level, 0.1 second of drinking must add exactly 1%, irregular frame intervals must sum correctly, and the bladder must clamp at 100% without overfilling.
+- Q with a positive bladder immediately creates a puddle on the support beneath Shidan and sets bladder to zero. Empty Q does nothing. Drinking stays blocked for thirty seconds of active play, including correct behavior immediately before and at the deadline. Pause/map/tour/title and inactive tabs freeze timers. Home/title preserve supplies, bladder, puddles and cooldowns; bedtime resets them without rebuilding the house.
+- Review 1280 × 720 and 850 × 720 layouts: clock and happiness upper right, Sound/Pause above them, guidance below, left-side energy/bladder/carried-ball panels, Q and Eat/drink controls, readable prompts, and no original Clover House header banner. Pause instructions must scroll without covering their navigation buttons.
+
+Verified locally on 2026-10-25 with Node.js 24.19.0 and the in-app browser on Windows:
+
+- All **229 Node tests pass**, including nineteen food/poop integration tests, carried-supply/cooldown/den-visit tests, and eighteen water/placement/rendering tests. The gallery fountain was moved clear of a fixed hay spawn. The fountain audit checks for competing coplanar colors, and prior house/prop surface regressions remain passing.
+- All **22 actual-game browser checks pass** in `/tests/body-resources.html`: initial resources, HUD placement, right-click/P cooldown boundaries, empty supply, eating a dropped ball, once-per-visit hay, exact 0.1-second drinking, full bladder, Q puddles, the 29.9/30-second drinking boundary, paused cooldown, den re-entry and bedtime reset. The test uses an isolated score store and injectable active clock, with actual mouse/key handlers and normal movement. The in-app preview rendered at roughly one frame per second (sampled game CPU around 1–2 ms), so consumption waits allow for that preview throttle.
+- JavaScript parsing, static build, HTTP module delivery and private-file boundaries pass. No new dependencies or runtime downloads are required. Test-only clock/preview controls are excluded from the build.
+
+The legacy happiness browser assertion includes the carrot's complete prompt: `+20 energy · +10 happiness · +5 poop balls`. `/tests/body-resources.html?preview` provides a full-window visual preview with isolated scores; it does not change the player's stored name or leaderboard.
+
 ## Daylight and bedtime — 0.4.0
 
 Verified locally on 2026-10-19 with Node.js 24.19.0 and the Codex in-app browser on Windows.
@@ -192,3 +236,12 @@ Roof tests check every covered room, upward ceiling contact, clear stairs, downw
 ## Publication approval
 
 The user approved uploading the complete 0.5.0 version after the local playtest revisions above. The release includes happiness scoring, food balance and timing, the free first den jump, pushable consumables, and the complete roof/ceilings. Validation remains 155 automated tests and 44 browser checks, plus source/build/HTTP checks. Personal photos, keys, local test artifacts and generated distribution files remain excluded from source control.
+
+
+## Coplanar colour flicker audit
+
+175 Node tests pass, including 20 new surface regressions. A test-only triangle audit covers actual world transforms, instanced colours, vertex-colour batches, material sidedness, positive-area overlap, concealed opaque box volumes and the legal camera envelope. It reproduces the original wall-trim, sofa-side, crate-side and book-binding defects. Browser-only textured room signs also participate; a lounge-sign/doorway-trim conflict was found and fixed, and texture-map identity is checked even when material tints match. The complete house (ground, upstairs, garden, lamps, ceilings and roof) has zero exposed differently coloured coplanar patches both before and after batching. All consumable models, permanent hay and five Shidan animation poses pass; an actual two-book pushing sequence also stays free of competing patches.
+
+Authored fixes add real clearance to frames, sills, skirting, sofa bases, chair backs, crate sides, hedge/passage joins, rails, roof trim and lamp beams. Book binding ends are inset from covers/pages. Thin intentional floor overlays retain depth testing/writing and use a cached material depth bias. The camera keeps its 0.06 m near plane only when squeezed against an obstacle, increasing to 0.18 m normally and 0.75 m in survey mode. Projection-depth and post-batching overlay tests verify those safeguards.
+
+All 25 actual-game browser interaction checks pass with the surface changes. Source checks and the static build pass. No surface audit runs during gameplay. This is a geometric regression guard plus browser review, not a claim that every possible GPU artifact can be detected from geometry alone. Changes are local for review.

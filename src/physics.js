@@ -146,6 +146,10 @@ export class RabbitController {
   jumpCost(charge = this.charge,input = {}) { return this.isFreeDenJump(input) ? 0 : highJumpCost(charge); }
   releaseInput() { this.jumpHeld = false; this.charging = false; this.charge = 0; }
   update(dt, input = {}) {
+    if(input.locked) {
+      this.releaseInput();this.vx=this.vz=0;this.sprinting=false;
+      input={};
+    }
     // Small substeps prevent tunnelling at low framerates, including the circular fence.
     const duration = clamp(dt, 0, .1), n = Math.max(1, Math.ceil(duration / (1 / 120)));
     this.lastJump = null; this.lastJumpFree = false; this.lastLanding = false; this.jumpEnergyBlocked = false;

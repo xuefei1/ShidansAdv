@@ -5,6 +5,7 @@ import { cube, cylinder, beam, mat } from './model.js';
 import { furnishHouse } from './furnishings.js';
 import { createHouseLamps } from './house-lamps.js';
 import { createHouseRoof } from './house-roof.js';
+import { applySurfaceOverlay } from './surface-materials.js';
 
 // The house is a set of connected spaces, authored at rabbit scale. Ground and
 // upper art are batched separately for a readable floor-by-floor cutaway.
@@ -35,7 +36,7 @@ export function createHouse(scene) {
   solid(ceiling, 0xbccda9, 0, H - .14, -9, 48, .28, 22, 'carpet', 'upper-floor');
   solid(outside, 0xdac49e, 2, H - .14, -22.5, 44, .28, 5, 'deck', 'balcony-floor');
   for (const r of ROOMS.filter(r => r.floor === 1 && r.id !== 'balcony')) {
-    detail(upper, Number(r.color.replace('#', '0x')), (r.minX + r.maxX) / 2, H + .001, (r.minZ + r.maxZ) / 2, r.maxX - r.minX - .3, .002, r.maxZ - r.minZ - .3);
+    applySurfaceOverlay(detail(upper, Number(r.color.replace('#', '0x')), (r.minX + r.maxX) / 2, H + .007, (r.minZ + r.maxZ) / 2, r.maxX - r.minX - .3, .002, r.maxZ - r.minZ - .3));
   }
   for (let x = -19.6; x < 24; x += .8) detail(outside, 0xc5af8c, x, H + .003, -22.5, .018, .005, 4.95);
 
@@ -56,8 +57,10 @@ export function createHouse(scene) {
     const parent = w.floor ? upper : ground, y = w.floor * H;
     solid(parent, w.color, w.axis === 'x' ? (a + b) / 2 : w.fixed, y + (low + high) / 2,
       w.axis === 'x' ? w.fixed : (a + b) / 2, w.axis === 'x' ? b - a : .24, high - low, w.axis === 'x' ? .24 : b - a, 'wood', `${w.id}:${a}:${low}`).userData.wall = w.id;
-    if (low === 0) detail(parent, 0xf9f0dc, w.axis === 'x' ? (a + b) / 2 : w.fixed, y + .1,
-      w.axis === 'x' ? w.fixed : (a + b) / 2, w.axis === 'x' ? b - a : .255, .2, w.axis === 'x' ? .255 : b - a);
+    // Shorten the skirting at each segment end. Flush end caps used to compete
+    // with the differently coloured door/window reveals on the same plane.
+    if (low === 0 && b-a>.024) detail(parent, 0xf9f0dc, w.axis === 'x' ? (a + b) / 2 : w.fixed, y + .09,
+      w.axis === 'x' ? w.fixed : (a + b) / 2, w.axis === 'x' ? b - a - .024 : .255, .2, w.axis === 'x' ? .255 : b - a - .024);
   }
   // Uniform, unlit tint is cheap and blends consistently even when panes share
   // one batch. No refraction pass or shadow casting for transparent glass.
@@ -69,10 +72,12 @@ export function createHouse(scene) {
       wallSegment(w, cursor, a, 0, 3.9); wallSegment(w, a, b, 0, o.bottom); wallSegment(w, a, b, o.top, 3.9);
       // Contrasting frames make traversable windows and low hidden arches legible.
       const p = w.floor ? upper : ground, y = w.floor * H, c = o.kind === 'tunnel' ? 0x977b5d : o.kind === 'window' ? 0xa4c9ca : 0xfdf3df;
-      for (const at of [a - .045, b + .045]) detail(p, c, w.axis === 'x' ? at : w.fixed, y + (o.top + o.bottom) / 2,
-        w.axis === 'x' ? w.fixed : at, w.axis === 'x' ? .09 : .28, o.top - o.bottom + .07, w.axis === 'x' ? .28 : .09);
-      if (o.bottom) detail(p, 0xc49d72, w.axis === 'x' ? o.at : w.fixed, y + o.bottom - .025,
-        w.axis === 'x' ? w.fixed : o.at, w.axis === 'x' ? o.width : .27, .05, w.axis === 'x' ? .27 : o.width);
+      // The frame wraps 12mm over the opening reveal, rather than ending on the
+      // wall's exact exposed end plane. This is a physical overhang, not a bias.
+      for (const at of [a - .048, b + .048]) detail(p, c, w.axis === 'x' ? at : w.fixed, y + (o.top + o.bottom) / 2,
+        w.axis === 'x' ? w.fixed : at, w.axis === 'x' ? .12 : .28, o.top - o.bottom + .07, w.axis === 'x' ? .28 : .12);
+      if (o.bottom) detail(p, 0xc49d72, w.axis === 'x' ? o.at : w.fixed, y + o.bottom - .017,
+        w.axis === 'x' ? w.fixed : o.at, w.axis === 'x' ? o.width-.024 : .27, .05, w.axis === 'x' ? .27 : o.width-.024);
       if (o.kind === 'glazed-window') {
         const x = w.axis === 'x' ? o.at : w.fixed, z = w.axis === 'x' ? w.fixed : o.at, midY = y + (o.bottom + o.top) / 2;
         const pane = solid(p, 0xa7d4df, x, midY, z, w.axis === 'x' ? o.width : .06, o.top - o.bottom, w.axis === 'x' ? .06 : o.width, 'wood', `glass:${w.id}:${o.at}`);
@@ -94,9 +99,11 @@ export function createHouse(scene) {
     solid(parent, 0xa99470, x, y + .92, z, axis === 'x' ? length : .16, .08, axis === 'x' ? .16 : length);
     for (let at = start; at <= end; at += .9) detail(parent, 0xfbf5e1, axis === 'x' ? at : fixed, y + .43, axis === 'x' ? fixed : at, .10, .87, .10);
   }
-  rail(upper, 'x', 2, -24, .8, H, 'gallery-west-rail'); rail(upper, 'x', 2, 4.2, 24, H, 'gallery-east-rail');
+  // Finish rails inside their adjoining walls instead of overlapping the wall
+  // undersides at the gallery/balcony corners, which are visible from below.
+  rail(upper, 'x', 2, -23.86, .8, H, 'gallery-west-rail'); rail(upper, 'x', 2, 4.2, 23.86, H, 'gallery-east-rail');
   rail(outside, 'x', -25, -20, 18.8, H, 'balcony-rail'); rail(outside, 'x', -25, 22.2, 24, H);
-  rail(outside, 'z', -20, -25, -20, H); rail(outside, 'z', 24, -25, -20, H);
+  rail(outside, 'z', -20, -25, -20.14, H); rail(outside, 'z', 24, -25, -20.14, H);
   for (const r of RAMPS) {
     const count = 30, width = r.maxX - r.minX, dz = (r.endZ - r.startZ) / count;
     for (let i = 0; i < count; i++) {
@@ -139,7 +146,7 @@ export function label(parent, text, x, y, z, w, h, background = '#f8efda', foreg
   const ctx = canvas.getContext('2d'); ctx.fillStyle = background; ctx.fillRect(0, 0, 512, 128);
   ctx.fillStyle = foreground; ctx.font = '500 38px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, 256, 66);
   const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: texture, roughness: 1 })); mesh.position.set(x, y, z); parent.add(mesh);
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: texture, roughness: 1 })); mesh.name=`Room sign: ${text}`;mesh.position.set(x, y, z); parent.add(mesh);
 }
 
 export { batchStaticGeometry } from './render-batching.js';

@@ -59,7 +59,7 @@ document.getElementById('run').onclick=async()=>{
     await until(()=>pos()[0]>-11,'Escape den');key('keyup','KeyD');await until(()=>canvas().dataset.grounded==='true','Land');
     check('First outward den escape spends no energy and uses its daily allowance',Number(canvas().dataset.energy)===100&&canvas().dataset.freeDenJump==='false');
     await walk(-11.7,17.6);await until(()=>canvas().dataset.consumeTarget==='carrot-0','Reach carrot');
-    check('Carrot prompt includes both rewards',game().getElementById('consume-energy').textContent==='+20 energy · +10 happiness');
+    check('Carrot prompt includes energy, happiness and poop rewards',game().getElementById('consume-energy').textContent==='+20 energy · +10 happiness · +5 poop balls');
     const carrotPosition=canvas().dataset.consumePosition;
     key('keydown','KeyA');await until(()=>canvas().dataset.consumePosition!==carrotPosition&&canvas().dataset.consumeTarget==='carrot-0','Nudge the carrot');key('keyup','KeyA');
     check('Shidan pushes the carrot and can still eat it',canvas().dataset.consumePosition!==carrotPosition);

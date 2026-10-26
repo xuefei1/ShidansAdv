@@ -60,3 +60,80 @@
 .welcome .day-ended{padding:12px 0 0;max-width:360px}
 @media(max-width:850px){.location,.quest{top:255px}.energy{top:385px}}
 @media(max-width:700px){.welcome{top:100px;max-height:calc(100vh - 160px)}.welcome h1{font-size:44px}.welcome .milestone-note{display:none}.location,.quest{top:230px}.energy{top:350px}.consume{width:290px}.day-clock{width:230px}.welcome-actions{flex-wrap:wrap;gap:10px}}
+
+/* Keep daily goals on the right and Shidan's supplies on the left. */
+.day-clock{left:auto;right:30px;top:90px;transform:none;width:248px}
+.location{top:90px}
+.energy{top:220px}
+.bladder{position:fixed;left:30px;top:358px;width:226px;padding:15px 18px;pointer-events:none}
+.bladder-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.bladder-heading>span{font-size:8px;letter-spacing:1.5px;color:#678391;font-weight:700}
+#bladder-value{font-size:19px;font-variant-numeric:tabular-nums;letter-spacing:-.6px;color:#53798b}
+.bladder-track{height:9px;border-radius:12px;background:#d9e5e4;margin:11px 0 9px;overflow:hidden}
+#bladder-fill{display:block;height:100%;width:0;border-radius:inherit;background:linear-gradient(90deg,#79afbf,#a8ced6);transition:width .05s linear}
+.bladder p{font-size:9px;line-height:1.5;color:#67818a;margin:0 0 7px;min-height:14px}
+.bladder small{font-size:9px;color:#7b8d8e}
+.bladder kbd{font-size:8px;padding:2px 4px;background:#e5edeb;color:#64828d}
+.bladder[data-full=true] #bladder-value{color:#a37e40}
+#map-button{margin-top:10px}
+.poop-counter{top:520px;bottom:auto;width:226px;min-width:0}
+.poop-counter>div{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.poop-counter b{float:none;font-size:13px;font-variant-numeric:tabular-nums;font-weight:400}
+.poop-counter strong{font-size:19px;font-weight:600}
+.poop-counter small{line-height:1.4;min-height:13px}
+.controls{gap:13px}
+.modal{max-height:92vh;overflow-y:auto}
+.modal>.restart-note{font-size:10px;line-height:1.6;color:#7c866e;margin:9px 0 12px}
+@media(max-height:780px){
+  .minimap{bottom:112px}
+  #camera-hint{display:none}
+}
+@media(max-width:1100px){.controls{gap:10px}#camera-hint{display:none}}
+@media(max-width:900px){.minimap{display:none}}
+@media(max-width:850px){
+  .day-clock{left:auto;right:15px;top:80px;width:220px;transform:none}
+  .location{left:15px;top:80px;width:195px;padding:14px 16px}
+  .location h2{font-size:23px}
+  .energy{left:15px;top:210px;width:195px;padding:14px 16px}
+  .energy-heading{flex-wrap:wrap;gap:5px}
+  .bladder{left:15px;top:346px;width:195px;padding:14px 16px}
+  .poop-counter{left:15px;top:508px;width:195px}
+}
+@media(max-width:700px){
+  .day-clock{right:15px;top:76px;width:210px;padding:10px 14px}
+  .location{top:76px;width:170px;padding:13px}
+  .location h2{font-size:21px}
+  .energy{top:198px;width:170px;padding:13px}
+  .bladder{top:342px;width:170px;padding:13px}
+  .poop-counter{top:506px;width:170px;bottom:auto;padding:12px 13px}
+  .controls{padding:11px 13px;gap:8px 10px}
+}
+@media(max-height:680px){
+  .location{top:78px;padding-top:11px;padding-bottom:11px}
+  .location h2{font-size:21px;margin:5px 0 7px}
+  .energy{top:178px;padding-top:11px;padding-bottom:11px}
+  .energy-track{margin:8px 0}
+  .bladder{top:306px;padding-top:11px;padding-bottom:11px}
+  .bladder-track{margin:8px 0}
+  .poop-counter{top:460px;bottom:auto}
+  .day-clock{top:78px}
+  .minimap{display:none}
+  .consume{bottom:128px}
+  .charge{bottom:242px}
+  .toast{bottom:307px}
+}
+
+.action-timer{display:block;font-size:14px;font-variant-numeric:tabular-nums;font-weight:600;letter-spacing:0}
+#pee-cooldown,#poop-cooldown{font-size:14px;font-weight:600;line-height:1.4;min-height:20px;white-space:nowrap}
+.bladder .action-timer{color:#53798b}
+.poop-counter .action-timer{color:#8b6842;margin-top:5px}
+.pee-track{height:5px;background:#e7dfbf;border-radius:5px;margin:8px 0;overflow:hidden}
+#pee-fill{display:block;width:0;height:100%;background:#c6ab67;transition:width .05s linear}
+.minimap #map-button{margin-top:9px;padding-top:9px;line-height:1.5;white-space:normal}
+@media(max-width:900px),(max-height:680px){
+  .minimap{display:block;top:270px;right:30px;bottom:auto;width:220px;padding:12px 14px}
+  .minimap canvas,.minimap>div{display:none}
+  .minimap #map-button{border:0;margin:0;padding:0}
+}
+@media(max-width:850px){.minimap{right:15px}}
+@media(max-width:700px){.minimap{top:260px;width:190px}}

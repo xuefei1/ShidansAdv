@@ -1,0 +1,56 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import * as THREE from '../vendor/three.module.js';
+import { World,RabbitController,DEN } from '../src/physics.js';
+import { createHouse } from '../src/house.js';
+import { createConsumables } from '../src/consumables.js';
+import { createPoopBalls } from '../src/poop.js';
+import { createWaterFountains } from '../src/fountains.js';
+import { DayClock } from '../src/day-cycle.js';
+import { Leaderboard,HappinessRun } from '../src/happiness.js';
+import { resetAdventure } from '../src/adventure-session.js';
+
+test('action lock cancels a charged jump and stops sliding, sprinting and steering until released',()=>{
+  const rabbit=new RabbitController(new World()),origin={x:rabbit.x,z:rabbit.z};
+  Object.assign(rabbit,{vx:4,vz:-3,charging:true,charge:.7,jumpHeld:true});rabbit.energy.value=60;
+  for(let i=0;i<20;i++) rabbit.update(.05,{x:1,z:1,run:true,jump:i%2===0,locked:true});
+  assert.equal(rabbit.x,origin.x);assert.equal(rabbit.z,origin.z);assert.equal(rabbit.y,0);
+  assert.equal(rabbit.charging,false);assert.equal(rabbit.lastJump,null);assert.equal(rabbit.sprinting,false);
+  assert.equal(rabbit.hasFreeDenJump,true);assert.ok(Math.abs(rabbit.energy.value-60.01)<1e-8);
+  rabbit.update(.1,{x:1,run:true});assert.ok(rabbit.x>origin.x);assert.ok(rabbit.energy.value<60);
+});
+
+test('restarting creates a fresh named round without saving its abandoned score or deleting completed scores',()=>{
+  const board=new Leaderboard(null),ids=['first','second','third'];
+  board.record({id:'saved',name:'Saved player',score:250,finishedAt:'2026-10-25T00:00:00Z'});
+  const run=new HappinessRun(board,{id:()=>ids.shift()});run.start('Shidan fan');
+  run.consume({kind:'consume',happiness:150});assert.equal(run.score,150);
+  assert.equal(run.restart(),true);assert.equal(run.name,'Shidan fan');assert.equal(run.id,'second');
+  assert.equal(run.score,0);assert.equal(run.active,true);assert.equal(run.lastResult,null);
+  assert.deepEqual(board.entries.map(e=>[e.id,e.score]),[['saved',250]]);
+  assert.equal(run.restart('   '),false);assert.equal(run.active,true);assert.equal(run.id,'second');
+});
+
+test('restart during a partially completed pee resets the full world and resources while retaining scene batches',()=>{
+  const scene=new THREE.Scene(),{world}=createHouse(scene),controller=new RabbitController(world);
+  const water=createWaterFountains(scene,world),consumables=createConsumables(scene,world),poop=createPoopBalls(scene,world);
+  consumables.system.setExternalItems(poop);
+  const clock=new DayClock(),board=new Leaderboard(null),happiness=new HappinessRun(board);
+  happiness.start('Restart QA');happiness.consume({kind:'consume',happiness:200});
+  controller.energy.value=3;controller.freeDenJumpAvailable=false;controller.sprintExhausted=true;
+  poop.drop(controller,0);poop.supply.grant(25);
+  water.system.bladder.value=80;water.pee(controller);water.advance(.4,controller);
+  assert.equal(water.system.bladder.value,48);assert.equal(water.system.peeing,true);assert.equal(water.puddles.length,1);
+  clock.setActive(true,0);clock.update(100000);
+  const nodes=scene.children.slice(),oldId=happiness.id;
+  assert.equal(happiness.restart(),true);resetAdventure({clock,controller,consumables,poop,water},100000);
+  assert.notEqual(happiness.id,oldId);assert.equal(happiness.score,0);assert.equal(board.entries.length,0);
+  assert.equal(clock.remaining,600);assert.equal(clock.active,false);
+  assert.equal(controller.x,DEN.x);assert.equal(controller.z,DEN.z);assert.equal(controller.energy.value,100);
+  assert.equal(controller.hasFreeDenJump,true);assert.equal(controller.sprintExhausted,false);
+  assert.equal(poop.supply.value,10);assert.equal(poop.physics.count,0);assert.equal(poop.supply.nextPoopAt,0);
+  assert.equal(consumables.system.count,41);assert.equal(consumables.system.chewableCount,22);
+  assert.equal(consumables.system.target,null);assert.equal(water.system.peeing,false);
+  assert.equal(water.system.bladder.value,0);assert.equal(water.system.cooldownRemaining,0);
+  assert.equal(water.puddles.length,0);assert.deepEqual(scene.children,nodes);
+});

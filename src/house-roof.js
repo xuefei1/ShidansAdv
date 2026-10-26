@@ -6,8 +6,8 @@ import { batchStaticGeometry } from './render-batching.js';
 // Low wings surround a tall central stair hall. The upper rear rooms and the
 // stair hall share one ceiling height, leaving the whole stair flight open.
 export const CEILING_VOLUMES = Object.freeze([
-  {id:'lounge-ceiling',minX:-24,maxX:-5,minZ:2,maxZ:20,bottom:3.9,top:4.08},
-  {id:'kitchen-ceiling',minX:5,maxX:24,minZ:2,maxZ:20,bottom:3.9,top:4.08},
+  {id:'lounge-ceiling',minX:-24,maxX:-5.12,minZ:2,maxZ:20,bottom:3.9,top:4.08},
+  {id:'kitchen-ceiling',minX:5.12,maxX:24,minZ:2,maxZ:20,bottom:3.9,top:4.08},
   {id:'upstairs-ceiling',minX:-24,maxX:24,minZ:-20,maxZ:2,bottom:H+3.9,top:H+4.08},
   {id:'stair-hall-ceiling',minX:-5,maxX:5,minZ:2,maxZ:20,bottom:H+3.9,top:H+4.08},
 ].map(Object.freeze));
@@ -34,8 +34,8 @@ function pitchedRoof(parent,{id,minX,maxX,minZ,maxZ,base,rise,ridge='x',color=0x
   const material=mat(color).clone();material.side=THREE.FrontSide;material.shadowSide=THREE.BackSide;
   const mesh=new THREE.Mesh(geometry,material);mesh.name=id;mesh.castShadow=mesh.receiveShadow=true;
   mesh.userData.roof=true;parent.add(mesh);
-  const start=ridge==='x'?[minX,base+rise+.025,centre]:[(minX+maxX)/2,base+rise+.025,minZ];
-  const end=ridge==='x'?[maxX,base+rise+.025,centre]:[(minX+maxX)/2,base+rise+.025,maxZ];
+  const start=ridge==='x'?[minX-.03,base+rise+.025,centre]:[(minX+maxX)/2,base+rise+.025,minZ-.03];
+  const end=ridge==='x'?[maxX+.03,base+rise+.025,centre]:[(minX+maxX)/2,base+rise+.025,maxZ+.03];
   beam(parent,0x819f99,start,end,.055);
   return mesh;
 }
@@ -61,14 +61,14 @@ export function createHouseRoof({group,solid,detail,world}) {
   roofSolid(ceilings,0xe9ddc5,0,6,20,10,4.2,.24,'stair-hall-high-front');
   // Existing gallery rails reach y=5.16; the upper facade continues from there
   // to the roof on either side of the open central stair hall.
-  for(const x of [-14.5,14.5]) roofSolid(ceilings,0xe1d9c7,x,6.63,2,19,2.94,.24,`gallery-upper-facade-${x}`);
+  for(const x of [-14.5,14.5]) roofSolid(ceilings,0xe1d9c7,x,6.63,2,18.76,2.94,.24,`gallery-upper-facade-${x}`);
   // Frosted clerestory panels and cream mullions brighten the high facade.
   // They are backed by the enclosure solids and do not add glass draw passes.
   const highPanel=(x,y,z,w,h)=>{
     detail(shell,0xc3dad9,x,y,z,w,h,.018);
     for(const px of [x-w/2-.04,x+w/2+.04]) detail(shell,0xf8efdc,px,y,z+.015,.08,h+.16,.03);
     for(const py of [y-h/2-.04,y+h/2+.04]) detail(shell,0xf8efdc,x,py,z+.015,w+.16,.08,.03);
-    detail(shell,0xf8efdc,x,y,z+.02,.075,h,.035);
+    detail(shell,0xf8efdc,x,y,z+.02,.075,h-.04,.035);
   };
   highPanel(0,6.3,20.132,5.8,1.55);
   for(const x of [-20,-10,10,20]) highPanel(x,6.7,2.132,4.8,1.25);

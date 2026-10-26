@@ -51,7 +51,7 @@ export class ConsumableSystem {
     this.items = new Map(this.slots.map(slot => [slot.id, { ...slot }]));
     this.chewables = new Map(this.wires.map(slot => [slot.id, {...slot}]));
     this.pending = new Map(); this.elapsed = 0; this.restockTime = 0; this.cancel();
-    for(const item of this.availableItems()) this.addCollider(item);
+    for(const item of [this.denHay,...this.items.values(),...this.chewables.values()]) this.addCollider(item);
     for(const [type,limit] of Object.entries(this.randomLimits)) for(let i=0;i<limit;i++) {
       const item=this.randomItem(`${type}-${i}`,type);
       if(item) this.addChewable(item);
@@ -71,7 +71,9 @@ export class ConsumableSystem {
   }
   get chewableCount() { return this.chewables.size; }
   get fraction() { return this.target ? Math.min(1,this.progress/consumptionSeconds(this.target)) : 0; }
-  *availableItems() { yield this.denHay; yield* this.items.values(); yield* this.chewables.values(); }
+  // Dropped balls share food's reach/hold rules without joining its restock pool.
+  setExternalItems(provider) { this.external = provider; }
+  *availableItems() { yield this.denHay; yield* this.items.values(); yield* this.chewables.values(); if(this.external) yield* this.external.availableItems(); }
   randomItem(id,type,player=null) {
     // Reserve fixed locations even when empty, so returning food/cables cannot
     // appear inside a random box while their own cooldown is running.
@@ -122,20 +124,23 @@ export class ConsumableSystem {
     } else this.restockTime = 0;
     this.motion.update(dt);
     if (!this.target) return events;
-    if ((this.target !== this.denHay && !this.items.has(this.target.id) && !this.chewables.has(this.target.id)) || !canReachConsumable(player, this.target, this.world)) { this.cancel(); return events; }
+    if ((this.target !== this.denHay && !this.items.has(this.target.id) && !this.chewables.has(this.target.id) && !this.external?.has(this.target)) || !canReachConsumable(player, this.target, this.world)) { this.cancel(); return events; }
     // Do not credit the part of the first frame before the mouse was pressed.
     this.progress += Math.max(0, dt - this.holdDelay);
     this.holdDelay = Math.max(0, this.holdDelay - dt);
     if (this.progress + 1e-9 >= consumptionSeconds(this.target)) {
       const item = this.target, type = consumableDetails(item);
-      if (item.permanent) player.energy.refill();
+      if (item.type === 'poop') {
+        if(!this.external?.consume(item,player)) { this.cancel(); return events; }
+      }
+      else if (item.permanent) player.energy.refill();
       else {
         this.items.delete(item.id); this.chewables.delete(item.id);
         if(item.collider) { this.motion.remove(item);this.world.removeBox(item.collider); delete item.collider; }
         if(type.energy>0) player.energy.consume(type.energy);
         if(type.respawn) this.pending.set(item.id,{item,at:this.elapsed+type.respawn});
       }
-      events.push({ kind: 'consume', item, energy: type.energy, happiness: type.happiness || 0 });
+      events.push({ kind: 'consume', item, energy: type.energy, happiness: type.happiness || 0, poop: type.poop || 0 });
       // A fresh press is required for the next item, even if the button stays down.
       this.cancel();
     }

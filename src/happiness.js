@@ -47,6 +47,11 @@ export class HappinessRun {
   consume(event) {
     if(this.active && event.kind==='consume' && Number.isSafeInteger(event.happiness) && event.happiness>0) this.score+=event.happiness;
   }
+  restart(name=this.name) {
+    name=playerName(name);if(!name) return false;
+    // Abandoning a round never records its unfinished score.
+    this.active=false;return this.start(name);
+  }
   finish(clock) {
     if(!this.active || !clock.finished) return null;
     const result={id:this.id,name:this.name,score:this.score,finishedAt:this.now()};

@@ -8,9 +8,10 @@ for (let i = 0; i < 60; i++) {
   await setTimeout(100);
 }
 assert.ok(ready, 'The launcher started the local HTTP server');
-for (const path of ['/', '/src/main.js', '/src/happiness.js', '/src/chewable-data.js', '/src/start.js', '/src/day-cycle.js', '/src/day-lighting.js', '/src/house-lamps.js', '/src/adventure-session.js', '/src/layout.js', '/src/furnishings.js', '/src/level-map.js', '/src/render-batching.js', '/src/render-quality.js', '/src/render-profile.js', '/src/energy.js', '/src/consumable-data.js', '/src/consumable-collision.js', '/src/consumable-motion.js', '/src/house-roof.js', '/src/consumable-system.js', '/src/consumables.js', '/vendor/three.module.js', '/style.css']) {
+for (const path of ['/', '/src/main.js', '/src/happiness.js', '/src/chewable-data.js', '/src/start.js', '/src/day-cycle.js', '/src/day-lighting.js', '/src/house-lamps.js', '/src/adventure-session.js', '/src/layout.js', '/src/furnishings.js', '/src/level-map.js', '/src/render-batching.js', '/src/render-quality.js', '/src/surface-materials.js', '/src/render-profile.js', '/src/energy.js', '/src/consumable-data.js', '/src/consumable-collision.js', '/src/consumable-motion.js', '/src/house-roof.js', '/src/consumable-system.js', '/src/consumables.js', '/vendor/three.module.js', '/style.css']) {
   const response = await fetch(base + path);
   assert.equal(response.status, 200, path); assert.ok((await response.text()).length > 50, path);
 }
+for (const path of ['/src/poop-supply.js','/src/poop.js','/src/poop-physics.js','/src/water.js','/src/fountains.js']) assert.equal((await fetch(base + path)).status,200,path);
 for (const path of ['/pic/', '/.git/config', '/Start-Game.command']) assert.equal((await fetch(base + path)).status, 404, path);
 console.log('Launcher/server smoke checks passed: page, game modules, local engine, stylesheet, and private-file boundaries.');

@@ -34,10 +34,10 @@ export function beam(parent, color, a, b, radius = .025) {
 
 export function createRabbit() {
   const root = new THREE.Group(); root.name = 'Shidan';
-  const body = new THREE.Group(); root.add(body);
+  const body = new THREE.Group(); body.name = 'Shidan body'; root.add(body);
   ellipsoid(body, palette.ink, 0, .38, -.12, .31, .34, .43);
   ellipsoid(body, palette.furLight, 0, .38, .18, .245, .27, .26);
-  const head = new THREE.Group(); head.position.set(0, .64, .25); body.add(head);
+  const head = new THREE.Group(); head.name = 'Shidan head'; head.position.set(0, .64, .25); body.add(head);
   ellipsoid(head, palette.ink, 0, 0, .035, .265, .25, .255);
   ellipsoid(head, palette.ink, -.09, -.09, .225, .13, .105, .095);
   ellipsoid(head, palette.ink, .09, -.09, .225, .13, .105, .095);
@@ -74,21 +74,52 @@ export function createRabbit() {
     for (let j = -1; j <= 1; j++) beam(paw, 0xc5c0bc, [j * .027, -.028, z < 0 ? .211 : .166], [j * .027, -.003, z < 0 ? .213 : .168], .002);
     paws.push(paw);
   }
+  const pawRestPositions = paws.map(paw => paw.position.clone());
   ellipsoid(body, palette.ink, 0, .37, -.535, .12, .13, .125);
   const shadow = new THREE.Mesh(new THREE.CircleGeometry(.36, 32), new THREE.MeshBasicMaterial({ color: 0x443c35, transparent: true, opacity: .16, depthWrite: false }));
   shadow.rotation.x = -Math.PI / 2; shadow.position.y = .012; root.add(shadow);
   // Each animated joint stays independent; rigid details share one draw.
   for (const joint of [body, head, ...eyes, ...ears, ...paws]) batchStaticGeometry(joint, { recursive: false, cellSize: Infinity });
   return {
-    root,
-    animate(time, speed = 0, grounded = true, charge = 0, floorY = 0) {
+    root, joints: { body, head, eyes, ears, paws },
+    animate(time, speed = 0, grounded = true, charge = 0, floorY = 0, action = 'idle') {
       const gait = time * (speed > 3 ? 20 : 14), moving = Math.min(speed / 2, 1);
       body.position.y = grounded ? Math.abs(Math.sin(gait)) * .045 * moving : .015;
       body.scale.set(1 + charge * .1, 1 - charge * .22, 1 + charge * .08);
       body.rotation.x = grounded ? Math.sin(gait) * .04 * moving : -.12;
+      head.position.set(0,.64,.25);
       head.rotation.x = Math.sin(time * 1.7) * .035 - charge * .12;
       ears.forEach((ear, i) => { ear.rotation.x = -.07 + Math.sin(time * 2.2 + i * .8) * .055 - moving * .14; ear.rotation.z = (i ? -.14 : .14) + Math.sin(time * 1.5 + i) * .025; });
-      paws.forEach((paw, i) => { paw.rotation.x = grounded ? Math.sin(gait + (i < 2 ? Math.PI : 0)) * .42 * moving : (i < 2 ? .45 : -.35); });
+      paws.forEach((paw, i) => { paw.position.copy(pawRestPositions[i]); paw.rotation.x = grounded ? Math.sin(gait + (i < 2 ? Math.PI : 0)) * .42 * moving : (i < 2 ? .45 : -.35); });
+      // Only joint transforms change: eating and drinking keep all rigid detail
+      // batches intact, and every call starts from the ordinary movement pose.
+      if (grounded && (action === 'eat' || action === 'drink')) {
+        const drinking = action === 'drink', nibble = Math.sin(time * (drinking ? 17 : 24));
+        body.position.y = .005 + (nibble+1)*.004;
+        body.rotation.x = drinking ? .055 : .025;
+        body.scale.set(1.015,.96,1.025);
+        head.position.set(0,(drinking ? .45 : .51)+nibble*.018,drinking ? .33 : .30);
+        head.rotation.x = (drinking ? .39 : .25)+nibble*.045;
+        ears.forEach((ear,i) => {
+          ear.rotation.x = -.10 + Math.sin(time*3+i)*.025;
+          ear.rotation.z = (i ? -.18 : .18)+Math.sin(time*2+i)*.018;
+        });
+        paws.forEach((paw,i) => {
+          paw.rotation.x = i < 2 ? .045 : -.09 + Math.sin(time*6+i)*.035;
+          if(i>=2) paw.position.z += drinking ? .035 : .055;
+        });
+      } else if (grounded && action === 'pee') {
+        const breathe = Math.sin(time*5)*.006;
+        // A small forward tilt raises the tail relative to the crouched rump.
+        body.position.y = .008; body.scale.set(1.08,.78+breathe,1.07); body.rotation.x = .065;
+        head.position.set(0,.58,.27); head.rotation.x = .08;
+        ears.forEach((ear,i) => { ear.rotation.x = -.16; ear.rotation.z = i ? -.22 : .22; });
+        paws.forEach((paw,i) => {
+          paw.rotation.x = i < 2 ? .16 : -.12;
+          paw.position.x = pawRestPositions[i].x*1.13;
+          if(i<2) paw.position.z += .065;
+        });
+      }
       const blink = Math.sin(time * .77) > .997 ? .12 : 1; eyes.forEach(eye => eye.scale.y = blink);
       shadow.position.y = floorY - root.position.y + .014; shadow.material.opacity = Math.max(.03, .17 - (root.position.y - floorY) * .065);
       shadow.scale.setScalar(1 + Math.max(0, root.position.y - floorY) * .2);

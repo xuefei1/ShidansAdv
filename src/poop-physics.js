@@ -1,7 +1,7 @@
 import { clamp } from './physics.js';
 import { DEN, STAIRS, BOUNDS } from './layout.js';
 
-export const MAX_POOP_BALLS = 10_000;
+export const MAX_POOP_BALLS = 1_000;
 export const POOP_RADIUS = .065;
 const boundsOf=b=>({minX:b.minX,maxX:b.maxX,minY:b.minY,maxY:b.maxY,minZ:b.minZ,maxZ:b.maxZ});
 const sameBounds=(a,b)=>a && a.minX===b.minX && a.maxX===b.maxX && a.minY===b.minY && a.maxY===b.maxY && a.minZ===b.minZ && a.maxZ===b.maxZ;
@@ -31,7 +31,7 @@ class SphereGrid {
   }
 }
 
-// Fixed-capacity pool: the oldest slot is reused only when adding ball 10,001.
+// Fixed-capacity pool: the oldest ball is replaced only when adding ball 1,001.
 // Sleeping balls keep both their collider and rendered instance indefinitely.
 export class PoopPhysics {
   constructor(world, capacity = MAX_POOP_BALLS) {
@@ -58,7 +58,11 @@ export class PoopPhysics {
     this.active.clear(); this.grid.cells.clear(); this.dirty.clear();
   }
   spawn({ x, y, z, vx = 0, vy = 0, vz = 0 }) {
-    const slot = this.count < this.capacity ? this.count : this.cursor;
+    let slot = this.count;
+    if (this.count >= this.capacity) {
+      // Eating compacts render slots, so their order no longer represents age.
+      slot = this.balls.reduce((oldest, ball) => ball.id < this.balls[oldest].id ? ball.slot : oldest, 0);
+    }
     const old = this.balls[slot];
     if (old) {
       // Removing a supporting ball wakes nearby sleepers so piles can settle.
@@ -70,6 +74,17 @@ export class PoopPhysics {
     this.resolveEnvironment(ball, { x, y, z }, 0);
     this.grid.update(ball); this.active.add(ball); this.dirty.add(slot);
     return ball;
+  }
+  remove(ball) {
+    if (!ball || this.balls[ball.slot] !== ball) return false;
+    for (const neighbor of this.grid.near(ball.x, ball.y, ball.z, POOP_RADIUS * 3)) if (neighbor !== ball) this.wake(neighbor);
+    this.grid.remove(ball); this.active.delete(ball);
+    const slot = ball.slot, last = this.balls.pop();
+    if (last !== ball) { last.slot = slot; this.balls[slot] = last; }
+    // Keep a dirty marker even for the final removal so the instance count is
+    // reduced on the next sync. No empty slot is uploaded to the GPU.
+    this.dirty.delete(this.count); this.dirty.add(slot);
+    return true;
   }
   dropBehind(rabbit) {
     const backX = -Math.sin(rabbit.facing), backZ = -Math.cos(rabbit.facing);

@@ -1,15 +1,18 @@
 import { DEN, FLOOR_HEIGHT as H, BOUNDS } from './layout.js';
 import { palette as P, cylinder, sceneryEllipsoid as ellipsoid, beam } from './model.js';
+import { applySurfaceOverlay } from './surface-materials.js';
 
 export function furnishHouse({ ground: g, upper: u, outside: o, solid: s, detail: d, world, label }) {
   const rug = (p, x, y, z, w, depth, color) => {
     // Ground-floor mats are cosmetic; only the pen has grip downstairs.
-    d(p, color, x, y + .006, z, w, .012, depth);
-    for (const sign of [-1, 1]) d(p, 0xf4e9cc, x, y + .014, z + sign * (depth / 2 - .14), w - .18, .008, .06);
+    applySurfaceOverlay(d(p, color, x, y + .006, z, w, .012, depth));
+    for (const sign of [-1, 1]) applySurfaceOverlay(d(p, 0xf4e9cc, x, y + .019, z + sign * (depth / 2 - .14), w - .18, .006, .06));
   };
   const book = (p, x, bottom, z, w, h, depth, color, id) => {
     s(p, color, x, bottom + h / 2, z, w, h, depth, 'wood', id);
-    d(p, 0xf5e8cc, x + .015, bottom + h / 2, z + .018, w - .04, Math.max(.025, h - .055), depth - .035);
+    // Page edges project clearly past the cover face; the old 0.5mm reveal
+    // could quantize onto the cover depth when viewed from across a room.
+    d(p, 0xf5e8cc, x + .015, bottom + h / 2, z + .03, w - .04, Math.max(.025, h - .055), depth - .035);
   };
   const plant = (p, x, y, z, size = 1, color = 0xf4d2aa) => {
     // Enclose the pot and low foliage, so neither the pot nor the canopy can be walked through.
@@ -42,7 +45,7 @@ export function furnishHouse({ ground: g, upper: u, outside: o, solid: s, detail
     d(p, 0xb69a68, x, y + h * .55, z + depth / 2 + .026, .13, .08, .025);
   };
   const sofa = (p, x, y, z, w, color, id) => {
-    s(p, 0xb29470, x, y + .32, z, w, .56, 1.95, 'wood', `${id}-base`);
+    s(p, 0xb29470, x, y + .32, z, w-.04, .56, 1.95, 'wood', `${id}-base`);
     s(p, color, x, y + .71, z + .12, w - .36, .26, 1.72, 'carpet', `${id}-cushion`);
     s(p, color, x, y + 1.1, z - .94, w, 1.22, .28);
     for (const sign of [-1, 1]) s(p, color, x + sign * (w / 2 - .14), y + .8, z, .28, 1, 2.05);
@@ -92,7 +95,7 @@ export function furnishHouse({ ground: g, upper: u, outside: o, solid: s, detail
   book(g, -9.4, 1.44, 7.3, .7, .09, .5, P.sage);
   plant(g, -22.3, 0, 4.1, 1.6); plant(g, -7, 0, 18, 1.5);
   picture(g, -18, 2.3, 2.14, 2.4, 1.4);
-  label(g, 'SUNNY LOUNGE', -11, 2.3, 2.14, 2.8, .5);
+  label(g, 'SUNNY LOUNGE', -10.5, 2.3, 2.14, 2.8, .5);
 
   // Entrance: wide circulation on the west of the stairs and a front-door porch.
   // Appliance landmarks for the fixed chewable cable coils.
@@ -126,7 +129,7 @@ export function furnishHouse({ ground: g, upper: u, outside: o, solid: s, detail
   rug(g, 14, 0, 15, 8, 6, 0xe4cfb0); table(g, 14, 0, 15, 4.8, 2.8, 1.52, 0xcfa87b, 'dining');
   for (const x of [12.3, 15.7]) for (const z of [12.8, 17.2]) {
     stool(g, x, 0, z, 1.1, 1.1, .68, P.sage);
-    s(g, 0xb8c69f, x, 1.12, z + (z < 15 ? -.5 : .5), 1.1, 1.15, .13);
+    s(g, 0xb8c69f, x, 1.12, z + (z < 15 ? -.5 : .5), 1.04, 1.15, .13);
   }
   chest(g, 10.7, 0, 15, 1.25, 1.12, 1.6, 0xe7bd96, 'dining-climb');
   stool(g, 9.5, 0, 15, 1.2, 1.4, .72, P.peach); book(g, 8.4, 0, 15, .9, .32, 1.1, P.blue);
@@ -139,7 +142,7 @@ export function furnishHouse({ ground: g, upper: u, outside: o, solid: s, detail
     for (let row = 0; row < 4; row++) for (let i = 0; i < 9; i++) d(g, [P.peach, P.blue, P.sage, P.gold][i % 4], -19.89, .3 + row * .6, z - 1.22 + i * .3, .014, .42, .23);
   }
   // A ceiling makes this route a genuine low passage, with open arches at each end.
-  s(g, 0xc6b798, -22.5, 1.72, -11.5, 2.8, .22, 16, 'wood', 'library-tunnel-ceiling');
+  s(g, 0xc6b798, -22.5, 1.72, -11.5, 2.8, .22, 16.04, 'wood', 'library-tunnel-ceiling');
   for (let z = -16; z < -6; z += 1.5) paw(g, -22.5, 0, z);
   table(g, -12, 0, -11, 4.4, 2.8, 1.6, 0xc7a983, 'library-table');
   shelves(g, -12, 0, -18.8, 6, .8, 2.6, 0xbda27f, 'rear-bookcase');
@@ -159,7 +162,9 @@ export function furnishHouse({ ground: g, upper: u, outside: o, solid: s, detail
   label(g, 'TO THE CLOVER GARDEN', 4.5, 2.3, -19.85, 3.9, .45);
 
   // Craft room: crate staircase and laundry create several corners for losing sight.
-  for (const [x, z, h, color] of [[12, -9, .32, 0xdfbd91], [12, -10, .69, 0xc8ac88], [12, -11, 1.08, 0xe0c499], [12, -12, 1.48, 0xd0b389], [14, -12, 1.48, 0xd9bb94]]) chest(g, x, 0, z, 1.65, h, 1.25, color, `craft-crate-${z}-${x}`);
+  // Keep the overlapping treads that make this hop route forgiving, but inset
+  // each successive crate's sides so different wood colours never share a face.
+  for (const [x, z, h, color] of [[12, -9, .32, 0xdfbd91], [12, -10, .69, 0xc8ac88], [12, -11, 1.08, 0xe0c499], [12, -12, 1.48, 0xd0b389], [14, -12, 1.48, 0xd9bb94]]) chest(g, x, 0, z, 1.65-(x===12?(-z-9)*.04:0), h, 1.25, color, `craft-crate-${z}-${x}`);
   blanket(g, 14, 1.48, -12, 1.6, 1.2, P.blue, 'crate-blanket');
   for (const z of [-15, -17.4]) {
     s(g, 0xe1e9d7, 22.2, .8, z, 2, 1.6, 2, 'wood', 'laundry-' + z);
@@ -208,7 +213,7 @@ export function furnishHouse({ ground: g, upper: u, outside: o, solid: s, detail
     s(u, 0xc1d0c5, 20.4, H + 1.35, z, 1, 2.7, 3);
     for (let i = 0; i < 4; i++) d(u, 0x9fb9ac, 19.88, H + .5 + i * .58, z, .02, .03, 2.8);
   }
-  s(u, 0xc9d7c6, 22.5, H + 1.72, -11.5, 2.8, .22, 16, 'wood', 'linen-tunnel-ceiling');
+  s(u, 0xc9d7c6, 22.5, H + 1.72, -11.5, 2.8, .22, 16.04, 'wood', 'linen-tunnel-ceiling');
   for (let z = -16; z < -6; z += 1.5) paw(u, 22.5, H, z);
   chest(u, 10.5, H, -18, 2.5, .8, 1.3, 0xe1bf9e, 'studio-trunk');
   blanket(u, 10.5, H + .8, -18, 2.4, 1.25, P.blue, 'studio-blanket');
@@ -219,7 +224,7 @@ export function furnishHouse({ ground: g, upper: u, outside: o, solid: s, detail
   stool(o, -8, H, -22.2, 4, 1.2, .55, 0xcbd0ab, 'wood', 'balcony-bench');
   blanket(o, -8, H + .55, -22.2, 1.6, 1.1, 0xe4c6a1, 'balcony-blanket');
   for (const x of [-18.8, 6, 12, 23]) plant(o, x, H, -24, .85);
-  for (const x of [-19.7, -9, 8, 23.7]) s(o, 0xf1e6cc, x, H / 2, -24.6, .25, H, .25);
+  for (const x of [-19.7, -9, 8, 23.7]) s(o, 0xf1e6cc, x, (H-.28) / 2, -24.6, .25, H-.28, .25);
 
   // Backyard: grass sprint lanes, a hedge tunnel, garden-bed loops, and stepping logs.
   d(o, 0xb7cc98, 0, -.06, -29, 52, .12, 18);
@@ -239,7 +244,7 @@ export function furnishHouse({ ground: g, upper: u, outside: o, solid: s, detail
   // Low lintels make a sheltered route that a future standing adult cannot use.
   for (const z of [-35, -31]) s(o, 0x87a773, -16, .94, z, 8.2, 1.88, 1, 'grass', 'hedge-' + z);
   for (const x of [-20, -12]) {
-    for (const z of [-34.1, -31.9]) s(o, 0x91af79, x, .94, z, 1, 1.88, 1.2, 'grass');
+    for (const z of [-34.1, -31.9]) s(o, 0x91af79, x, .92, z, 1, 1.84, 1.2, 'grass');
     s(o, 0x91af79, x, 1.71, -33, 1, .34, 1.2, 'grass');
   }
   s(o, 0x9bb77e, -16, 1.72, -33, 7, .22, 3, 'grass', 'hedge-roof');
@@ -261,7 +266,7 @@ export function furnishHouse({ ground: g, upper: u, outside: o, solid: s, detail
   d(o, 0xc0d29f, 0, -.06, (20 + BOUNDS.maxZ) / 2, 52, .12, BOUNDS.maxZ - 20);
   for (const x of [-25, 25]) d(o, 0xb7cc98, x, -.06, 0, 2, .12, 40);
   d(o, 0xe3d8bb, 0, .005, 26, 3.4, .01, 11.8);
-  for (let i = 0; i < 7; i++) d(o, 0xf0e4c7, 0, .014, 21.4 + i * 1.55, 2.8, .008, 1.15);
+  for (let i = 0; i < 7; i++) applySurfaceOverlay(d(o, 0xf0e4c7, 0, .027, 21.4 + i * 1.55, 2.8, .016, 1.15));
   for (const x of [-7, 7]) {
     stool(o, x, 0, 25, 3.6, 1.1, .55, 0xc7af83, 'grass', `front-bench-${x}`);
     for (const dx of [-2.5, 2.5]) plant(o, x + dx, 0, 25, .85, 0xeac6ac);

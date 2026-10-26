@@ -1,9 +1,9 @@
 {
   "name": "shidans-adventure",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
-  "description": "A cozy 3D rabbit adventure — happiness, energy and a ten-minute day",
+  "description": "A cozy 3D rabbit adventure — happiness, supplies, water and a ten-minute day",
   "engines": { "node": ">=22" },
   "scripts": {
     "start": "node scripts/serve.mjs",

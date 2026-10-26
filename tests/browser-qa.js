@@ -46,7 +46,10 @@ document.getElementById('run').addEventListener('click', async () => {
     const initialCount = Number(canvas.dataset.poopCount);
     for (let i = 0; i < 3; i++) { mouse('mousedown', 2); mouse('mouseup', 2); mouse('contextmenu', 2); }
     await wait(150);
-    check('Every right click produces exactly one ball', Number(canvas.dataset.poopCount) === initialCount + 3);
+    check('Rapid right clicks respect the one-second poop cooldown', Number(canvas.dataset.poopCount) === initialCount + 1);
+    for (let i = 0; i < 2; i++) { await wait(1100); mouse('mousedown', 2); mouse('mouseup', 2); }
+    await wait(150);
+    check('Right clicks after the cooldown each produce one ball', Number(canvas.dataset.poopCount) === initialCount + 3);
     await wait(1700);
     check('Poop balls settle on the floor and remain', Number(canvas.dataset.poopCount) === initialCount + 3 && Number(canvas.dataset.lastPoopPosition.split(',')[1]) >= .06);
     key('keydown', 'Space'); key('keyup', 'Space'); await wait(150);
@@ -57,7 +60,7 @@ document.getElementById('run').addEventListener('click', async () => {
     key('keydown', 'KeyD'); key('keyup', 'Space'); await wait(500);
     check('Charged jump clears the taller fence', pos()[1] > DEN.fenceHeight, `height ${pos()[1]}`);
     await wait(650); key('keyup', 'KeyD'); await wait(450);
-    check('Escaping updates the wood surface and objective', canvas.dataset.surface === 'wood' && d.getElementById('step-den').classList.contains('done'), pos().join(', '));
+    check('Escaping updates the wood surface and discovery progress', canvas.dataset.surface === 'wood' && canvas.dataset.escaped==='true', pos().join(', '));
     d.getElementById('menu-button').click(); await wait(80);
     const paused = pos(); key('keydown', 'KeyW'); await wait(250); key('keyup', 'KeyW');
     check('Pause opens menu and freezes movement', !d.getElementById('pause').hidden && JSON.stringify(paused) === JSON.stringify(pos()));
@@ -192,7 +195,7 @@ document.getElementById('hay').addEventListener('click', async () => {
     d.getElementById('player-name').value='Gameplay QA'; d.getElementById('play').click();
     await until(()=>canvas.dataset.consumeTarget==='den-hay','hay prompt');
     check('Special hay is reachable from the starting position',d.getElementById('consume-name').textContent==='Special den hay');
-    check('The prompt explains the full, unlimited refill',d.getElementById('consume-energy').textContent==='100% energy · unlimited');
+    check('The prompt explains the full refill and once-per-visit ball reward',d.getElementById('consume-energy').textContent==='100% energy · +10 poop balls');
     await jump(); check('A charged jump spends energy before the refill',energy()<91);
     mouse('mousedown'); await until(()=>progress()>=.3,'partial eating hold'); mouse('mouseup');
     await until(()=>progress()===0,'cancelled hold');

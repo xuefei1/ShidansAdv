@@ -33,3 +33,5 @@ The engine is pinned at 0.180.0 for a reproducible first milestone; upgrading it
 The 0.5.0 expansion adds original procedural cable coils with plugs, taped cardboard parcels, bunny slippers, and TV/oven/computer details. They use the same code-authored geometry and existing project license; no external assets or downloads were added.
 
 The covered-house revision adds original code-authored pitched roof prisms, cream fascia, ceiling slabs and high stair-hall enclosure. No third-party assets or textures were added.
+
+Version 0.6.0 adds original procedural water fountains, reservoir/stream visuals and gold puddles in `src/fountains.js`, plus joint-based eating, drinking and crouching animations in `src/model.js`. These use the existing project license and local geometry only; no external assets, fonts or downloads were added.

@@ -12,8 +12,7 @@ test('solid ceilings cover both low wings, all upstairs rooms and the full centr
   assert.equal(ceiling.children.length,1);assert.equal(ceiling.children[0].geometry.index.count/3,12);
   for(const v of CEILING_VOLUMES) {
     const b=world.fixtures.get(v.id);assert.ok(b);
-    assert.equal(b.minX,v.minX);assert.equal(b.maxX,v.maxX);
-    assert.equal(b.minZ,v.minZ);assert.equal(b.maxZ,v.maxZ);
+    for(const key of ['minX','maxX','minZ','maxZ'])assert.ok(Math.abs(b[key]-v[key])<1e-6,`${v.id} ${key}`);
     assert.ok(Math.abs(b.minY-v.bottom)<1e-6);assert.ok(Math.abs(b.maxY-v.top)<1e-6);
   }
   upper.visible=false;

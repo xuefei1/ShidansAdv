@@ -23,8 +23,8 @@ export function createHouseLamps({ground,upper,world}) {
   for (const [floor,x,z,width] of [[0,-14.5,12,19],[0,-14.5,5,19],[0,0,16,10],[0,14.5,15,19],[0,14.5,7,19],
     [1,-14.5,-8,19],[1,1.5,-10,13],[1,16,-8,16],[1,0,-.5,48]]) {
     const parent=floor?upper:ground, y=floor*H+3.88;
-    cube(parent,0xcbbba2,x,y,z,width,.08,.12);
-    colliders.push(world.addBox(x,y,z,width,.08,.12));
+    cube(parent,0xcbbba2,x,y,z,width-.04,.08,.12);
+    colliders.push(world.addBox(x,y,z,width-.04,.08,.12));
   }
   for (const floor of [0,1]) {
     const parent=floor?upper:ground, fixtures=LAMP_PLACEMENTS.filter(l=>l.floor===floor);

@@ -37,41 +37,43 @@ Open **http://localhost:4173** if the browser does not open automatically. No pa
 | Tap Space | Small hop, triggered on release |
 | Hold Space, then release | Charged long jump on bedding, carpet, grass, and balcony; hold a movement key to travel |
 | Scroll wheel | Camera distance |
-| Hold left mouse near an item | Eat or chew for the time shown in its prompt; releasing early cancels. |
-| Right mouse click / P | Drop one poop ball behind Shidan |
+| Hold left mouse near an item or fountain | Eat / chew for the time shown, or keep drinking water; releasing stops the action |
+| Right mouse click / P | Spend one carried poop ball; 1-second cooldown |
+| Q | Pee for one second; 60-second cooldown before another pee or drink |
 | C | Center camera behind Shidan |
 | V | House tour with floor, garden-view and Show roof / Look inside choices |
 | M | Floor plan, route hints, and discoveries |
 | R | Return to the den |
-| Esc | Pause / resume; releases the mouse |
+| Esc | Pause / resume; menu includes Restart game; releases the mouse |
 
 **First adventure:** charge a jump in the den and release while moving outward to escape. Your first outward charged jump from inside the den is free each day, even with empty energy. Find the hay outside the den and hold left-click nearby to try eating. Press **M** for the floor plan and seven little discoveries: sofa, library passage, upstairs, bed quilt, balcony, backyard, and hedge hideaway. Collect happiness from food, books, wires, cardboard and slippers. AI pursuit remains a later milestone.
 
-## Energy, happiness and consumables (0.5.0)
+## Energy, happiness and consumables (0.6.0)
 
 Energy starts at **100.00%**, displayed to two decimal places. A full bar supports **30 seconds of continuous sprinting**, including passive recovery. Charged jumps cost **5–10 energy**, depending on charge time. Each new day grants one free outward charged jump from inside the den; stationary charged jumps still cost energy. Returning home or visiting the title preserves whether this allowance has been used, and the next day renews it. Ordinary movement and small hops (including charged inputs on slippery wood) are free. Standing still with Shift is free. Empty energy restores ordinary speed; release Shift before sprinting again. A charged jump without enough energy becomes a free small hop.
 
 Passive recovery is **0.01 energy per second**, applied smoothly. Hold left-click near an item for the uninterrupted time shown in its prompt to consume it. Early release, leaving reach, jumping away, and menus cancel the hold. Walls and floors block eating through them. The item shrinks into golden particles and restores energy over **one second**, capped at 100. One press consumes one item. Eating at full energy still uses the item.
 
-Consumption time in seconds is **`max(1, energy / 25 + happiness / 50)`**, rounded up to the next **0.1 second**. Use the item’s listed rewards rather than the energy currently missing from the bar. The special den hay uses 100 energy in this formula, so its full refill takes four seconds. Every item takes at least one second; larger combined rewards take longer.
+Consumption time in seconds is **`max(1, energy / 25 + happiness / 50)`**, rounded up to the next **0.1 second**. Use the item’s listed rewards rather than the energy currently missing from the bar. The special den hay uses 100 energy in this formula, so its full refill takes four seconds. Every item takes at least one second; larger combined rewards take longer. Poop-ball rewards do not change the hold duration.
 
 Each round starts with **41 snacks, 10 cables at authored spots, 8 random boxes, 4 random pairs of slippers, and 1 permanent hay stack**. Happiness is awarded immediately, only after a full uninterrupted hold; energy rewards recover over one further second. The special hay instead refills energy instantly. Energy is capped at 100; happiness has no cap or target yet.
 
-| Item | Initial | Min–max present | Regeneration | Hold | Energy | Happiness |
-| --- | ---: | ---: | --- | ---: | ---: | ---: |
-| Special den hay | 1 | 1–1 | Permanent / reusable | 4 s | Refill to 100% | 0 |
-| Carrot | 8 | 0–8 | Shared snack rule* | 1 s | +20 | +10 |
-| Book | 12 | 0–12 | Shared snack rule* | 1 s | +10 | +20 |
-| Hay stack | 6 | 0–6 | Shared snack rule* | 1 s | +25 | 0 |
-| Apple | 4 | 0–4 | Shared snack rule* | 2 s | +25 | +50 |
-| Rabbit food | 3 | 0–3 | Shared snack rule* | 2.4 s | +20 | +80 |
-| Banana | 3 | 0–3 | Shared snack rule* | 1.6 s | +20 | +40 |
-| Bread | 2 | 0–2 | Shared snack rule* | 1.6 s | +30 | +20 |
-| Noodles | 2 | 0–2 | Shared snack rule* | 1.4 s | +30 | +10 |
-| Cake | 1 | 0–1 | 120 s after consumption, original location | 5 s | +50 | +150 |
-| Wire / cable | 10 | 0–10 | 30 s per consumed cable, original location | 3 s | 0 | +150 |
-| Cardboard box | 8 | 0–8 | 60 s per consumed box, random location | 2.8 s | +20 | +100 |
-| Slippers (one pair = one item) | 4 | 0–4 | 90 s per consumed pair, random location | 4 s | 0 | +200 |
+| Item | Initial | Min–max present | Regeneration | Hold | Energy | Happiness | Carried poop balls |
+| --- | ---: | ---: | --- | ---: | ---: | ---: | ---: |
+| Special den hay | 1 | 1–1 | Permanent / reusable | 4 s | Refill to 100% | 0 | +10 once per den visit |
+| Carrot | 8 | 0–8 | Shared snack rule* | 1 s | +20 | +10 | +5 |
+| Book | 12 | 0–12 | Shared snack rule* | 1 s | +10 | +20 | +5 |
+| Hay stack | 6 | 0–6 | Shared snack rule* | 1 s | +25 | 0 | +10 |
+| Apple | 4 | 0–4 | Shared snack rule* | 2 s | +25 | +50 | +5 |
+| Rabbit food | 3 | 0–3 | Shared snack rule* | 2.4 s | +20 | +80 | +5 |
+| Banana | 3 | 0–3 | Shared snack rule* | 1.6 s | +20 | +40 | +5 |
+| Bread | 2 | 0–2 | Shared snack rule* | 1.6 s | +30 | +20 | +5 |
+| Noodles | 2 | 0–2 | Shared snack rule* | 1.4 s | +30 | +10 | +15 |
+| Cake | 1 | 0–1 | 120 s after consumption, original location | 5 s | +50 | +150 | +15 |
+| Wire / cable | 10 | 0–10 | 30 s per consumed cable, original location | 3 s | 0 | +150 | 0 |
+| Cardboard box | 8 | 0–8 | 60 s per consumed box, random location | 2.8 s | +20 | +100 | 0 |
+| Slippers (one pair = one item) | 4 | 0–4 | 90 s per consumed pair, random location | 4 s | 0 | +200 | 0 |
+| Dropped poop ball | 0 | 0–1,000 | Player drops one from carried supply | 1 s | +5 | 0 | 0 |
 
 *Eight regular snack types share a restock pool: below two regular snacks remaining, one random regular snack appears every 60 seconds, stopping at two. This pool starts with 40 items and excludes cake. This is not a separate cooldown for each regular snack; kind probabilities are weighted by inverse energy. Cake has its own 120-second cooldown and returns only to its original reserved location, even if it was pushed elsewhere before being eaten, with a maximum of one available. Wires likewise respawn at their original appliance or lamp locations. Cake, wires, boxes and slippers never enter or suppress the regular-snack restock pool. Min–max means currently available items, not total spawns over a round; a depleted type may temporarily have zero. Respawn delays count active play, not menus or inactive tabs, and begin after full consumption.
 
@@ -81,13 +83,25 @@ Fully consuming a finite item removes its body along with the prop; respawning r
 
 Inside the den, **special hay in a cream dish with a mint bow** is within reach of Shidan’s starting position. Hold left-click for **four uninterrupted seconds** to restore energy immediately to **100%**, even from zero. This stack is permanent and reusable; it stays visible after eating and is excluded from the snack count and random restocking. It can be nudged within the den while retaining the same refill interaction. It prevents running out of energy from trapping Shidan inside the fence.
 
+## Poop supply and water
+
+Each day starts with **10 carried poop balls**, capped at **50**. The lower-left counter shows carried supply, rather than the number on the map. Right-click or P spends one and starts a **one-second active-play cooldown**; empty supply prevents another drop. Finishing food or books grants the balls in the table above, capped at 50. Special den hay grants ten on the first completed hold of a den visit, including the starting visit. Leave the den and land back inside to renew that reward; jumping straight up or eating repeatedly while staying inside does not renew it. A visit’s grant is used even at capacity. Repeated hay consumption can still refill energy.
+
+Dropped balls keep their gravity, rolling and collisions, and can be pushed. Hold left-click near one for **one second** to eat it, remove it and recover **five energy** over the usual one-second recovery period. It grants no happiness or carried balls and does not count as a regular snack. At most **1,000 dropped balls** remain on the map; a new drop beyond that limit replaces the oldest. Home, title and menus preserve both supply and dropped balls; bedtime starts again with ten carried balls and an empty map.
+
+There are **14 immovable water fountains**, one in every authored room/area, including the halls and balcony, plus the front and back yards. Each starts with **100 percentage points of water**, enough to fill one empty bladder. Hold left-click nearby to drink with a nibbling motion from Shidan. The bladder starts empty and fills at **10 percentage points per second**: 0.1 second adds exactly 1%, and filling stops at 100% or when that fountain is empty. Only the water actually drunk leaves its reservoir: drinking 25% leaves 75% for later. Each fountain has its own supply; the prompt shows what remains, and an empty fountain stays empty until the next round or Restart game. The left-side bladder meter shows two decimal places. Water grants no energy, happiness or poop balls.
+
+Press **Q** with water in the bladder to begin a **one-second pee action**, gradually emptying it to 0% and leaving a puddle beneath Shidan. Movement, jumping, eating, drinking and pooping are unavailable until the action finishes. A **60-second active-play cooldown starts when peeing begins**, blocking another pee or drink until it expires. Pressing Q while empty or cooling down does nothing. Larger poop and pee timers show decimal seconds, with a progress bar during peeing. Menus and inactive tabs freeze actions and cooldowns. R/Home and manual title navigation preserve bladder, remaining fountain water and cooldown state; bedtime or Restart game clears actions and refills every fountain. The countdown and happiness panel sits at the **upper right**, with the original Clover House header banner and curiosity panel removed. Map/discoveries are attached to the minimap, with a compact visible button on smaller screens.
+
 The 41 finite snacks (40 regular snacks and one cake) start and respawn outside the den. The loose collectible books are separate from solid climbing steps. While fewer than **two regular snacks** remain, one appears every **60 seconds of active play**, stopping at two. The choice of kind is weighted by **1 / energy reward**, then placed in a vacant appropriate spot outside the reserved cake location. Cake returns independently **120 seconds** after full consumption, even while other snacks remain. Pause, map, house tour, title, and background tabs freeze resource timers. Home/title navigation preserves supplies, energy, and pending food recovery; reloading starts a fresh session.
 
 ## Noon to bedtime (0.4.0)
 
 Each adventure lasts **10 minutes of active play**. The **Until bedtime** clock starts at **10:00**, with bright blue daylight. The sky and household lighting gradually move through afternoon and a peach-and-lavender dusk. By **2:00 remaining** (eight minutes elapsed), the sky is fully night: stars and a moon appear, and ceiling pendants and floor lamps cast warm light throughout the house.
 
-Menus, the map, house view, the title screen, and inactive tabs pause the clock. Returning home or manually visiting the title preserves the remaining time. The timer uses real elapsed time independently of the physics frame cap. At **0:00**, the game returns to the main screen and resets the day, energy, snacks, discoveries and poop balls. Before resetting, the completed happiness score is saved under the player’s name. The next adventure starts fresh at noon with zero happiness.
+Menus, the map, house view, the title screen, and inactive tabs pause the clock. Returning home or manually visiting the title preserves the remaining time. The timer uses real elapsed time independently of the physics frame cap. At **0:00**, the game returns to the main screen and resets the day, energy, snacks, discoveries, poop supply, dropped balls, bladder and puddles. Before resetting, the completed happiness score is saved under the player’s name. The next adventure starts fresh at noon with zero happiness.
+
+**Restart game** in the Escape menu discards the unfinished round and starts a fresh one under the same player name. It restores **10:00 at noon, zero happiness, full energy, ten carried poop balls, an empty bladder, full fountains and fresh items**. Dropped balls, puddles, discoveries, pending recovery and cooldowns are cleared, and the free first den jump is renewed. Previously completed leaderboard scores remain saved; restarting never records the abandoned score. **R / Home** still returns Shidan to the den while preserving the current round.
 
 The 18 fixtures have solid bases, stems and shades. Their glowing diffusers use two instanced batches; four reusable local lights illuminate the nearby rooms without casting extra shadow maps. The day cycle retains the existing cached sun direction and shadows.
 
@@ -112,12 +126,17 @@ Records and the last-used name live in this browser’s local storage on this ad
 - Original procedural Shidan model based on the three local reference photos, with black fur, white nose marking, white toes, ears, whiskers and a fluffy tail.
 - Breathing, blinking, ear movement, running gait, crouch and airborne poses.
 - Third-person orbit camera, running, tap jumps, charged jumps, furniture/ceiling collision, stair traversal and floor-dependent traction.
-- Pause/resume, reset, exploration guidance, and optional synthesized sound effects.
+- Pause/resume, full-round Restart game, map/discoveries, and optional synthesized sound effects.
 - Right-click poop balls with gravity, rolling, bounce and collisions against the house, fence, stairs, Shidan and one another. Resting balls can be nudged awake by Shidan.
-- Up to **10,000 balls** persist during the adventure, including through pause, return-home and manual title navigation. Each additional ball replaces only the oldest. Bedtime or reloading the page starts a fresh session.
+- Up to **1,000 dropped balls** persist during the adventure, including through pause, return-home and manual title navigation. Each additional ball replaces only the oldest. Carried supply starts at ten and is capped at fifty. Bedtime or reloading the page starts a fresh session.
+- Fourteen fixed drinking fountains with a full bladder's water each per round, a precise bladder meter, a one-second Q pee action and visible 60-second pee/drink cooldown.
 - Local source control, automated physics checks, browser integration checks, and a static distribution build.
 
 **Later milestones:** more interaction types; the mistress, her phone/laughter, noise and line-of-sight detection, pursuit and capture; the cotton cover; scoring balance and an optional happiness target.
+
+## Surface stability checks
+
+The regression suite audits the complete house, furnishings, every consumable kind and several Shidan poses for differently coloured surfaces sharing the same plane. It repeats the house check after geometry batching and checks nearby items while pushing. Intentional touching edges, embedded curved parts and fully concealed faces are handled separately from exposed surface conflicts. Floor paint and rugs use a small depth bias, while ordinary solid joins use real geometric clearance.
 
 ## Develop and verify
 
@@ -133,6 +152,8 @@ node scripts/serve.mjs --dist
 `npm run dev`, `npm test`, `npm run check`, and `npm run build` are aliases if npm is installed. The plain Node commands also work with the bundled runtime available on this computer.
 
 For input integration checks, run the development server, open **http://localhost:4173/tests/browser.html**, and click **Run input and menu checks**. Keep that tab foreground while the checks run. The runner exercises actual input, mouse error recovery, poop, fast tap buffering, charged escape, pause/resume, maps, cutaways and title navigation. The separate **Walk the balcony–garden loop** button walks the real game through the entrance, both floors, balcony, garden stairs and back inside. Keep this tab active until it finishes. **Check stair visibility** walks to the middle of the indoor stairs, verifies the ceiling and upstairs reveal, and checks that sunlight shadows remain cached.
+
+**http://localhost:4173/tests/body-resources.html** runs actual-game poop supply, den hay, drinking, pee, cooldown and new-day checks using an isolated score store and controllable active clock. Add `?actions` to focus on animation, one-second action locking, cooldowns and a full restart, or `?preview` for a clean full-window visual preview without changing your saved name or leaderboard.
 
 For rendering measurements, open **http://localhost:4173/tests/performance.html**, select a view size, and run the six-second camera orbit. Keep the test tab active. It reports frame intervals, CPU work, asynchronous GPU time where supported, and drawing submissions. `node scripts/benchmark-render.mjs` measures visible geometry across six locations; it is not an FPS test.
 
@@ -151,13 +172,16 @@ Open **http://localhost:4173/tests/day-cycle.html** to preview noon/dusk/night o
 | `src/day-cycle.js` | Ten-minute clock, phase progression and countdown formatting |
 | `src/day-lighting.js` | Sky, stars, moon, daylight and fixed local-light pool |
 | `src/house-lamps.js` | Ceiling/floor fixtures, collision and instanced glowing diffusers |
-| `src/adventure-session.js` | Clean resource reset at bedtime |
+| `src/adventure-session.js` | Clean resource reset at bedtime or Restart game |
 | `src/physics.js` | Independent character controller, collision, stairs and traction |
 | `src/layout.js` | Room, wall, opening, ramp, and discovery data |
 | `src/level-map.js` | Shared minimap and full floor plan |
 | `src/mouse.js` | Mouse actions and safe pointer-lock/drag fallback |
-| `src/poop-physics.js` | Sphere collision, sleep/wake, spatial indexing and 10k pool |
+| `src/poop-physics.js` | Sphere collision, sleep/wake, spatial indexing and 1,000-ball pool |
 | `src/poop.js` | Instanced poop-ball rendering |
+| `src/poop-supply.js` | Carried ball cap, drop cooldown and once-per-visit den reward |
+| `src/water.js` | Fountain placement/reach, finite water reserves, precise drinking, bladder and pee cooldown |
+| `src/fountains.js` | Fixed fountain models and pooled pee-puddle rendering |
 | `src/model.js` | Procedural rabbit model, animation and geometry helpers |
 | `src/energy.js` | Sprint/jump costs, passive recovery, timed food rewards |
 | `src/consumable-data.js` | Nine finite item kinds, 41 authored locations, and special den hay |

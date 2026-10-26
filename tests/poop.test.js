@@ -5,6 +5,7 @@ import { createHouse } from '../src/house.js';
 import { World, RabbitController } from '../src/physics.js';
 import { DEN, STAIRS } from '../src/layout.js';
 import { PoopPhysics, POOP_RADIUS as R, MAX_POOP_BALLS } from '../src/poop-physics.js';
+import { createPoopBalls } from '../src/poop.js';
 const { world } = createHouse(new THREE.Scene());
 function run(physics, seconds, rabbit) { for (let i = 0; i < seconds * 60; i++) physics.update(1 / 60, rabbit); }
 const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
@@ -65,7 +66,7 @@ test('stairs support balls and let them roll downward', () => {
   const ball = physics.spawn({ x, y: world.rampHeight(x, z) + R + .1, z });
   run(physics, 1); assert.ok(ball.z > z + .1); assert.ok(ball.y >= world.rampHeight(ball.x, ball.z));
 });
-test('exactly 10,000 balls persist and adding more replaces only the oldest', () => {
+test('exactly 1,000 balls persist and adding more replaces only the oldest', () => {
   const physics = new PoopPhysics(new World());
   for (let i = 0; i < MAX_POOP_BALLS; i++) physics.spawn({ x: -10 + (i % 100) * .2, y: R, z: -9.7 + Math.floor(i / 100) * .195 });
   const oldest = physics.balls[0], second = physics.balls[1], last = physics.balls.at(-1);
@@ -74,4 +75,57 @@ test('exactly 10,000 balls persist and adding more replaces only the oldest', ()
   assert.equal(physics.count, MAX_POOP_BALLS); assert.equal(extra.slot, oldest.slot);
   assert.equal(physics.balls[1], second); assert.equal(physics.balls.at(-1), last);
   assert.equal(physics.active.has(oldest), false); assert.equal([...physics.grid.near(oldest.x, oldest.y, oldest.z, R * 2)].includes(oldest), false);
+});
+test('eating removes a ball, compacts slots and leaves the moved collider active', () => {
+  const physics = new PoopPhysics(new World());
+  const first = physics.spawn({x:0,y:R,z:0}), middle = physics.spawn({x:1,y:R,z:0}), last = physics.spawn({x:2,y:R,z:0});
+  physics.dirty.clear();
+  assert.equal(physics.remove(middle), true);
+  assert.deepEqual(physics.balls, [first,last]); assert.equal(last.slot,1);
+  assert.equal(physics.active.has(middle),false); assert.equal(physics.grid.cells.get(middle.cell)?.has(middle) ?? false,false);
+  assert.equal(physics.grid.cells.get(last.cell).has(last),true); assert.equal(physics.dirty.has(1),true);
+  assert.equal(physics.remove(middle),false);
+});
+test('replacement still removes the oldest survivor after eating compacts slots', () => {
+  const physics = new PoopPhysics(new World(),3);
+  const first = physics.spawn({x:0,y:R,z:0}), second = physics.spawn({x:1,y:R,z:0}), third = physics.spawn({x:2,y:R,z:0});
+  physics.remove(first);
+  const fourth = physics.spawn({x:3,y:R,z:0});
+  assert.equal(physics.count,3); assert.ok(physics.balls.includes(second));
+  const fifth = physics.spawn({x:4,y:R,z:0});
+  assert.equal(physics.count,3); assert.equal(physics.balls.includes(second),false);
+  assert.ok(physics.balls.includes(third) && physics.balls.includes(fourth) && physics.balls.includes(fifth));
+});
+test('removing support wakes sleeping balls so a floating pile settles', () => {
+  const physics = new PoopPhysics(new World());
+  const lower = physics.spawn({x:0,y:R,z:0}), upper = physics.spawn({x:0,y:R*3,z:0});
+  upper.sleeping = true; physics.active.delete(upper);
+  physics.remove(lower);
+  assert.equal(upper.sleeping,false); assert.equal(physics.active.has(upper),true);
+  run(physics,2); assert.ok(Math.abs(upper.y-R)<.001);
+});
+test('rendering eating compacts instances and supports eating the final ball', () => {
+  const scene = new THREE.Scene(), poop = createPoopBalls(scene,new World()), mesh = scene.children[0];
+  const rabbit = new RabbitController(new World()); rabbit.energy.value = 20;
+  poop.drop(rabbit,0); poop.drop(rabbit,1); poop.sync(); mesh.instanceMatrix.clearUpdateRanges();
+  const [first,second] = [...poop.availableItems()];
+  assert.equal(poop.has(first),true); assert.equal(poop.has({type:'poop'}),false);
+  assert.equal(second.y,second.ball.y-R); second.ball.x += 1; assert.equal(second.x,second.ball.x);
+  assert.equal(poop.consume(first,rabbit),true); poop.sync();
+  assert.equal(poop.has(first),false); assert.equal(poop.has(second),true);
+  assert.equal(mesh.count,1); assert.equal(poop.physics.balls[0],second.ball);
+  const matrix = new THREE.Matrix4(); mesh.getMatrixAt(0,matrix);
+  assert.ok(Math.abs(matrix.elements[12]-second.x)<.00001);
+  assert.equal(poop.consume(first,rabbit),false);
+  assert.equal(poop.consume(second,rabbit),true); poop.sync(); assert.equal(mesh.count,0);
+  assert.equal(poop.physics.count,0); rabbit.energy.update(1);
+  assert.ok(Math.abs(rabbit.energy.value-30.01)<.00001);
+  assert.equal(poop.supply.value,8);
+});
+test('drop consumes carried supply once per second and never below zero', () => {
+  const poop = createPoopBalls(new THREE.Scene(),new World()), rabbit = new RabbitController(new World());
+  assert.ok(poop.drop(rabbit,0)); assert.equal(poop.drop(rabbit,.999),null); assert.equal(poop.supply.value,9);
+  for(let i=1;i<10;i++) assert.ok(poop.drop(rabbit,i));
+  assert.equal(poop.drop(rabbit,10),null); assert.equal(poop.physics.count,10); assert.equal(poop.supply.value,0);
+  poop.reset(); assert.equal(poop.supply.value,10); assert.equal(poop.physics.count,0); assert.ok(poop.drop(rabbit,0));
 });
