@@ -105,7 +105,7 @@ export class WaterSystem {
   }
   pee(player) {
     const amount=this.bladder.value;
-    if(!(amount>0) || this.peeing || this.cooldownRemaining>0 || !player || !Number.isFinite(player.x+player.y+player.z)) return null;
+    if(amount!==MAX_BLADDER || this.peeing || this.cooldownRemaining>0 || !player || !Number.isFinite(player.x+player.y+player.z)) return null;
     this.readyAt=this.elapsed+DRINK_COOLDOWN;this.peeElapsed=0;this.stop();
     // A press during a hop still acts immediately, with the patch on the
     // static support below Shidan instead of suspended in the air or on food.

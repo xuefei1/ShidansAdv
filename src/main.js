@@ -1,7 +1,8 @@
 import * as THREE from '../vendor/three.module.js';
 import { createHouse, batchStaticGeometry } from './house.js';
 import { createRabbit } from './model.js';
-import { RabbitController, DEN, clamp } from './physics.js';
+import { visualHeadroom } from './rabbit-clearance.js';
+import { RabbitController, DEN, clamp, SURFACES } from './physics.js';
 import { Sound } from './audio.js';
 import { FLOOR_HEIGHT, BOUNDS, HOUSE, LANDMARKS, roomAt } from './layout.js';
 import { drawLevelMap } from './level-map.js';
@@ -18,8 +19,20 @@ import { resetAdventure } from './adventure-session.js';
 import { Leaderboard, HappinessRun } from './happiness.js';
 import { createWaterFountains } from './fountains.js';
 import { MAX_CARRIED_POOP } from './poop-supply.js';
+import { NoiseSystem } from './noise.js';
+import { createNoiseRipples } from './noise-ripples.js';
+import { renderConsumableLegend } from './consumable-legend.js';
+import { MistressAI } from './mistress-ai.js';
+import { createMistressModel } from './mistress-model.js';
+import { MistressSight, MistressFootsteps } from './mistress-awareness.js';
+import { MistressPursuit } from './mistress-pursuit.js';
+import { MistressVision } from './mistress-vision.js';
+import { createMistressCone } from './mistress-cone.js';
+import { MistressCleanupSight } from './mistress-cleanup.js';
+import { RoundStats } from './round-stats.js';
 
 const elements = new Map();
+const TOP_SPRINT_SPEED=Math.max(...Object.values(SURFACES).map(surface=>surface.run));
 const $ = id => { if (!elements.has(id)) elements.set(id, document.getElementById(id)); return elements.get(id); };
 const canvas = $('game');
 function setText(id, value) { const element = $(id); if (element.textContent !== value) element.textContent = value; }
@@ -35,7 +48,8 @@ window.addEventListener('error', event => {
 
 // The QA entry point supplies a controllable monotonic clock. Normal play always
 // uses real time through start.js; there are no time cheats in the game controls.
-export async function boot({clockNow=()=>performance.now(),scoreStorage}={}) {
+export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMovementPerFrame=.1}={}) {
+  renderConsumableLegend($('consumable-legend-rows'));
   $('play').disabled = $('tour').disabled = true;
   $('load-status').hidden = false;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -62,6 +76,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage}={}) {
   const dayClock = new DayClock(clockNow());
   let storage=scoreStorage; if(storage===undefined) try { storage=window.localStorage; } catch { /* Private browser settings can deny storage. */ }
   const leaderboard=new Leaderboard(storage), happiness=new HappinessRun(leaderboard);
+  const roundStats=new RoundStats();
   $('player-name').value=leaderboard.name;
   const rabbit = createRabbit(); scene.add(rabbit.root);
   // Shidan already has an animated contact shadow. Keep her and the tiny balls
@@ -69,9 +84,26 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage}={}) {
   rabbit.root.traverse(object => { object.castShadow = false; });
   const controller = new RabbitController(world);
   const water = createWaterFountains(scene, world);
-  const consumables = createConsumables(scene, world);
+  // Share the human navigation graph with loot placement so rabbit-only
+  // passages cannot become protected food/chewing farms.
+  const mistressRoutine=new MistressAI(world);
+  const consumables = createConsumables(scene, world,{canSpawn:place=>!mistressRoutine.navigation.isRabbitSafe(place)});
   const poop = createPoopBalls(scene, world);
   consumables.system.setExternalItems(poop);
+  const noise = new NoiseSystem(), noiseRipples = createNoiseRipples(scene,world);
+  const mistress=new MistressPursuit(mistressRoutine), mistressModel=createMistressModel();scene.add(mistressModel.root);
+  const mistressBounds=new THREE.Box3();mistressModel.root.updateMatrixWorld(true);
+  mistressModel.root.traverseVisible(object=>{if(object.isMesh&&object!==mistressModel.shadow)mistressBounds.expandByObject(object);});
+  setData('mistressStandingHeight',mistressBounds.max.y.toFixed(3));
+  const mistressRipples=createNoiseRipples(scene,world);mistressRipples.mesh.name='Mistress noise ripples';
+  const mistressSight=new MistressSight([...layers,ceiling,...water.groups]),mistressFootsteps=new MistressFootsteps();
+  const enemyVision=new MistressVision(mistressSight,world),mistressCone=createMistressCone(scene,world);
+  const cleanupSight=new MistressCleanupSight({vision:enemyVision,navigation:mistress.navigation,poop,water});
+  let cleanupTick=-Infinity,cleanupCandidate=null,cleanupRevision='';
+  const sightSamples=Array.from({length:8},()=>new THREE.Vector3());
+  let mistressInView=false;
+  let enemySeen=false,visionTick=-Infinity,visionState='',visionYaw=NaN,captureCount=0,npcMovementSpent=0;
+  const npcMovementLimit=maxNpcMovementPerFrame===Infinity?Infinity:.1;
   const sound = new Sound();
   const keys = new Set();
   let mode = 'title', previousMode = 'play', overview = false, mapOpen = false, surveyFloor = 0, gardenView = false;
@@ -105,11 +137,92 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage}={}) {
   $('close-leaderboard').addEventListener('click',()=>{setHidden('leaderboard',true); $('show-leaderboard').focus();});
 
   function toast(text, seconds = 4) { setText('toast', text); $('toast').hidden = false; toastUntil = time + seconds; }
+  function enemyContext(force=false) {
+    const inDen=mistress.navigation.isDen(controller);
+    const asleep=mistress.phase==='routine'&&mistress.state==='acting'&&mistress.activity==='sleeping';
+    // Hidden passages need an immediate sight check on entry. The den itself
+    // is always safe and needs no ray work at all.
+    const hiding=!inDen&&mistress.phase==='chase'&&mistress.navigation.isRabbitSafe(controller,mistress.position);
+    const table=mistress.navigation.tableAt(controller);
+    const state=`${mistress.phase}:${table&&controller.y>=table.maxY-.03?table.id:''}`;
+    const turn=Math.abs(Math.atan2(Math.sin(mistress.yaw-visionYaw),Math.cos(mistress.yaw-visionYaw)));
+    if(inDen||asleep)enemySeen=false;
+    else if(force||hiding||mistress.phase==='scolding'||state!==visionState||turn>.12||mistress.elapsed-visionTick>=.1) {
+      syncMistressModel();syncRabbitModel();const eye=mistressModel.getSightPoints()[0];
+      enemySeen=enemyVision.canSee({position:mistress.renderPosition,eye,yaw:mistress.yaw},controller,{samples:rabbit.getSightPoints()});
+      visionTick=mistress.elapsed;visionState=state;visionYaw=mistress.yaw;
+    }
+    const revision=`${poop.physics.sequence}:${poop.physics.count}:${water.puddles.at(-1)?.id}:${water.puddles.length}`;
+    if(asleep||['caught','scolding'].includes(mistress.phase))cleanupCandidate=null;
+    else if(force||mistress.elapsed-cleanupTick>=.1||revision!==cleanupRevision||(cleanupCandidate&&(!cleanupCandidate.exists()||!cleanupCandidate.goal))) {
+      syncMistressModel();
+      cleanupCandidate=cleanupSight.scan({position:mistress.renderPosition,stance:mistress.position,
+        eye:mistressModel.getSightPoints()[0],yaw:mistress.yaw},mistress.cleanupTarget);
+      cleanupTick=mistress.elapsed;cleanupRevision=revision;
+    }
+    return {player:controller,seen:enemySeen,noiseEvents:noise.events,noiseElapsed:noise.elapsed,
+      cleanupTarget:cleanupCandidate,topSprintSpeed:TOP_SPRINT_SPEED,
+      dayElapsed:dayClock.elapsed,sprintSpeed:SURFACES[controller.surface]?.run||8.2,contactClear:closeContactClear};
+  }
+  function settlePursuitEvents() {
+    for(const event of mistress.takeEvents()) {
+      if(event.kind==='caught'||event.kind==='return-den') {
+        keys.clear();mouse.clear();water.system.stop();consumables.system.cancel();
+        controller.releaseInput();controller.vx=controller.vy=controller.vz=0;controller.sprinting=false;queuedHop=false;jumpSeen=false;
+        noise.update(0,controller,{locked:true});
+      }
+      if(event.kind==='caught') {captureCount++;roundStats.caught();sound.household('alert');}
+      if(event.kind==='cleanup-finished')roundStats.cleanup(event.cleanupKind);
+      if(event.kind==='chase-started')sound.household('alert',.7);
+      if(event.kind==='cleanup-finished'&&event.cleanupKind==='pee') {
+        toast(`Puddle cleaned · mistress rage +${Math.round(mistress.rageBonus*100)}% of top sprint speed`,4);
+        sound.household('alert',.8);
+      }
+      if(event.kind==='return-den') {
+        controller.reset();mistressFootsteps.relocateListener(controller);poop.supply.observePosition(controller);
+        enemySeen=false;visionTick=-Infinity;visionState='';visionYaw=NaN;cameraInitialized=false;yaw=-.45;pitch=.43;distance=5.2;
+        toast('Back in the den. She has a few words for you…',5);
+      }
+    }
+  }
+  function closeContactClear() {
+    syncMistressModel();return enemyVision.contactClear(mistressModel.getSightPoints()[0],controller,{
+      stance:mistress.position,reachInteraction:mistress.navigation.reachInteraction(controller)});
+  }
+  function senseCloseContact(context) {
+    if(!mistress.canAttemptCapture(controller))return;
+    mistress.update(0,context);
+  }
   function advanceResources() {
+    if(mode==='gameover')return;
     dayClock.update(clockNow());
     const delta=Math.max(0,dayClock.elapsed-resourceElapsed); resourceElapsed=dayClock.elapsed;
+    const beforeWater=water.system.bladder.value,wasDrinking=water.system.drinking,wasPeeing=water.system.peeing;
     water.advance(delta,controller);
+    if(happiness.active) {
+      if(wasPeeing)roundStats.urinate(Math.max(0,beforeWater-water.system.bladder.value));
+      else if(wasDrinking)roundStats.drink(Math.max(0,water.system.bladder.value-beforeWater));
+    }
     consumables.handle(consumables.system.update(0,controller,delta));
+    if(dayClock.finished)return;
+    const householdSequence=mistress.noise.sequence,stepSequence=mistressFootsteps.sequence;
+    // Catch-up can cross both quiet activities and walking. Small simulation
+    // slices keep footsteps attached to the walking intervals they came from.
+    for(let left=delta;left>1e-9;) {
+      const step=Math.min(left,.05),context=enemyContext();context.dayElapsed=dayClock.elapsed-left+step;
+      const movement=Math.min(step,Math.max(0,npcMovementLimit-npcMovementSpent));npcMovementSpent+=movement;
+      context.movementScale=movement/step;mistress.update(step,context);
+      senseCloseContact(context);settlePursuitEvents();
+      mistressFootsteps.update(step,{player:controller,mistress});left-=step;
+    }
+    const householdEvents=mistress.noise.events.filter(event=>event.id>householdSequence);
+    mistressRipples.update(delta);mistressRipples.emit(householdEvents,mistress.elapsed);
+    // Sound follows the live episode, including its randomized cover duration.
+    // The sound helper skips missed beats and never queues past its expiry.
+    if(delta>0)sound.householdEpisode(mistress.noise.events.at(-1),mistress.elapsed,controller);
+    const stepEvents=mistressFootsteps.events.filter(event=>event.id>stepSequence);
+    const step=stepEvents.at(-1);
+    if(step) sound.household('footstep',Math.max(0,1-Math.hypot(controller.x-step.position.x,controller.y-step.position.y,controller.z-step.position.z)/6));
   }
   function nearestInteraction() {
     if(water.system.target) return water.system.target;
@@ -119,8 +232,10 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage}={}) {
   }
   function dropPoop() {
     advanceResources();
-    if(dayClock.finished || water.system.peeing) return;
-    if(!poop.drop(controller,dayClock.elapsed)) {
+    if(dayClock.finished || water.system.peeing || mistress.playerLocked) return;
+    const ball=poop.drop(controller,dayClock.elapsed);
+    if(ball)roundStats.dropPoop(ball);
+    else {
       toast(poop.supply.value===0 ? 'No poop balls left. Eat something to replenish your supply.' : 'Wait one second between poop balls.',2);
     }
     updateHUD();
@@ -130,7 +245,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage}={}) {
     // A 0.1-second drink earns exactly 1%, regardless of rendering speed.
     advanceResources();
     if(!held) { water.system.stop(); consumables.system.cancel(); updateHUD(); return; }
-    if(dayClock.finished || water.system.peeing) return;
+    if(dayClock.finished || water.system.peeing || mistress.playerLocked) return;
     const nearby=nearestInteraction();
     water.system.stop(); consumables.system.cancel();
     if(nearby?.id.startsWith('fountain-')) water.system.start(controller);
@@ -147,6 +262,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage}={}) {
   });
   function clearInput() {
     advanceResources();
+    noise.update(0,controller,{locked:true});
     keys.clear(); mouse.clear(); water.system.stop(); consumables.system.cancel(); setHidden('consume-prompt', true); queuedHop = false; jumpSeen = false; controller.releaseInput();
     dayClock.setActive(mode==='play' && !overview && !mapOpen && !document.hidden,clockNow());
   }
@@ -154,7 +270,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage}={}) {
   function showGame() {
     document.body.classList.add('playing'); document.body.classList.remove('touring');
     $('welcome').hidden = true; $('intro-caption').hidden = true; $('intro-footer').hidden = true;
-    $('hud').hidden = false; $('menu-button').hidden = false; $('pause').hidden = true;
+    $('hud').hidden = false; $('menu-button').hidden = false; $('pause').hidden = true;$('game-over').hidden=true;
     mode = 'play'; overview = false; mapOpen = false; $('atlas').hidden = true; cameraInitialized = false; clearInput(); canvas.focus();
     $('menu-button').innerHTML = 'Pause <kbd>Esc</kbd>'; $('view').innerHTML = '<kbd>V</kbd> House view';
   }
@@ -169,12 +285,12 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage}={}) {
   }
   function reset() {
     advanceResources();
-    if(water.system.peeing) return;
-    controller.reset(); yaw = -.45; pitch = .43; distance = 5.2; clearInput(); cameraInitialized = false;
+    if(water.system.peeing||mistress.playerLocked) return;
+    controller.reset();mistressFootsteps.relocateListener(controller);yaw = -.45; pitch = .43; distance = 5.2; clearInput(); cameraInitialized = false;
     toast('Back in your cozy den. Hold left-click by the special hay to refill your energy.');
   }
   function setOverview() {
-    if (mode !== 'play' || water.system.peeing) return;
+    if (mode !== 'play' || water.system.peeing || mistress.playerLocked) return;
     overview = !overview; roofView=false;setText('roof-view','Show roof');mapOpen = false; $('atlas').hidden = true; surveyFloor = controller.y >= FLOOR_HEIGHT - .25 ? 1 : 0; clearInput(); renderAtlas();
     if (overview) { unlock(); toast('House view · press V to return to Shidan', 3); }
     else { cameraInitialized = false; canvas.focus(); }
@@ -187,7 +303,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage}={}) {
     $('player-name').value=happiness.name; $('player-name').disabled=true;
     setHidden('day-ended',true);
     escaped = upstairs = false; discovered.clear();
-    reset(); showGame(); lock(); toast('Eat and chew for happiness! Hold times depend on the rewards; check each item’s prompt.', 6);
+    reset(); showGame(); lock(); toast('Watch her floor pattern: amber sight, blue noise masking. Her vision stays active while she laughs. The den is safe.', 6);
   }
   $('play').addEventListener('click',startAdventure);
   $('player-name').addEventListener('input',()=>{$('player-name').setCustomValidity('');});
@@ -201,14 +317,20 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage}={}) {
   $('resume').addEventListener('click', resume);
   $('reset').addEventListener('click', restartGame);
   function resetRunState() {
-    resetAdventure({clock:dayClock,controller,consumables,poop,water},clockNow());
+    resetAdventure({clock:dayClock,controller,consumables,poop,water,noise,noiseRipples,mistress,mistressRipples,mistressFootsteps},clockNow());
+    roundStats.reset();
+    mistressInView=false;
+    enemySeen=false;visionTick=-Infinity;visionState='';visionYaw=NaN;captureCount=0;npcMovementSpent=0;mistressCone.clear();
+    cleanupSight.clear();cleanupTick=-Infinity;cleanupCandidate=null;cleanupRevision='';
     resourceElapsed=0;
     escaped=upstairs=false; discovered.clear(); upperApproach=false;
     yaw=-.45; pitch=.43; distance=5.2; cameraInitialized=false;
+    daylight.update(0,controller,camera,0);
     roofView=gardenView=false;surveyFloor=0;previousMode='play';
     setText('roof-view','Show roof');setText('garden-view','Garden view');
     time=toastUntil=lastStep=mapTick=hudTick=0;
     for(const key of ['lastConsumed','lastConsumedId','lastPoopPosition','lastScore','lastPlayer']) setData(key,'');
+    for(const key of ['finalRank','finalRankTotal','roundStats'])setData(key,'');
     setHidden('day-ended',true);setHidden('toast',true);renderDirty=true;
   }
   function restartGame() {
@@ -221,10 +343,10 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage}={}) {
   }
   function returnToTitle() {
     mode = 'title'; overview = false; mapOpen = false; $('atlas').hidden = true; clearInput(); unlock();
-    if(!water.system.peeing) controller.reset();
+    if(!water.system.peeing) {controller.reset();mistressFootsteps.relocateListener(controller);}
     cameraInitialized = false;
     document.body.classList.remove('playing', 'touring');
-    $('pause').hidden = true; $('welcome').hidden = false; $('intro-caption').hidden = false; $('intro-footer').hidden = false;
+    $('pause').hidden = true; $('game-over').hidden=true;$('welcome').hidden = false; $('intro-caption').hidden = false; $('intro-footer').hidden = false;
     $('hud').hidden = true; $('menu-button').hidden = true; $('menu-button').innerHTML = 'Pause <kbd>Esc</kbd>';
     $('player-name').disabled=happiness.active;
     setText('play',happiness.active ? 'Continue adventure ↗' : 'Let’s explore ↗');
@@ -232,21 +354,44 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage}={}) {
     $('play').focus();
   }
   $('back-title').addEventListener('click', returnToTitle);
+  $('game-over-new').addEventListener('click',restartGame);
+  $('game-over-menu').addEventListener('click',()=>{mode='title';resetRunState();returnToTitle();updateHUD();renderDirty=true;});
+  function renderGameOver(result,stats) {
+    const rank=leaderboard.rank(result);
+    setText('game-over-player',`${result.name}’s adventure`);
+    setText('game-over-score',result.score.toLocaleString());
+    setText('game-over-rank',`#${rank} of ${leaderboard.entries.length}`);
+    setText('game-over-storage',leaderboard.saved?'Saved to this browser’s leaderboard · tied scores share a rank':'Browser storage unavailable · rank and score are kept for this session');
+    const values={
+      'result-items':stats.consumedTotal,'result-poop':stats.poopDropped,'result-puddles':stats.puddlesCreated,
+      'result-water':`${stats.waterDrunk.toFixed(2)}%`,'result-urine':`${stats.urineProduced.toFixed(2)}%`,
+      'result-captures':stats.captures,'result-hops':stats.hops,'result-long-jumps':stats.longJumps,
+      'result-sprint':`${stats.sprintSeconds.toFixed(1)} s`,'result-distance':`${stats.distanceTravelled.toFixed(1)} m`,
+      'result-cleaned-poop':stats.wasteCleaned.poop,'result-cleaned-pee':stats.wasteCleaned.pee,
+    };
+    for(const [id,value] of Object.entries(values))setText(id,String(value));
+    $('game-over-items').replaceChildren(...Object.entries(stats.consumed).map(([key,count])=>{
+      const row=document.createElement('tr'),name=document.createElement('th'),number=document.createElement('td');
+      name.scope='row';name.textContent=consumableDetails(key==='den-hay'?{type:'hay',permanent:true}:{type:key}).name;
+      number.textContent=String(count);row.append(name,number);row.dataset.item=key;return row;
+    }));
+    setData('lastScore',String(result.score));setData('lastPlayer',result.name);
+    setData('finalRank',String(rank));setData('finalRankTotal',String(leaderboard.entries.length));setData('roundStats',JSON.stringify(stats));
+  }
   function finishDay() {
+    if(!happiness.active||mode==='gameover')return;
     const result=happiness.finish(dayClock);
-    returnToTitle();
-    resetRunState();
-    setHidden('day-ended',false); setHidden('toast',true); toastUntil=0;
-    if(result) {
-      setText('day-ended',`${result.name} earned ${result.score.toLocaleString()} happiness! ${leaderboard.saved ? 'Your score is saved.' : 'Your score is kept for this session; browser storage is unavailable.'}`);
-      setData('lastScore',String(result.score)); setData('lastPlayer',result.name); renderLeaderboard();
-    }
-    updateHUD(); drawMap(); renderDirty=true;
+    if(!result)return;
+    const stats=roundStats.snapshot();mode='gameover';overview=false;mapOpen=false;
+    clearInput();unlock();$('atlas').hidden=$('pause').hidden=$('survey').hidden=$('leaderboard').hidden=true;
+    $('hud').hidden=$('menu-button').hidden=$('welcome').hidden=$('intro-caption').hidden=$('intro-footer').hidden=true;
+    setHidden('toast',true);toastUntil=0;renderGameOver(result,stats);renderLeaderboard();
+    $('game-over').hidden=false;$('game-over-new').focus();updateHUD();renderDirty=true;
   }
   $('home').addEventListener('click', () => { reset(); canvas.focus(); });
   $('view').addEventListener('click', setOverview);
   function toggleMap() {
-    if (mode !== 'play' || water.system.peeing) return;
+    if (mode !== 'play' || water.system.peeing || mistress.playerLocked) return;
     mapOpen = !mapOpen; clearInput(); $('atlas').hidden = !mapOpen;
     if (mapOpen) { surveyFloor = controller.y >= FLOOR_HEIGHT - .25 ? 1 : 0; unlock(); renderAtlas(); }
     else canvas.focus();
@@ -269,6 +414,14 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage}={}) {
     $('sound').setAttribute('aria-label', enabled ? 'Disable sound' : 'Enable sound');
   });
   addEventListener('keydown', event => {
+    if(mode==='gameover') {
+      if(event.code==='Tab') {
+        const stops=[...$('game-over').querySelectorAll('button,[tabindex="0"]')],first=stops[0],last=stops.at(-1);
+        if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
+        else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+      }
+      return;
+    }
     if(!$('leaderboard').hidden) {
       if(event.code==='Escape') $('close-leaderboard').click();
       if(event.code==='Tab') { event.preventDefault(); $('close-leaderboard').focus(); }
@@ -276,8 +429,10 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage}={}) {
     }
     if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code) && mode === 'play' && event.target === canvas) event.preventDefault();
     if (event.code === 'Escape') { if (mapOpen) { toggleMap(); return; } if (mode === 'pause') resume(); else pause(); return; }
-    if (mode === 'play' && water.system.peeing) {
-      advanceResources();if(water.system.peeing) { event.preventDefault();return; }
+    // Disclosure and scroll-region keys belong to the board, not Shidan.
+    if(event.target instanceof Element && event.target.closest('#consumable-legend')) return;
+    if (mode === 'play' && (water.system.peeing||mistress.playerLocked)) {
+      advanceResources();if(water.system.peeing||mistress.playerLocked) { event.preventDefault();return; }
     }
     if (event.code === 'Enter' && mode === 'tour') { startAdventure(); return; }
     if (mode === 'play' && ['KeyM', 'KeyV'].includes(event.code)) {
@@ -291,10 +446,14 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage}={}) {
     if (event.code === 'KeyP' && !overview && !mapOpen) dropPoop();
     if (event.code === 'KeyQ' && !overview && !mapOpen) {
       advanceResources();
-      if(!dayClock.finished && water.pee(controller)) {
+      const pee=!dayClock.finished&&!mistress.playerLocked?water.pee(controller):null;
+      if(pee) {
+        roundStats.peeStarted(pee);
         keys.clear();mouse.clear();consumables.system.cancel();controller.releaseInput();
         controller.vx=controller.vz=0;controller.sprinting=false;queuedHop=false;jumpSeen=false;
         toast('Peeing… stay still for one second.',1);updateHUD();
+      } else if(!dayClock.finished && water.system.bladder.value<100) {
+        toast('Fill your bladder to 100% before peeing.',2);updateHUD();
       }
     }
     if (event.code === 'KeyC') { yaw = controller.facing + Math.PI; pitch = .43; }
@@ -366,17 +525,19 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage}={}) {
     $('energy-panel').dataset.low = String(controller.energy.value < 10);
     $('energy-panel').dataset.recovering = String(controller.energy.recovering);
     setText('energy-status', controller.energy.recovering ? 'Restoring energy…' : controller.sprintExhausted ? 'Rest to recover · release Shift to sprint' : controller.sprinting ? 'Sprinting · using energy' : 'Restoring 0.01% per second');
-    const bladder=water.system.bladder.value.toFixed(2), drinkWait=water.system.cooldownRemaining;
+    const bladderValue=water.system.bladder.value;
+    // Do not round a nearly full bladder up to a misleading 100.00%.
+    const bladder=(bladderValue<100 ? Math.min(bladderValue,99.99) : bladderValue).toFixed(2), drinkWait=water.system.cooldownRemaining;
     const cooldownText=seconds=>(Math.ceil(Math.max(0,seconds)*10-1e-8)/10).toFixed(1);
     setText('bladder-value',`${bladder}%`); $('bladder-fill').style.width=`${bladder}%`;
     $('bladder-meter').setAttribute('aria-valuenow',bladder);
     $('bladder-panel').dataset.full=String(water.system.bladder.value===100);
     setText('bladder-status',water.system.peeing ? 'Emptying bladder · actions locked' : drinkWait>0 ? `Drink again in ${cooldownText(drinkWait)}s` : water.system.bladder.value===100 ? 'Full · press Q to pee' : water.system.drinking ? 'Drinking · +10% per second' : nearbyWater===0 ? 'Fountain empty · try another room' : 'Hold left-click near a fountain');
-    setText('pee-cooldown',water.system.peeing ? `Peeing · ${cooldownText(water.system.peeRemaining)}s` : drinkWait>0 ? `Pee ready in ${cooldownText(drinkWait)}s` : water.system.bladder.value>0 ? 'Q · pee ready · 0.0s' : 'Q · bladder empty');
+    setText('pee-cooldown',water.system.peeing ? `Peeing · ${cooldownText(water.system.peeRemaining)}s` : drinkWait>0 ? `Pee ready in ${cooldownText(drinkWait)}s` : water.system.bladder.value===100 ? 'Q · pee ready · 0.0s' : 'Q · fill to 100%');
     setHidden('pee-progress',!water.system.peeing);
     $('pee-fill').style.width=`${water.system.peeProgress*100}%`;
     $('pee-progress').setAttribute('aria-valuenow',(water.system.peeProgress*100).toFixed(0));
-    $('home').disabled=$('view').disabled=$('map-button').disabled=water.system.peeing;
+    $('home').disabled=$('view').disabled=$('map-button').disabled=water.system.peeing||mistress.playerLocked;
     setText('poop-count',String(poop.supply.value));
     const poopWait=Math.max(0,poop.supply.nextPoopAt-dayClock.elapsed);
     setText('poop-status',water.system.peeing ? 'Wait until peeing finishes' : poop.supply.value===0 ? 'Eat to replenish your supply' : 'Right-click or P');
@@ -455,11 +616,75 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage}={}) {
     setData('camera', `${yaw.toFixed(2)},${pitch.toFixed(2)}`);
     setData('poopCount', String(poop.physics.count));
     setData('poopActive', String(poop.physics.active.size));
+    setData('noiseSequence',String(noise.sequence));setData('noiseCount',String(noise.events.length));
+    setData('noiseKinds',noise.activeKinds.join(','));setData('noiseRipples',String(noiseRipples.count));
+    const latestNoise=noise.events.at(-1);
+    setData('lastNoiseKind',latestNoise?.kind || '');setData('lastNoiseScope',latestNoise?.scope || '');
+    setData('lastNoiseRadius',latestNoise?.radius===5 ? '5' : latestNoise ? 'house' : '');
+    setData('lastNoisePosition',latestNoise ? [latestNoise.position.x,latestNoise.position.y,latestNoise.position.z].map(v=>v.toFixed(3)).join(',') : '');
+    setData('mistressPosition',[mistress.position.x,mistress.position.y,mistress.position.z].map(v=>v.toFixed(3)).join(','));
+    setData('mistressRenderPosition',[mistress.renderPosition.x,mistress.renderPosition.y,mistress.renderPosition.z].map(v=>v.toFixed(3)).join(','));
+    setData('mistressActivity',mistress.activity);setData('mistressState',mistress.state);
+    setData('mistressRemaining',mistress.remaining.toFixed(3));setData('mistressSpeed',mistress.speed.toFixed(3));
+    setData('mistressElapsed',mistress.elapsed.toFixed(3));setData('mistressLaughing',String(mistress.laughing));
+    setData('mistressNoiseSequence',String(mistress.noise.sequence));setData('mistressNoiseCount',String(mistress.noise.events.length));
+    setData('mistressNoiseKinds',mistress.noise.events.map(event=>event.kind).join(','));setData('mistressRipples',String(mistressRipples.count));
+    const latestHouseholdNoise=mistress.noise.events.at(-1);
+    setData('mistressNoiseDuration',String(latestHouseholdNoise?.lifetime??0));
+    setData('mistressNoiseRemaining',Math.max(0,(latestHouseholdNoise?.expiresAt??mistress.elapsed)-mistress.elapsed).toFixed(9));
+    setData('mistressFootstepSequence',String(mistressFootsteps.sequence));
+    setData('mistressFootstepCount',String(mistressFootsteps.events.length));
+    setData('mistressPhase',mistress.phase);setData('mistressSeesPlayer',String(enemySeen));
+    setData('mistressMasking',String(mistress.maskingNoise));setData('mistressChaseMultiplier',mistress.chaseMultiplier.toFixed(2));
+    setData('mistressChaseSpeed',mistress.chaseSpeed.toFixed(3));setData('mistressLostSight',mistress.lostSightFor.toFixed(3));
+    setData('mistressSearchRemaining',mistress.searchRemaining.toFixed(3));setData('mistressCaptureRemaining',mistress.captureRemaining.toFixed(3));
+    setData('mistressCornerPause',mistress.cornerPauseRemaining.toFixed(3));setData('mistressDetection',mistress.lastDetection);
+    setData('mistressInvestigating',String(mistress.investigating));setData('mistressScoldRemaining',mistress.scoldRemaining.toFixed(3));
+    setData('mistressCleanupKind',mistress.cleanupKind);setData('mistressCleanupRemaining',mistress.cleanupRemaining.toFixed(3));
+    setData('mistressCleanupTarget',mistress.cleanupTargetId??'');setData('mistressRageBonus',mistress.rageBonus.toFixed(2));
+    setData('mistressRageSpeedBonus',mistress.rageSpeedBonus.toFixed(3));
+    setData('captureCount',String(captureCount));
+    const playing=mode==='play'&&!overview&&!mapOpen;
+    setHidden('noise-cover',!playing||!mistress.maskingNoise);
+    setHidden('mistress-rage',!playing||mistress.rageBonus<=0);
+    setText('mistress-rage',`Mistress rage +${Math.round(mistress.rageBonus*100)}% · +${mistress.rageSpeedBonus.toFixed(2)} m/s`);
+    const warning=playing&&['chase','search','caught','scolding','cleanup'].includes(mistress.phase);
+    setHidden('chase-warning',!warning);setHidden('danger-vignette',!warning||!['chase','caught'].includes(mistress.phase));
+    $('chase-warning').dataset.phase=mistress.phase;
+    setText('chase-title',mistress.phase==='cleanup'?(mistress.state==='acting'?'She’s cleaning…':'She spotted a mess!'):mistress.phase==='caught'?'Caught!':mistress.phase==='scolding'?'Someone’s in trouble…':mistress.phase==='search'?'She’s searching…':mistress.investigating?'She heard that!':'She’s after you!');
+    setText('chase-detail',mistress.phase==='caught'?`Back in the den in ${(Math.ceil(mistress.captureRemaining*10-1e-8)/10).toFixed(1)}s`:mistress.phase==='scolding'?`A little talking-to · ${Math.ceil(mistress.scoldRemaining-1e-8)}s`:mistress.phase==='search'?'Stay hidden and quiet':mistress.investigating?'She’s checking the sound · move quietly':mistress.lastDetection==='sight'?'Break her sight · use cover and narrow passages':'She heard that · find cover and stay quiet');
+    if(mistress.phase==='cleanup')setText('chase-detail',`${mistress.cleanupKind==='pee'?'Pee puddle':'Poop ball'} · ${mistress.state==='acting'?`${(Math.ceil(mistress.cleanupRemaining*10-1e-8)/10).toFixed(1)}s left`:'a little time to escape'}`);
     const latestPoop = poop.physics.balls.reduce((latest,ball)=>!latest||ball.id>latest.id?ball:latest,null);
     setData('lastPoopPosition',latestPoop ? `${latestPoop.x.toFixed(3)},${latestPoop.y.toFixed(3)},${latestPoop.z.toFixed(3)}` : '');
   }
   const map = $('map').getContext('2d');
-  function drawMap() { drawLevelMap(map, 170, 192, controller, controller.y >= FLOOR_HEIGHT - .25 ? 1 : 0, discovered); }
+  function syncMistressModel() {
+    const position=mistress.renderPosition;
+    mistressModel.root.position.set(position.x,position.y,position.z);mistressModel.root.rotation.y=mistress.yaw;
+    mistressModel.animate(mistress.elapsed,{activity:mistress.state==='walking'?'idle':(mistress.definition?.animation??mistress.activity),moving:mistress.state==='walking',speed:mistress.speed,activityTime:mistress.activityTime,laughing:mistress.laughing,poseWeight:mistress.poseWeight,cleanupKind:mistress.cleanupKind,enraged:mistress.rageBonus>0});
+  }
+  function syncRabbitModel() {
+    rabbit.root.position.set(controller.x,controller.y,controller.z);
+    rabbit.root.rotation.y=mode==='title'?.43:controller.facing;
+    const speed=mode==='play'?Math.hypot(controller.vx,controller.vz):0;
+    const action=water.system.peeing?'pee':water.system.drinking?'drink':consumables.system.target?'eat':'idle';
+    rabbit.animate(time,speed,controller.grounded,controller.charge/.8,
+      world.support(controller.x,controller.z,controller.y+.01,true).y,action,visualHeadroom(world,controller));
+    return action;
+  }
+  function drawMap() {
+    if(!cameraInitialized) {syncMistressModel();updateCamera(0);}
+    mistressModel.root.updateMatrixWorld(true);
+    const joints=mistressModel.joints;
+    [joints.head,joints.body,...joints.arms,...joints.shins].forEach((joint,index)=>joint.getWorldPosition(sightSamples[index]));
+    joints.body.localToWorld(sightSamples[6].set(0,.2,0));
+    joints.head.localToWorld(sightSamples[7].set(0,.15,0));
+    mistressInView=mistressSight.inView(camera,sightSamples,{visible:mistressModel.root.visible});
+    const ripples=mistressFootsteps.ripples;
+    drawLevelMap(map,170,192,controller,controller.y>=FLOOR_HEIGHT-.25?1:0,discovered,false,{mistress:mistressInView?mistress.renderPosition:null,ripples});
+    setData('mapMistressVisible',String(mistressInView));setData('mapFootstepCount',String(ripples.length));
+    setData('mapFootsteps',JSON.stringify(ripples));
+  }
 
   // Read-only diagnostics, sampled in batches so profiling does not alter play.
   const frameTimes = [], cpuTimes = [];
@@ -470,10 +695,10 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage}={}) {
     const cpuStart = performance.now();
     const frameMs = now - previousTime;
     requestAnimationFrame(frame);
-    const dt = Math.min((now - previousTime) / 1000, .05); previousTime = now;
+    const dt = Math.min((now - previousTime) / 1000, .1); previousTime = now;
     advanceResources();
-    if(dayClock.finished) finishDay();
-    const frozen = mode === 'pause' || mapOpen || document.hidden;
+    if(dayClock.finished&&happiness.active) finishDay();
+    const frozen = mode === 'pause' || mode==='gameover' || mapOpen || document.hidden;
     if (frozen && wasFrozen && !renderDirty) return;
     wasFrozen = frozen; renderDirty = false;
     if (!document.hidden) frameTimes.push(frameMs);
@@ -481,16 +706,31 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage}={}) {
     if (mode === 'play' && !overview && !frozen) {
       const forward = Number(keys.has('KeyW') || keys.has('ArrowUp')) - Number(keys.has('KeyS') || keys.has('ArrowDown'));
       const right = Number(keys.has('KeyD') || keys.has('ArrowRight')) - Number(keys.has('KeyA') || keys.has('ArrowLeft'));
-      const input = { x: -Math.sin(yaw) * forward + Math.cos(yaw) * right, z: -Math.cos(yaw) * forward - Math.sin(yaw) * right, run: keys.has('ShiftLeft') || keys.has('ShiftRight'), jump: keys.has('Space'),locked:water.system.peeing };
-      if (queuedHop) { controller.update(.0001, { ...input, jump: true }); queuedHop = false; }
+      const input = { x: -Math.sin(yaw) * forward + Math.cos(yaw) * right, z: -Math.cos(yaw) * forward - Math.sin(yaw) * right, run: keys.has('ShiftLeft') || keys.has('ShiftRight'), jump: keys.has('Space'),locked:water.system.peeing||mistress.playerLocked,captured:mistress.playerLocked };
+      const motionX=controller.x,motionZ=controller.z;
+      let frameJump=null;
+      if (queuedHop) { controller.update(.0001, { ...input, jump: true });frameJump=controller.lastJump; queuedHop = false; }
       controller.update(dt, input);
+      frameJump=controller.lastJump||frameJump;
+      if(frameJump)roundStats.jump(frameJump);
+      // Actual substep displacement includes acceleration and collision stops;
+      // sample before any capture/home teleport can change the position.
+      if(dt>0)roundStats.travel(dt,{sprinting:controller.sprinting,speed:Math.hypot(controller.x-motionX,controller.z-motionZ)/dt});
       poop.supply.observePosition(controller);
+      const previousConsumeProgress=consumables.system.progress;
       const resourceEvents = consumables.system.update(dt, controller,0);
+      // A target alone is only a selection. Noise begins when the held action
+      // actually progresses, including an interrupted hold or its final frame.
+      const eating=consumables.system.progress>previousConsumeProgress ? consumables.system.target : resourceEvents.find(event=>event.kind==='consume')?.item;
+      const noiseEvents=noise.update(dt,controller,{consuming:eating,longJump:controller.lastJump==='long',locked:water.system.peeing||mistress.playerLocked});
+      noiseRipples.emit(noiseEvents);noiseRipples.update(dt);
+      const context=enemyContext();mistress.update(0,context);senseCloseContact(context);settlePursuitEvents();
       consumables.handle(resourceEvents);
       for (const event of resourceEvents) if (event.kind === 'consume') {
         const type = consumableDetails(event.item);
         const poopGained=poop.supply.grantFromConsumption(event,controller);
         happiness.consume(event);
+        roundStats.consume(event);
         const rewards=[type.happiness ? `+${type.happiness} happiness` : '',type.energy ? `+${type.energy} energy` : '',poopGained ? `+${poopGained} poop balls` : ''].filter(Boolean).join(' · ');
         toast(event.item.permanent ? `Energy fully restored!${poopGained ? ` +${poopGained} poop balls.` : ' Leave and re-enter the den for more poop balls.'}` : `${type.name} · ${rewards}`, 2.2); sound.chime();
         setData('lastConsumed', event.item.type);
@@ -506,16 +746,12 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage}={}) {
       poop.update(dt, controller);
     } else consumables.sync(0);
     poop.sync();
-    rabbit.root.position.set(controller.x, controller.y, controller.z);
-    rabbit.root.rotation.y = mode === 'title' ? .43 : controller.facing;
-    const speed = mode === 'play' ? Math.hypot(controller.vx, controller.vz) : 0;
-    const action=water.system.peeing ? 'pee' : water.system.drinking ? 'drink' : consumables.system.target ? 'eat' : 'idle';
-    rabbit.animate(time, speed, controller.grounded, controller.charge / .8, world.support(controller.x, controller.z, controller.y + .01,true).y,action);
+    const action=syncRabbitModel();
+    const mistressPosition=mistress.renderPosition;syncMistressModel();
     setData('rabbitAction',action);
     updateCamera(dt);
     daylight.update(dayClock.elapsed,controller,camera,frozen?0:dt,overview||mode==='tour');
     if (time - hudTick >= .05 || frozen) { updateHUD(); hudTick = time; }
-    if (mode === 'play' && !overview && !mapOpen && time - mapTick > .12) { drawMap(); mapTick = time; }
     const surveying = overview || mode === 'tour' || (mode === 'pause' && previousMode === 'tour');
     upperApproach = upperRoomsVisible(controller, upperApproach);
     const outside=controller.x<HOUSE.minX||controller.x>HOUSE.maxX||controller.z<HOUSE.minZ||controller.z>HOUSE.maxZ;
@@ -523,11 +759,21 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage}={}) {
     const showCeiling = !surveying || surveyFloor === 1||roofView;
     consumables.setUpperVisible(showUpper);
     water.setUpperVisible(showUpper);
+    noiseRipples.setUpperVisible(showUpper);
+    noiseRipples.mesh.visible=(mode==='play'&&!overview&&!mapOpen)||(mode==='pause'&&previousMode==='play');
+    mistressRipples.setUpperVisible(showUpper);
+    mistressRipples.mesh.visible=noiseRipples.mesh.visible;
+    mistressModel.root.visible=mistressPosition.y<FLOOR_HEIGHT-.1||showUpper;
+    const asleep=mistress.phase==='routine'&&mistress.state==='acting'&&mistress.activity==='sleeping';
+    mistressCone.update(frozen?0:dt,{position:mistressPosition,yaw:mistress.yaw,phase:mistress.phase,masked:mistress.maskingNoise,
+      eye:mistressModel.getSightPoints()[0],upperVisible:showUpper,visible:!asleep&&((mode==='play'&&!overview&&!mapOpen)||(mode==='pause'&&previousMode==='play'))});
+    setData('mistressConeVisible',String(mistressCone.mesh.visible));
     const showRoof=!surveying||roofView;
     if (upper.visible !== showUpper || ceiling.visible !== showCeiling || roof.shell.visible!==showRoof || roof.ceilings.visible!==showRoof) {
       upper.visible = showUpper; ceiling.visible = showCeiling;
       roof.shell.visible=roof.ceilings.visible=showRoof; renderer.shadowMap.needsUpdate = true;
     }
+    if(mode==='play'&&!overview&&!mapOpen&&time-mapTick>.12) {drawMap();mapTick=time;}
     setHidden('survey', !surveying || mode === 'pause');
     setData('mode', mode);
     setData('visibleFloor', upper.visible ? '1' : '0');
@@ -545,10 +791,16 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage}={}) {
       setData('performance', JSON.stringify({ frameMedian: percentile(frameTimes, .5), frameP95: percentile(frameTimes, .95), cpuMedian: percentile(cpuTimes, .5), cpuP95: percentile(cpuTimes, .95), calls: renderer.info.render.calls, triangles: renderer.info.render.triangles }));
       frameTimes.length = cpuTimes.length = 0; profileTime = now;
     }
+    npcMovementSpent=0;
   }
+  syncMistressModel();
   updateCamera(0); daylight.update(0,controller,camera); updateHUD(); drawMap();
   // Compile the upstairs and window variants too, before any camera turn can
   // reveal them. compileAsync uses parallel shader compilation when available.
+  // Warm every household prop too, including phone/book/mop which are hidden
+  // in other poses. Restore the current pose once their buffers are uploaded.
+  const mistressVisibility=[];
+  mistressModel.root.traverse(object=>{mistressVisibility.push([object,object.visible]);object.visible=true;});
   await renderer.compileAsync(scene, camera);
   // Upload every chunk now, including off-screen rooms, so the first look in a
   // new direction does not allocate vertex buffers during play.
@@ -556,6 +808,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage}={}) {
   scene.traverse(object => { if (object.isMesh) { culling.push([object, object.frustumCulled]); object.frustumCulled = false; } });
   rabbit.root.position.set(controller.x, controller.y, controller.z);
   renderer.render(scene, camera);
+  for(const [object,visible] of mistressVisibility)object.visible=visible;
   for (const [object, enabled] of culling) object.frustumCulled = enabled;
   upper.visible = false;
   consumables.setUpperVisible(false);

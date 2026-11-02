@@ -1,15 +1,15 @@
 import { DEN, FLOOR_HEIGHT as H } from './layout.js';
 
 export const CONSUMABLE_TYPES = Object.freeze({
-  hay: { name: 'Hay stack', energy: 25, poop: 10, color: 0xd6b85c, verb: 'Nibble' },
-  carrot: { name: 'Carrot', energy: 20, poop: 5, happiness: 10, color: 0xef984d, verb: 'Nibble' },
-  rabbitFood: { name: 'Rabbit food', energy: 20, poop: 5, happiness: 80, color: 0x97b583, verb: 'Eat' },
-  bread: { name: 'Bread', energy: 30, poop: 5, happiness: 20, color: 0xd5a267, verb: 'Nibble' },
-  apple: { name: 'Apple', energy: 25, poop: 5, happiness: 50, color: 0xd87566, verb: 'Nibble' },
-  banana: { name: 'Banana', energy: 20, poop: 5, happiness: 40, color: 0xe9ca65, verb: 'Nibble' },
-  book: { name: 'Book', energy: 10, poop: 5, happiness: 20, color: 0x8eafbb, verb: 'Chew' },
-  cake: { name: 'Cake', energy: 50, poop: 15, happiness: 150, respawn: 120, color: 0xe6a7b6, verb: 'Eat' },
-  noodles: { name: 'Noodles', energy: 30, poop: 15, happiness: 10, color: 0xe6cb93, verb: 'Eat' },
+  hay: { name: 'Hay stack', energy: 40, poop: 3, color: 0xd6b85c, verb: 'Nibble' },
+  carrot: { name: 'Carrot', energy: 20, poop: 2, happiness: 10, color: 0xef984d, verb: 'Nibble' },
+  rabbitFood: { name: 'Rabbit food', energy: 20, poop: 2, happiness: 80, color: 0x97b583, verb: 'Eat' },
+  bread: { name: 'Bread', energy: 30, poop: 2, happiness: 20, color: 0xd5a267, verb: 'Nibble' },
+  apple: { name: 'Apple', energy: 25, poop: 2, happiness: 50, color: 0xd87566, verb: 'Nibble' },
+  banana: { name: 'Banana', energy: 20, poop: 2, happiness: 40, color: 0xe9ca65, verb: 'Nibble' },
+  book: { name: 'Book', energy: 10, poop: 2, happiness: 20, color: 0x8eafbb, verb: 'Chew' },
+  cake: { name: 'Cake', energy: 50, poop: 5, happiness: 150, respawn: 120, color: 0xe6a7b6, verb: 'Eat' },
+  noodles: { name: 'Noodles', energy: 30, poop: 5, happiness: 10, color: 0xe6cb93, verb: 'Eat' },
   wire: { name: 'Wire / cable', energy: 0, happiness: 150, respawn: 30, color: 0x565a70, verb: 'Chew' },
   cardboard: { name: 'Cardboard box', energy: 20, happiness: 100, respawn: 60, color: 0xc69a68, verb: 'Chew' },
   slippers: { name: 'Slippers', energy: 0, happiness: 200, respawn: 90, color: 0xdb9f9e, verb: 'Chew' },
@@ -21,7 +21,7 @@ export const SNACK_TYPES = Object.freeze(Object.keys(CONSUMABLE_TYPES).filter(id
 export const DEN_HAY = Object.freeze({
   id: 'den-hay', type: 'hay', permanent: true, x: DEN.x - .9, y: 0, z: DEN.z + .3,
 });
-const DEN_HAY_DETAILS = Object.freeze({ name: 'Special den hay', energy: 100, poop: 10, color: 0xd6b85c, verb: 'Nibble' });
+const DEN_HAY_DETAILS = Object.freeze({ name: 'Special den hay', energy: 100, poop: 3, color: 0xd6b85c, verb: 'Nibble' });
 const POOP_DETAILS = Object.freeze({ name: 'Poop ball', energy: 5, happiness: 0, poop: 0, verb: 'Eat' });
 export const consumableDetails = item => item.permanent ? DEN_HAY_DETAILS : item.type === 'poop' ? POOP_DETAILS : CONSUMABLE_TYPES[item.type];
 // Use the full listed reward, regardless of the rabbit's current energy. Round
@@ -31,17 +31,18 @@ export function consumptionSeconds(item) {
   return Math.ceil(Math.max(1,energy/25+happiness/50)*10-1e-9)/10;
 }
 
-// Fixed, reachable places on both floors. Books here are loose chewable props;
-// the large structural book steps in furnishings.js remain solid climbing aids.
+// Tables are exposed climbing routes with food on top. The shared navigation
+// filter still excludes real hiding passages before spawning. Books here are
+// loose chewable props; structural book steps remain solid climbing aids.
 const places = {
-  book: [[-12,0,5],[-8,0,12.5],[-18,0,-7],[-17,0,-15.5],[-10,0,-6],[-22.5,0,-12],[-17,H+.96,-13.4],[-21,H,-6],[1,H,-8],[4.8,H,-16],[12.8,H+1.46,-12],[22.5,H,-12]],
+  book: [[-12,0,5],[-8,0,12.5],[-18,0,-7],[-17,0,-15.5],[-10,0,-6],[-22.5,0,-12],[-17,H+.96,-13.4],[-21,H,-6],[1,H,-8],[4.8,H,-16],[12.8,H+1.46,-12],[21.8,H+.9,-10.1]],
   carrot: [[-12.5,0,17.6],[19.5,0,10],[18,0,17.5],[-1.8,0,-14],[4.7,0,-17.5],[10,0,-7],[16,0,-16],[2,H+.4,-11.3]],
   hay: [[-9,0,15.5],[-21.4,0,10],[18,0,-12],[11,0,-16],[6,0,-6],[-11,H,0]],
   apple: [[-8.4,1.44,7.5],[18.5,0,7],[3.4,.92,-10.3],[3.5,H+.84,-13.2]],
   rabbitFood: [[-10.8,0,5],[14,1.56,-12],[10.5,H+.88,-18]],
-  banana: [[-9.8,1.44,7.7],[11.8,1.52,15],[17,H,-7]],
+  banana: [[-9.8,1.44,7.7],[11.8,1.52,15],[21.8,H+1.9,-14]],
   bread: [[13,1.52,14.7],[17,0,11]],
-  noodles: [[15.3,1.52,14.6],[15.5,H+1.46,-12]],
+  noodles: [[15.3,1.52,14.6],[15.5,H+1.46,-11.35]],
   cake: [[14.3,1.52,15.4]],
 };
 export const CONSUMABLE_SLOTS = Object.freeze(Object.entries(places).flatMap(([type, positions]) =>

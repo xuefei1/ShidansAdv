@@ -11,7 +11,7 @@ const close=(a,b,epsilon=.015)=>assert.ok(Math.abs(a-b)<epsilon,`${a} != ${b}`);
 const options={wires:[],randomLimits:{}};
 
 test('reward-based durations have a one-second floor and use the full listed rewards',()=>{
-  const expected={carrot:1,hay:1,apple:2,rabbitFood:2.4,banana:1.6,bread:1.6,noodles:1.4,book:1,cake:5,wire:3,cardboard:2.8,slippers:4};
+  const expected={carrot:1,hay:1.6,apple:2,rabbitFood:2.4,banana:1.6,bread:1.6,noodles:1.4,book:1,cake:5,wire:3,cardboard:2.8,slippers:4};
   for(const [type,seconds] of Object.entries(expected)) assert.equal(consumptionSeconds({type}),seconds,type);
   assert.equal(consumptionSeconds(DEN_HAY),4);
   for(const type of Object.keys(CONSUMABLE_TYPES)) {

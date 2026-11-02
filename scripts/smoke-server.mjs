@@ -12,6 +12,7 @@ for (const path of ['/', '/src/main.js', '/src/happiness.js', '/src/chewable-dat
   const response = await fetch(base + path);
   assert.equal(response.status, 200, path); assert.ok((await response.text()).length > 50, path);
 }
-for (const path of ['/src/poop-supply.js','/src/poop.js','/src/poop-physics.js','/src/water.js','/src/fountains.js']) assert.equal((await fetch(base + path)).status,200,path);
+for (const path of ['/src/poop-supply.js','/src/poop.js','/src/poop-physics.js','/src/water.js','/src/fountains.js','/src/noise.js','/src/noise-ripples.js','/src/consumable-legend.js','/src/mistress-ai.js','/src/mistress-navigation.js','/src/mistress-model.js','/src/mistress-awareness.js']) assert.equal((await fetch(base + path)).status,200,path);
 for (const path of ['/pic/', '/.git/config', '/Start-Game.command']) assert.equal((await fetch(base + path)).status, 404, path);
+for (const path of ['/src/mistress-pursuit.js','/src/mistress-vision.js','/src/mistress-cone.js','/src/mistress-cleanup.js','/src/table-refuges.js','/src/round-stats.js','/src/rabbit-clearance.js']) assert.equal((await fetch(base + path)).status,200,path);
 console.log('Launcher/server smoke checks passed: page, game modules, local engine, stylesheet, and private-file boundaries.');

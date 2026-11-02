@@ -32,16 +32,18 @@ export function canReachConsumable(player, item, world) {
 }
 
 export class ConsumableSystem {
-  constructor(world, { slots = CONSUMABLE_SLOTS, random = Math.random, wires = WIRE_SLOTS, randomLimits = RANDOM_CHEWABLE_LIMITS, randomPlaces = null } = {}) {
-    this.world = world; this.random = random;
+  constructor(world, { slots = CONSUMABLE_SLOTS, random = Math.random, wires = WIRE_SLOTS, randomLimits = RANDOM_CHEWABLE_LIMITS, randomPlaces = null, canSpawn = () => true } = {}) {
+    this.world = world; this.random = random;this.canSpawn=canSpawn;
     this.motion=new ConsumableMotion(world);
     // Both the initial population and restocking use this pool. Leave enough
     // clearance that an item's geometry cannot overlap the den fence either.
-    this.slots = slots.filter(slot => Math.hypot(slot.x - DEN.x, slot.z - DEN.z) >= DEN.radius + .4)
+    // Classify static placement pools once, rather than doing human navigation
+    // queries every frame. The den's permanent recovery hay is an exception.
+    this.slots = slots.filter(slot => Math.hypot(slot.x - DEN.x, slot.z - DEN.z) >= DEN.radius + .4 && this.canSpawn(slot))
       .filter((slot,index,available) => slot.type !== 'cake' || available.findIndex(s=>s.type==='cake')===index);
     this.denHay = {...DEN_HAY};
-    this.wires = wires; this.randomLimits = randomLimits;
-    this.randomPlaces = randomPlaces || createChewablePlaces(world);
+    this.wires = wires.filter(slot=>this.canSpawn(slot)); this.randomLimits = randomLimits;
+    this.randomPlaces = (randomPlaces || createChewablePlaces(world)).filter(place=>this.canSpawn(place));
     this.reset();
   }
   reset() {
@@ -101,6 +103,10 @@ export class ConsumableSystem {
     for(const [id,pending] of this.pending) if(this.elapsed+1e-9>=pending.at) {
       const fixed=['wire','cake'].includes(pending.item.type);
       const item=fixed ? {...pending.item,...pending.item.spawnPosition} : this.randomItem(id,pending.item.type,player);
+      // Fixed objects return to their authored source, never to a hiding place
+      // that the player pushed them into. Discard an invalid source so a bad
+      // pending entry cannot retry a navigation query forever.
+      if((fixed&&!this.canSpawn(item))||(!fixed&&!this.randomPlaces.length)){this.pending.delete(id);continue;}
       if(!item) continue;
       this.pending.delete(id);
       if(item.type==='cake') { this.addCollider(item); this.items.set(id,item); } else this.addChewable(item);

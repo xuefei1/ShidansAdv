@@ -1,3 +1,5 @@
+import { CONSUMABLE_TYPES } from '../src/consumable-data.js';
+
 const frame=document.getElementById('app'),results=document.getElementById('results'),status=document.getElementById('status');
 const prefix=`shidans-adventure.qa.${crypto.randomUUID()}.`,ownedKeys=new Set();
 // Exercise actual browser persistence under unique test-only keys. Never write
@@ -48,9 +50,10 @@ async function walk(x,z) {
 document.getElementById('run').onclick=async()=>{
   results.replaceChildren();saved.clear();document.getElementById('run').disabled=true;
   try {
-    await load();click('play');check('Blank name cannot start a round',!game().getElementById('welcome').hidden);
+    await load();const initialConsumables=canvas().dataset.consumableCount,initialChewables=canvas().dataset.chewableCount;
+    click('play');check('Blank name cannot start a round',!game().getElementById('welcome').hidden);
     game().getElementById('player-name').value='Happiness QA';click('play');await until(()=>canvas().dataset.mode==='play','Start named run');
-    check('Named round starts with zero happiness and all 22 chewables',score()===0&&canvas().dataset.chewableCount==='22');
+    check('Named round starts with zero happiness and the full initial item population',score()===0&&canvas().dataset.chewableCount===initialChewables&&canvas().dataset.consumableCount===initialConsumables&&Number(initialChewables)>0);
     check('Special hay prompt uses its four-second reward-based hold',game().getElementById('consume-action').textContent.includes('4 seconds'));
     mouse('mousedown');await until(()=>canvas().dataset.lastConsumedId==='den-hay','Eat special hay');mouse('mouseup');check('Permanent hay never farms happiness',score()===0);
     const yaw=Number(canvas().dataset.camera.split(',')[0]);mouse('mousedown');
@@ -59,7 +62,8 @@ document.getElementById('run').onclick=async()=>{
     await until(()=>pos()[0]>-11,'Escape den');key('keyup','KeyD');await until(()=>canvas().dataset.grounded==='true','Land');
     check('First outward den escape spends no energy and uses its daily allowance',Number(canvas().dataset.energy)===100&&canvas().dataset.freeDenJump==='false');
     await walk(-11.7,17.6);await until(()=>canvas().dataset.consumeTarget==='carrot-0','Reach carrot');
-    check('Carrot prompt includes energy, happiness and poop rewards',game().getElementById('consume-energy').textContent==='+20 energy · +10 happiness · +5 poop balls');
+    const carrot=CONSUMABLE_TYPES.carrot;
+    check('Carrot prompt includes energy, happiness and poop rewards',game().getElementById('consume-energy').textContent===`+${carrot.energy} energy · +${carrot.happiness} happiness · +${carrot.poop} poop balls`);
     const carrotPosition=canvas().dataset.consumePosition;
     key('keydown','KeyA');await until(()=>canvas().dataset.consumePosition!==carrotPosition&&canvas().dataset.consumeTarget==='carrot-0','Nudge the carrot');key('keyup','KeyA');
     check('Shidan pushes the carrot and can still eat it',canvas().dataset.consumePosition!==carrotPosition);
@@ -76,14 +80,24 @@ document.getElementById('run').onclick=async()=>{
     click('play');await until(()=>canvas().dataset.mode==='play','Continue named run');check('Continuing preserves happiness',score()===10);
     check('Home and title do not renew the used free jump',canvas().dataset.freeDenJump==='false');
     advance(480);await until(()=>canvas().dataset.dayPhase==='Night','Night');check('Happiness survives the day-night transition',score()===10);
-    advance(120);await until(()=>canvas().dataset.mode==='title','Bedtime saves score');
-    check('Bedtime records the name and score before reset',canvas().dataset.lastScore==='10'&&canvas().dataset.lastPlayer==='Happiness QA'&&score()===0);
-    check('Main screen displays the completed score',game().getElementById('day-ended').textContent.includes('earned 10 happiness'));
+    advance(120);await until(()=>canvas().dataset.mode==='gameover','Bedtime saves score and shows results');
+    check('Bedtime records the completed name and score exactly once',canvas().dataset.lastScore==='10'&&canvas().dataset.lastPlayer==='Happiness QA'&&score()===0&&JSON.parse(saved.get('shidans-adventure.leaderboard.v1')).length===1);
+    check('Game Over displays the final score, player and competition rank',!game().getElementById('game-over').hidden&&game().getElementById('game-over-score').textContent==='10'&&game().getElementById('game-over-player').textContent.includes('Happiness QA')&&game().getElementById('game-over-rank').textContent==='#1 of 1');
+    const finalStats=canvas().dataset.roundStats,stats=JSON.parse(finalStats);
+    check('Round summary counts the completed carrot and special hay but excludes the cancelled hold',stats.consumed.carrot===1&&stats.consumed['den-hay']===1&&stats.consumed.hay===0&&stats.consumedTotal===2&&game().querySelector('#game-over-items [data-item="carrot"] td').textContent==='1');
+    check('The summary includes the free long jump and zero water/urine amounts',stats.longJumps===1&&stats.waterDrunk===0&&stats.urineProduced===0&&stats.puddlesCreated===0);
+    const savedResult=saved.get('shidans-adventure.leaderboard.v1');advance(60);
+    await new Promise(resolve=>frame.contentWindow.requestAnimationFrame(()=>frame.contentWindow.requestAnimationFrame(resolve)));
+    check('Waiting on Game Over preserves the final statistics and does not save again',canvas().dataset.mode==='gameover'&&canvas().dataset.roundStats===finalStats&&saved.get('shidans-adventure.leaderboard.v1')===savedResult);
+    click('game-over-menu');await until(()=>canvas().dataset.mode==='title','Choose the main menu');
+    check('Main-menu choice resets the round while retaining the completed leaderboard',canvas().dataset.dayRemaining==='600.00'&&canvas().dataset.dayPhase==='Noon'&&canvas().dataset.consumableCount===initialConsumables&&game().getElementById('game-over').hidden);
     click('show-leaderboard');check('Leaderboard shows the completed run',game().getElementById('leaderboard-rows').textContent.includes('Happiness QA10'));
     await load();click('show-leaderboard');check('Saved score survives a full game reload',game().getElementById('leaderboard-rows').textContent.includes('Happiness QA10'));click('close-leaderboard');
     game().getElementById('player-name').value='Second player';click('play');await until(()=>canvas().dataset.mode==='play','Start second round');check('New player starts at zero with ten minutes',score()===0&&canvas().dataset.dayRemaining==='600.00');
     check('A fresh day restores the free den escape',canvas().dataset.freeDenJump==='true');
-    advance(600);await until(()=>canvas().dataset.mode==='title','Save zero-score round');click('show-leaderboard');
+    advance(600);await until(()=>canvas().dataset.mode==='gameover','Save zero-score round');
+    check('A lower completed score shows its full-board rank',canvas().dataset.lastScore==='0'&&canvas().dataset.finalRank==='2'&&canvas().dataset.finalRankTotal==='2'&&game().getElementById('game-over-rank').textContent==='#2 of 2');
+    click('game-over-menu');await until(()=>canvas().dataset.mode==='title','Open the menu after the second result');click('show-leaderboard');
     check('Zero scores are saved and scores sort descending',game().querySelectorAll('#leaderboard-rows tr').length===2&&game().querySelector('#leaderboard-rows tr').textContent.includes('Happiness QA10'));
     check('No fatal game error',game().getElementById('fatal').hidden);status.textContent='All happiness browser checks passed.';
   } catch(error) {const li=document.createElement('li');li.className='fail';li.textContent=error.message;results.append(li);status.textContent=error.message;console.error(error);}

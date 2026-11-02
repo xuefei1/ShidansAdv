@@ -9,6 +9,10 @@ import { createWaterFountains } from '../src/fountains.js';
 import { DayClock } from '../src/day-cycle.js';
 import { Leaderboard,HappinessRun } from '../src/happiness.js';
 import { resetAdventure } from '../src/adventure-session.js';
+import { NoiseSystem } from '../src/noise.js';
+import { createNoiseRipples } from '../src/noise-ripples.js';
+import { MistressAI } from '../src/mistress-ai.js';
+import { MistressFootsteps } from '../src/mistress-awareness.js';
 
 test('action lock cancels a charged jump and stops sliding, sprinting and steering until released',()=>{
   const rabbit=new RabbitController(new World()),origin={x:rabbit.x,z:rabbit.z};
@@ -34,16 +38,24 @@ test('restarting creates a fresh named round without saving its abandoned score 
 test('restart during a partially completed pee resets the full world and resources while retaining scene batches',()=>{
   const scene=new THREE.Scene(),{world}=createHouse(scene),controller=new RabbitController(world);
   const water=createWaterFountains(scene,world),consumables=createConsumables(scene,world),poop=createPoopBalls(scene,world);
+  const noise=new NoiseSystem(),noiseRipples=createNoiseRipples(scene,world);
+  const mistress=new MistressAI(world,{random:()=>.5}),mistressRipples=createNoiseRipples(scene,world),navigation=mistress.navigation;
+  const mistressFootsteps=new MistressFootsteps();mistressFootsteps.update(.1,{player:controller,mistress:{position:controller,state:'walking',speed:3.5}});
+  assert.equal(mistressFootsteps.sequence,1);
+  mistressRipples.emit(mistress.update(6),mistress.elapsed);
+  assert.equal(mistress.noise.sequence,1);assert.ok(mistressRipples.count>0);
+  noiseRipples.emit(noise.update(.05,controller,{longJump:true}));
+  assert.equal(noise.sequence,1);assert.ok(noiseRipples.count>0);
   consumables.system.setExternalItems(poop);
   const clock=new DayClock(),board=new Leaderboard(null),happiness=new HappinessRun(board);
   happiness.start('Restart QA');happiness.consume({kind:'consume',happiness:200});
   controller.energy.value=3;controller.freeDenJumpAvailable=false;controller.sprintExhausted=true;
   poop.drop(controller,0);poop.supply.grant(25);
-  water.system.bladder.value=80;water.pee(controller);water.advance(.4,controller);
-  assert.equal(water.system.bladder.value,48);assert.equal(water.system.peeing,true);assert.equal(water.puddles.length,1);
+  water.system.bladder.value=100;water.pee(controller);water.advance(.4,controller);
+  assert.equal(water.system.bladder.value,60);assert.equal(water.system.peeing,true);assert.equal(water.puddles.length,1);
   clock.setActive(true,0);clock.update(100000);
   const nodes=scene.children.slice(),oldId=happiness.id;
-  assert.equal(happiness.restart(),true);resetAdventure({clock,controller,consumables,poop,water},100000);
+  assert.equal(happiness.restart(),true);resetAdventure({clock,controller,consumables,poop,water,noise,noiseRipples,mistress,mistressRipples,mistressFootsteps},100000);
   assert.notEqual(happiness.id,oldId);assert.equal(happiness.score,0);assert.equal(board.entries.length,0);
   assert.equal(clock.remaining,600);assert.equal(clock.active,false);
   assert.equal(controller.x,DEN.x);assert.equal(controller.z,DEN.z);assert.equal(controller.energy.value,100);
@@ -53,4 +65,9 @@ test('restart during a partially completed pee resets the full world and resourc
   assert.equal(consumables.system.target,null);assert.equal(water.system.peeing,false);
   assert.equal(water.system.bladder.value,0);assert.equal(water.system.cooldownRemaining,0);
   assert.equal(water.puddles.length,0);assert.deepEqual(scene.children,nodes);
+  assert.equal(noise.sequence,0);assert.equal(noise.events.length,0);assert.equal(noiseRipples.count,0);assert.equal(noiseRipples.visibleCount,0);
+  assert.equal(mistress.elapsed,0);assert.equal(mistress.activity,'phone');assert.equal(mistress.state,'acting');
+  assert.equal(mistress.noise.sequence,0);assert.equal(mistressRipples.count,0);assert.equal(mistressRipples.visibleCount,0);
+  assert.equal(mistress.navigation,navigation);
+  assert.equal(mistressFootsteps.elapsed,0);assert.equal(mistressFootsteps.sequence,0);assert.equal(mistressFootsteps.ripples.length,0);
 });

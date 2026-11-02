@@ -122,7 +122,7 @@ export function createWaterFountains(scene, world) {
     mesh.name=`Pee puddles layer ${index}`;mesh.count=0;mesh.frustumCulled=false;mesh.receiveShadow=true;
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);group.add(mesh);return mesh;
   });
-  const puddles=[];
+  const puddles=[];let puddleSequence=0;
   function syncPuddles() {
     for(const mesh of puddleMeshes) mesh.count=0;
     for(const event of puddles) {
@@ -141,7 +141,17 @@ export function createWaterFountains(scene, world) {
     },
     pee(player) {
       const event=system.pee(player);if(!event) return null;
+      // Keep identity stable while instances compact or the cap replaces an
+      // old puddle. IDs do not repeat when a new round resets this view.
+      event.id=++puddleSequence;
       if(puddles.length===MAX_PUDDLES) puddles.shift();puddles.push(event);syncPuddles();return event;
+    },
+    removePuddle(puddle) {
+      if(!puddle||!(puddle.progress>=1))return false;
+      const index=puddles.indexOf(puddle);if(index<0)return false;
+      // Cleanup affects scenery only. The bladder and action cooldown belong
+      // to WaterSystem and must survive removal of a completed puddle.
+      puddles.splice(index,1);syncPuddles();return true;
     },
     reset() {system.reset();puddles.length=0;syncPuddles();syncWater();},
     setUpperVisible(visible) {groups[1].visible=visible;},

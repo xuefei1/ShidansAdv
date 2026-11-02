@@ -30,6 +30,13 @@ export class Leaderboard {
     } catch { this.saved=false; }
     return this.saved;
   }
+  rank(result) {
+    const score=typeof result==='number'?result:result?.score;
+    if(!Number.isSafeInteger(score)||score<0)return null;
+    // Competition ranking counts every strictly higher completed run. Equal
+    // scores share a rank, including earlier runs under the same player name.
+    return 1+this.entries.reduce((higher,entry)=>higher+(entry.score>score?1:0),0);
+  }
   get name() { try { return playerName(this.storage?.getItem(PLAYER_NAME_KEY)); } catch { return ''; } }
   rememberName(name) { try { this.storage?.setItem(PLAYER_NAME_KEY,playerName(name)); } catch { /* Scoring still works. */ } }
 }

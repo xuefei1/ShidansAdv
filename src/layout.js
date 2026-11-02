@@ -39,7 +39,7 @@ const window = (at, width = 2.4) => ({ at, width, bottom: .42, top: 2.65, kind: 
 const glazed = (at, width = 2.8) => ({ at, width, bottom: .85, top: 3.15, kind: 'glazed-window' });
 const tunnel = at => ({ at, width: 1.8, bottom: 0, top: 1.6, kind: 'tunnel' });
 // One source for real wall openings, collision and the floor plan. Portal sizes
-// also describe constraints for the future pursuer; no enemy AI is enabled yet.
+// also describe the human pursuer's clearance constraints.
 export const WALLS = [];
 const wall = (id, axis, fixed, start, end, floor, openings = [], color = 0xf2e7cc) => WALLS.push({ id, axis, fixed, start, end, floor, openings, color });
 for (const floor of [0, 1]) {
@@ -56,7 +56,6 @@ wall('lounge-hall', 'z', -5, 2, 20, 0, [door(6), window(11), door(17)], 0xeee2c9
 wall('kitchen-hall', 'z', 5, 2, 20, 0, [door(7), window(11), door(17)], 0xdce3c8);
 wall('front-hall', 'x', 2, -24, 24, 0, [door(-14, 3.5), door(0, 8.5), door(17, 3.5)]);
 wall('shelf-passage', 'z', -21, -19.5, -3.5, 0, [tunnel(-17), tunnel(-6)], 0xbda485);
-wall('linen-passage', 'z', 21, -19.5, -3.5, 1, [tunnel(-17), tunnel(-6)], 0xb2c2bd);
 
 export const PORTALS = Object.freeze(WALLS.flatMap(w => w.openings.map((o, i) => ({
   id: `${w.id}-${i}`, kind: o.kind, floor: w.floor, width: o.width, clearance: o.top - o.bottom,

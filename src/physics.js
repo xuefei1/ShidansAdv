@@ -130,7 +130,7 @@ export class RabbitController {
   reset() {
     this.x = DEN.x; this.y = 0; this.z = DEN.z; this.vx = 0; this.vy = 0; this.vz = 0;
     this.facing = Math.PI; this.grounded = true; this.surface = 'bedding'; this.charge = 0;
-    this.charging = false; this.jumpHeld = false; this.lastJump = null; this.lastJumpFree = false; this.lastLanding = false; this.longJumping = false;
+    this.charging = false; this.jumpHeld = false; this.lastJump = null; this.lastJumpPosition=null;this.lastJumpFree = false; this.lastLanding = false; this.longJumping = false;
     this.sprinting = false; this.jumpEnergyBlocked = false; this.pushing=false;this.lastPushedId='';
   }
   // Home/title navigation resets position only. A new day restores the single
@@ -146,13 +146,20 @@ export class RabbitController {
   jumpCost(charge = this.charge,input = {}) { return this.isFreeDenJump(input) ? 0 : highJumpCost(charge); }
   releaseInput() { this.jumpHeld = false; this.charging = false; this.charge = 0; }
   update(dt, input = {}) {
+    if(input.captured) {
+      // Being held is different from peeing: gravity must not carry Shidan
+      // away from the catch point during the three-second return delay.
+      this.releaseInput();this.vx=this.vy=this.vz=0;this.sprinting=false;
+      this.lastJump=null;this.lastJumpPosition=null;this.lastJumpFree=false;this.lastLanding=false;this.jumpEnergyBlocked=false;
+      this.energy.update(clamp(dt,0,.1));return;
+    }
     if(input.locked) {
       this.releaseInput();this.vx=this.vz=0;this.sprinting=false;
       input={};
     }
     // Small substeps prevent tunnelling at low framerates, including the circular fence.
     const duration = clamp(dt, 0, .1), n = Math.max(1, Math.ceil(duration / (1 / 120)));
-    this.lastJump = null; this.lastJumpFree = false; this.lastLanding = false; this.jumpEnergyBlocked = false;
+    this.lastJump = null; this.lastJumpPosition=null;this.lastJumpFree = false; this.lastLanding = false; this.jumpEnergyBlocked = false;
     for (let i = 0; i < n; i++) this.step(duration / n, input);
   }
   step(dt, input) {
@@ -183,6 +190,7 @@ export class RabbitController {
         this.vy = long ? 6 + power * 2.25 : 4.2;
         this.longJumping = long;
         if (long && moving) { this.vx = dx * (3.8 + power * 2); this.vz = dz * (3.8 + power * 2); }
+        this.lastJumpPosition={x:this.x,y:this.y,z:this.z};
         this.grounded = false; this.lastJump = long ? 'long' : 'hop';
       }
       this.charging = false; this.charge = 0;

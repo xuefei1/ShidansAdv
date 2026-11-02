@@ -48,16 +48,16 @@ test('the first held frame credits only time after the input event',()=>{
   system.advance(.15,p);assert.equal(system.bladder.value,1.75);
 });
 test('pee takes exactly one active second, empties linearly and starts the drinking restriction at the beginning',()=>{
-  const {system,p}=setup();system.start(p);system.advance(2.5,p);
+  const {system,p}=setup();system.bladder.value=75;system.start(p);system.advance(2.5,p);
   const event=system.pee(p);
-  assert.deepEqual(event,{kind:'pee',x:.9,y:0,z:0,amount:25,progress:0});
-  assert.equal(system.bladder.value,25);assert.equal(system.drinking,false);assert.equal(system.peeing,true);
+  assert.deepEqual(event,{kind:'pee',x:.9,y:0,z:0,amount:100,progress:0});
+  assert.equal(system.bladder.value,100);assert.equal(system.drinking,false);assert.equal(system.peeing,true);
   assert.equal(PEE_SECONDS,1);assert.equal(system.peeRemaining,1);
   assert.equal(DRINK_COOLDOWN,60);assert.equal(system.cooldownRemaining,60);assert.equal(system.start(p),false);
-  system.advance(.1,p);assert.equal(system.bladder.value,22.5);assert.equal(event.progress,.1);assert.equal(system.peeRemaining,.9);
-  system.advance(.4,p);assert.equal(system.bladder.value,12.5);assert.equal(system.peeProgress,.5);
+  system.advance(.1,p);assert.equal(system.bladder.value,90);assert.equal(event.progress,.1);assert.equal(system.peeRemaining,.9);
+  system.advance(.4,p);assert.equal(system.bladder.value,50);assert.equal(system.peeProgress,.5);
   system.advance(.499,p);assert.equal(system.peeing,true);assert.equal(system.peeRemaining,.001);
-  close(system.bladder.value,.025);
+  close(system.bladder.value,.1);
   system.advance(.001,p);assert.equal(system.peeing,false);assert.equal(system.peeProgress,1);assert.equal(event.progress,1);
   assert.equal(system.bladder.value,0);assert.equal(system.peeRemaining,0);assert.equal(system.cooldownRemaining,59);
   system.advance(58.9,p);assert.equal(system.cooldownRemaining,.1);assert.equal(system.start(p),false);
@@ -67,9 +67,9 @@ test('pee takes exactly one active second, empties linearly and starts the drink
 });
 test('one-second pee remains precise at different frame rates and across a large delta',()=>{
   for(const fps of [30,60,144]) {
-    const {system,p}=setup();system.bladder.value=37.5;const event=system.pee(p);
+    const {system,p}=setup();system.bladder.value=100;const event=system.pee(p);
     for(let i=0;i<fps/2;i++)system.advance(1/fps,p);
-    assert.equal(system.peeProgress,.5);assert.equal(system.bladder.value,18.75);
+    assert.equal(system.peeProgress,.5);assert.equal(system.bladder.value,50);
     for(let i=0;i<fps/2;i++)system.advance(1/fps,p);
     assert.equal(system.peeing,false);assert.equal(system.bladder.value,0);assert.equal(event.progress,1);
     assert.equal(system.cooldownRemaining,59);
@@ -78,9 +78,9 @@ test('one-second pee remains precise at different frame rates and across a large
   assert.equal(system.bladder.value,0);assert.equal(system.peeProgress,1);assert.equal(system.cooldownRemaining,56.75);
 });
 test('pee cannot be cancelled by drinking stop or pause, and blocks overlapping pee/drinking actions',()=>{
-  const {system,p}=setup();system.bladder.value=70;const event=system.pee(p);
+  const {system,p}=setup();system.bladder.value=100;const event=system.pee(p);
   system.advance(.25,p);system.stop();system.advance(0,p);
-  assert.equal(system.peeing,true);assert.equal(system.bladder.value,52.5);assert.equal(system.peeRemaining,.75);
+  assert.equal(system.peeing,true);assert.equal(system.bladder.value,75);assert.equal(system.peeRemaining,.75);
   assert.equal(system.start(p),false);assert.equal(system.drinking,false);assert.equal(system.pee(p),null);
   assert.equal(system.peeEvent,event);system.advance(.75,{...p,x:20,grounded:false});
   assert.equal(system.peeing,false);assert.equal(event.progress,1);assert.equal(system.bladder.value,0);
@@ -88,8 +88,29 @@ test('pee cannot be cancelled by drinking stop or pause, and blocks overlapping 
 });
 test('empty Q presses do not create events or extend the drinking cooldown',()=>{
   const {system,p}=setup();assert.equal(system.pee(p),null);assert.equal(system.cooldownRemaining,0);
-  system.start(p);system.advance(.1,p);system.pee(p);system.advance(3,p);
+  system.bladder.value=100;assert.ok(system.pee(p));system.advance(3,p);
   assert.equal(system.pee(p),null);assert.equal(system.cooldownRemaining,57);
+});
+test('pee requires an exactly full bladder and rejects incomplete or invalid values without side effects',()=>{
+  for(const value of [0,1,50,99,99.99,99.999999,100.000001,-1,NaN,Infinity]) {
+    const {system,p,item}=setup();assert.equal(system.start(p),true);system.advance(.15,p);
+    system.bladder.value=value;
+    const before={target:system.target,elapsed:system.elapsed,readyAt:system.readyAt,peeEvent:system.peeEvent,peeElapsed:system.peeElapsed,drinkStart:system.drinkStart,drinkSourceStart:system.drinkSourceStart,drinkElapsed:system.drinkElapsed,waterRevision:system.waterRevision,remaining:system.remaining(item)};
+    assert.equal(system.pee(p),null,`${value} must not begin peeing`);
+    assert.ok(Object.is(system.bladder.value,value));assert.equal(system.drinking,true);
+    assert.deepEqual({target:system.target,elapsed:system.elapsed,readyAt:system.readyAt,peeEvent:system.peeEvent,peeElapsed:system.peeElapsed,drinkStart:system.drinkStart,drinkSourceStart:system.drinkSourceStart,drinkElapsed:system.drinkElapsed,waterRevision:system.waterRevision,remaining:system.remaining(item)},before);
+  }
+});
+test('rejected partial-bladder pee leaves active drinking uninterrupted until exactly 100 percent',()=>{
+  const {system,p,item}=setup();system.start(p);system.advance(.1,p);
+  assert.equal(system.bladder.value,1);assert.equal(system.remaining(item),99);
+  assert.equal(system.pee(p),null);assert.equal(system.drinking,true);assert.equal(system.cooldownRemaining,0);
+  system.advance(9.8999,p);assert.equal(system.bladder.value,99.999);assert.equal(system.pee(p),null);
+  assert.equal(system.drinking,true);system.advance(.0001,p);
+  assert.equal(system.bladder.value,100);assert.equal(system.remaining(item),0);
+  const event=system.pee(p);assert.equal(event.amount,100);assert.equal(system.cooldownRemaining,60);
+  system.advance(.5,p);assert.equal(system.bladder.value,50);assert.equal(system.peeing,true);
+  system.advance(.5,p);assert.equal(system.bladder.value,0);assert.equal(system.peeing,false);
 });
 test('full bladder consumes only the missing water and leaves the unused reservoir for a later visit',()=>{
   const {system,p,item}=setup();
@@ -147,10 +168,10 @@ test('the closest reachable fountain is selected, with its own basin excluded fr
 test('Q during a hop places the puddle on static support, ignoring movable food',()=>{
   const {world,system,p}=setup();world.addBox(.9,.25,0,1,.5,1);
   const food=world.addDynamicBox(.9,.6,0,.5,.2,.5);food.pushable=true;
-  system.bladder.value=12;assert.equal(system.pee({...p,y:1.2,grounded:false}).y,.5);
+  system.bladder.value=100;assert.equal(system.pee({...p,y:1.2,grounded:false}).y,.5);
 });
 test('new day resets water, cooldown and held interaction without removing fountains',()=>{
-  const {system,p}=setup();system.start(p);system.advance(5,p);system.pee(p);system.reset();
+  const {system,p}=setup();system.start(p);system.advance(10,p);system.pee(p);system.reset();
   assert.equal(system.bladder.value,0);assert.equal(system.cooldownRemaining,0);assert.equal(system.elapsed,0);
   assert.equal(system.drinking,false);assert.equal(system.peeing,false);assert.equal(system.peeEvent,null);
   assert.equal(system.peeProgress,0);assert.equal(system.peeRemaining,0);assert.equal(system.items.length,1);assert.equal(system.start(p),true);
@@ -244,13 +265,24 @@ test('finite pools shrink, empty stations lose their water/stream, and a new day
   assert.equal(basin.uuid,shellUUID);assert.equal(liquid.uuid,poolUUID);assert.equal(stream.uuid,streamUUID);
   assert.equal(world.solids.length,solids.length);world.solids.forEach((collider,index)=>assert.equal(collider,solids[index]));
 });
+test('partial-bladder pee creates no rendered puddle, consumes no water and leaves drinking active',()=>{
+  const fixtures=createWaterFountains(new THREE.Scene(),new World()),item=fixtures.items.find(f=>f.room==='front-yard');
+  const p=player(item.x+.9,item.y,item.z);assert.equal(fixtures.system.start(p),true);fixtures.advance(.1,p);
+  const versions=fixtures.puddleMeshes.map(mesh=>mesh.instanceMatrix.version);
+  assert.equal(fixtures.pee(p),null);assert.equal(fixtures.system.bladder.value,1);assert.equal(fixtures.system.remaining(item),99);
+  assert.equal(fixtures.system.drinking,true);assert.equal(fixtures.system.peeing,false);assert.equal(fixtures.system.cooldownRemaining,0);
+  assert.equal(fixtures.puddles.length,0);assert.ok(fixtures.puddleMeshes.every(mesh=>mesh.count===0));
+  assert.deepEqual(fixtures.puddleMeshes.map(mesh=>mesh.instanceMatrix.version),versions);
+  fixtures.advance(9.9,p);assert.equal(fixtures.system.bladder.value,100);
+  assert.equal(fixtures.pee(p).amount,100);assert.equal(fixtures.puddles.length,1);
+});
 test('puddles persist, have bounded instanced rendering, respect upper-floor hiding and reset on a new day',()=>{
   water.reset();const p=player(11,0,29.5);
   assert.equal(water.pee(p),null);
-  for(let i=0;i<MAX_PUDDLES+7;i++) {water.system.bladder.value=25;water.pee({...p,x:11+i*.001});water.advance(60,p);}
+  for(let i=0;i<MAX_PUDDLES+7;i++) {water.system.bladder.value=100;water.pee({...p,x:11+i*.001});water.advance(60,p);}
   assert.equal(water.puddles.length,MAX_PUDDLES);assert.equal(water.puddleMeshes.reduce((sum,mesh)=>sum+mesh.count,0),MAX_PUDDLES);
   assert.equal(water.puddles[0].x,11.007);
-  water.system.bladder.value=50;water.pee(player(-10,FLOOR_HEIGHT,-5));
+  water.system.bladder.value=100;water.pee(player(-10,FLOOR_HEIGHT,-5));
   const upper=water.puddleMeshes[1],matrix=new THREE.Matrix4();upper.getMatrixAt(0,matrix);
   close(matrix.elements[13],FLOOR_HEIGHT+PUDDLE_CLEARANCE,1e-6); // GPU matrices use float32.
   for(const mesh of water.puddleMeshes) {assert.equal(mesh.isInstancedMesh,true);assert.equal(mesh.material.polygonOffset,true);assert.equal(mesh.material.depthWrite,false);}
@@ -281,7 +313,7 @@ test('same-location puddles retain stable instance order and blend without depth
   const isolated=new THREE.Scene(),fixtures=createWaterFountains(isolated,new World()),p=player(0,0,0);
   fixtures.system.bladder.value=100;const first=fixtures.pee(p);fixtures.advance(60,p);
   const mesh=fixtures.puddleMeshes[0],original=new THREE.Matrix4();mesh.getMatrixAt(0,original);
-  fixtures.system.bladder.value=25;const second=fixtures.pee(p);fixtures.advance(.5,p);
+  fixtures.system.bladder.value=100;const second=fixtures.pee(p);fixtures.advance(.5,p);
   const growing=new THREE.Matrix4(),preserved=new THREE.Matrix4();mesh.getMatrixAt(0,preserved);mesh.getMatrixAt(1,growing);
   assert.deepEqual(preserved.elements,original.elements,'A new overlapping patch never reorders or shifts the old instance');
   assert.equal(preserved.elements[13],growing.elements[13],'Both patches occupy the same support plane');

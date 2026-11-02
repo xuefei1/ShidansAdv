@@ -1,6 +1,6 @@
 import { WALLS, ROOMS, LANDMARKS, DEN, RAMPS, HOUSE, BOUNDS, FLOOR_HEIGHT } from './layout.js';
 
-export function drawLevelMap(ctx, width, height, player, floor, discovered, large = false) {
+export function drawLevelMap(ctx, width, height, player, floor, discovered, large = false, cues = {}) {
   const lotWidth = BOUNDS.maxX - BOUNDS.minX, lotDepth = BOUNDS.maxZ - BOUNDS.minZ;
   const scale = Math.min((width - 28) / (lotWidth + 2), (height - 28) / (lotDepth + 2));
   const tx = x => width / 2 + (x - (BOUNDS.minX + BOUNDS.maxX) / 2) * scale;
@@ -54,9 +54,31 @@ export function drawLevelMap(ctx, width, height, player, floor, discovered, larg
     ctx.fillStyle = discovered.has(l.id) ? '#728b55' : '#be9a56'; ctx.fill();
     if (large) { ctx.fillStyle = '#fffbed'; ctx.font = '11px Segoe UI'; ctx.textAlign = 'center'; ctx.fillText(discovered.has(l.id) ? '✓' : String(index + 1), tx(l.x), tz(l.z) + 4); }
   });
+  // Hearing gives a short-lived area cue, including through walls and from a
+  // nearby floor. Only current camera sight supplies the exact red marker.
+  const validPoint=p=>p&&['x','y','z'].every(axis=>Number.isFinite(p[axis]));
+  const floorTag=point=>(point.y>=FLOOR_HEIGHT-.25?1:0)===floor ? '' : point.y>=FLOOR_HEIGHT-.25 ? '↑' : '↓';
+  ctx.save();
+  for(const ripple of cues.ripples || []) {
+    if(!validPoint(ripple) || !Number.isFinite(ripple.radius) || !Number.isFinite(ripple.opacity) || !(ripple.radius>0) || !(ripple.opacity>0))continue;
+    ctx.globalAlpha=Math.min(1,ripple.opacity);ctx.strokeStyle='#c8434e';ctx.lineWidth=large?3:2;
+    ctx.beginPath();ctx.arc(tx(ripple.x),tz(ripple.z),Math.max(1,ripple.radius*scale),0,Math.PI*2);ctx.stroke();
+    const tag=floorTag(ripple);
+    if(tag) {ctx.fillStyle='#c8434e';ctx.font=large?'bold 13px Segoe UI':'bold 10px Segoe UI';ctx.textAlign='center';ctx.fillText(tag,tx(ripple.x)+6,tz(ripple.z)-5);}
+  }
+  ctx.restore();
   if ((player.y >= FLOOR_HEIGHT - .25 ? 1 : 0) === floor) {
     ctx.save(); ctx.translate(tx(player.x), tz(player.z)); ctx.rotate(-player.facing + Math.PI);
     ctx.fillStyle = '#3d5742'; ctx.strokeStyle = '#fff7db'; ctx.lineWidth = 1.5; ctx.beginPath();
     ctx.moveTo(0, -7); ctx.lineTo(-4.5, 5); ctx.lineTo(4.5, 5); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
   }
+  ctx.save();
+  const mistress=cues.mistress;
+  if(validPoint(mistress)) {
+    ctx.globalAlpha=1;ctx.beginPath();ctx.arc(tx(mistress.x),tz(mistress.z),large?5:3.5,0,Math.PI*2);
+    ctx.fillStyle='#c8434e';ctx.strokeStyle='#fff7e6';ctx.lineWidth=1.4;ctx.fill();ctx.stroke();
+    const tag=floorTag(mistress);
+    if(tag) {ctx.fillStyle='#c8434e';ctx.font=large?'bold 13px Segoe UI':'bold 10px Segoe UI';ctx.textAlign='center';ctx.fillText(tag,tx(mistress.x)+7,tz(mistress.z)-5);}
+  }
+  ctx.restore();
 }

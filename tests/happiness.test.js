@@ -29,7 +29,7 @@ function beside(item,world,system=null) {
 
 test('all item rewards require a completed hold and award once, even at full energy',()=>{
   const board=new Leaderboard(memory()),run=runFor(board);run.start('Alex');
-  for(const [type,points,energy] of [['carrot',10,20],['hay',0,25],['apple',50,25],['rabbitFood',80,20],['banana',40,20],['bread',20,30],['noodles',10,30],['cake',150,50],['book',20,10],['wire',150,0],['cardboard',100,20],['slippers',200,0]]) {
+  for(const [type,points,energy] of [['carrot',10,20],['hay',0,40],['apple',50,25],['rabbitFood',80,20],['banana',40,20],['bread',20,30],['noodles',10,30],['cake',150,50],['book',20,10],['wire',150,0],['cardboard',100,20],['slippers',200,0]]) {
     const w=new World(),p=new RabbitController(w);Object.assign(p,{x:0,y:0,z:0});
     const item={id:type,type,x:.9,y:0,z:0};
     const s=new ConsumableSystem(w,{slots:[item],wires:[],randomLimits:{}}),seconds=consumptionSeconds(item);
@@ -208,4 +208,24 @@ test('leaderboard handles corrupt entries, duplicate saves, sequential tabs and 
   storage.setItem(LEADERBOARD_KEY,JSON.stringify([record('ok',20),record('bad',-2),record('bad2',1.5),{name:'bad'}]));
   assert.deepEqual(new Leaderboard(storage).entries.map(e=>e.id),['ok']);
   assert.equal(playerName('  A\u0000  B  '),'A B');assert.equal([...playerName('🐰'.repeat(30))].length,24);
+});
+
+test('final rank uses the full leaderboard with competition ties and separate runs under the same name',()=>{
+  const board=new Leaderboard(memory());
+  for(let index=0;index<14;index++)board.record(record(`older-${index}`,200-index*10,'Alex'));
+  board.record(record('tie-a',80,'Alex'));board.record(record('tie-b',80,'Alex'));
+  assert.equal(board.entries.length,16);
+  assert.equal(board.rank({score:80}),13,'twelve strictly higher runs put every 80-point run at rank thirteen');
+  assert.equal(board.rank({score:0}),17,'rank is not limited to the top ten displayed rows');
+  assert.equal(board.rank({score:200}),1);assert.equal(board.rank(210),1);
+  const reloaded=new Leaderboard(board.storage);assert.equal(reloaded.rank({score:80}),13);
+  for(const bad of [null,undefined,-1,1.5,NaN,Infinity,'80',{}, {score:-1}])assert.equal(board.rank(bad),null);
+});
+
+test('a finished score can be ranked once after storage failure without recording an unfinished restart',()=>{
+  const storage={getItem(){throw Error('blocked');},setItem(){throw Error('quota');}},board=new Leaderboard(storage);
+  board.record(record('earlier',100));const run=runFor(board);run.start('Alex');run.consume({kind:'consume',happiness:80});
+  const result=run.finish(expired());assert.equal(board.saved,false);assert.equal(board.rank(result),2);assert.equal(board.entries.length,2);
+  assert.equal(run.finish(expired()),null);assert.equal(board.entries.length,2);
+  run.restart();assert.equal(board.entries.length,2);assert.equal(run.score,0);assert.equal(board.rank(result),2);
 });

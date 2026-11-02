@@ -8,6 +8,7 @@ export function createPoopBalls(scene, world) {
   mesh.name = 'Persistent poop balls'; mesh.count = 0; mesh.castShadow = false; mesh.receiveShadow = true;
   mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); mesh.frustumCulled = false; scene.add(mesh);
   const transform = new THREE.Object3D();
+  const hasBall=ball=>!!ball&&physics.balls[ball.slot]===ball;
   return {
     physics, supply,
     reset() { physics.reset(); supply.reset(); mesh.count = 0; mesh.instanceMatrix.clearUpdateRanges(); },
@@ -20,7 +21,9 @@ export function createPoopBalls(scene, world) {
         yield ball.pickup;
       }
     },
-    has(item) { return item?.type === 'poop' && !!item.ball && physics.balls[item.ball.slot] === item.ball; },
+    hasBall,
+    remove(ball) { return physics.remove(ball); },
+    has(item) { return item?.type === 'poop' && hasBall(item.ball); },
     consume(item, player) {
       if (item?.type !== 'poop' || !physics.remove(item.ball)) return false;
       player.energy.consume(5);

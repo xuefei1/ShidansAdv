@@ -35,3 +35,15 @@ The 0.5.0 expansion adds original procedural cable coils with plugs, taped cardb
 The covered-house revision adds original code-authored pitched roof prisms, cream fascia, ceiling slabs and high stair-hall enclosure. No third-party assets or textures were added.
 
 Version 0.6.0 adds original procedural water fountains, reservoir/stream visuals and gold puddles in `src/fountains.js`, plus joint-based eating, drinking and crouching animations in `src/model.js`. These use the existing project license and local geometry only; no external assets, fonts or downloads were added.
+
+The noise revision adds original instanced ring geometry and a soft ripple shader in `src/noise-ripples.js`. It uses the existing project license, with no new external assets or dependencies.
+
+The mistress is an original procedural, jointed character in `src/mistress-model.js`, with original phone, book and mop props. Household laughing/cooking cues are synthesized locally in `src/audio.js`. No external character, animation or sound assets are downloaded; these additions use the project license.
+
+The forward-view floor pattern in `src/mistress-cone.js`, warning SVG/CSS and short alert tones are original procedural assets under the project license. They add no downloaded assets or runtime dependencies.
+
+The noise-cover badge, angry eyebrows/scolding gesture and additional household task animations and synthesized cues are also original procedural assets. Existing geometry and prop pools are reused for the expanded routines; no external downloads or runtime dependencies were added.
+
+Waste cleanup reuses the original cloth/mop geometry with procedural pickup/wiping poses, plus original rage-badge styling. No external art, animation or audio assets were added.
+
+The Game Over layout, score cards and statistics table are original HTML/CSS and reuse the existing rabbit favicon. No external assets or dependencies were added.

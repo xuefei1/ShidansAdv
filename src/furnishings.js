@@ -1,6 +1,8 @@
+import * as THREE from '../vendor/three.module.js';
 import { DEN, FLOOR_HEIGHT as H, BOUNDS } from './layout.js';
 import { palette as P, cylinder, sceneryEllipsoid as ellipsoid, beam } from './model.js';
 import { applySurfaceOverlay } from './surface-materials.js';
+import { markTabletop } from './table-refuges.js';
 
 export function furnishHouse({ ground: g, upper: u, outside: o, solid: s, detail: d, world, label }) {
   const rug = (p, x, y, z, w, depth, color) => {
@@ -31,7 +33,8 @@ export function furnishHouse({ ground: g, upper: u, outside: o, solid: s, detail
     ellipsoid(p, 0xd9b875, x + w * .2, y + h * .2, z + .065, w * .12, w * .12, .01);
   };
   const table = (p, x, y, z, w, depth, top, color = P.wood, id = 'table') => {
-    s(p, color, x, y + top - .09, z, w, .18, depth, 'wood', `${id}-top`);
+    const mesh=s(p, color, x, y + top - .09, z, w, .18, depth, 'wood', `${id}-top`);
+    markTabletop(mesh.userData.collider,y);
     for (const dx of [-1, 1]) for (const dz of [-1, 1]) s(p, 0xae8c65, x + dx * (w / 2 - .2), y + (top - .18) / 2, z + dz * (depth / 2 - .2), .16, top - .18, .16);
   };
   const stool = (p, x, y, z, w, depth, top, color = P.peach, surface = 'wood', id) => {
@@ -68,6 +71,35 @@ export function furnishHouse({ ground: g, upper: u, outside: o, solid: s, detail
   const paw = (p, x, y, z, angle = 0) => {
     const print = ellipsoid(p, 0xb89970, x, y + .014, z, .09, .003, .12); print.rotation.y = angle; print.castShadow = false;
     for (const dx of [-.07, 0, .07]) ellipsoid(p, 0xb89970, x + dx, y + .014, z - .15, .028, .003, .035).castShadow = false;
+  };
+  const shelfRamp = (parent, metadata, {id,x,width,startZ,endZ,startHeight,endHeight}) => {
+    // Shallow real step boxes follow the smooth visible slope within 2.1 cm.
+    // They use ordinary furniture collision, so no ground-floor ramp or human
+    // stair graph is created underneath this upstairs-only piece of furniture.
+    const count=24;
+    for(let i=0;i<count;i++) {
+      const a=startZ+(endZ-startZ)*i/count,b=startZ+(endZ-startZ)*(i+1)/count;
+      const top=H+startHeight+(endHeight-startHeight)*(i+1)/count;
+      const collider=world.addBox(x,(H+top)/2,(a+b)/2,width,top-H,Math.abs(b-a),'carpet');
+      collider.id=`${id}-step-${i}`;collider.reachableShelf=metadata;collider.rabbitRamp=true;
+      world.fixtures?.set(collider.id,collider);
+    }
+    const left=x-width/2,right=x+width/2;
+    const corners=[[left,H,startZ],[right,H,startZ],[right,H,endZ],[left,H,endZ],
+      [left,H+startHeight+.02,startZ],[right,H+startHeight+.02,startZ],
+      [right,H+endHeight,endZ],[left,H+endHeight,endZ]];
+    const positions=[],colors=[],wood=new THREE.Color(0xbda783),carpet=new THREE.Color(0x9fbeb1);
+    for(const [face,indices] of [[0,[0,3,2,1]],[1,[0,1,5,4]],[2,[3,7,6,2]],
+      [3,[0,4,7,3]],[4,[1,2,6,5]],[5,[4,5,6,7]]]) {
+      const color=face===5?carpet:wood;
+      for(const index of [indices[0],indices[1],indices[2],indices[0],indices[2],indices[3]]) {
+        positions.push(...corners[index]);colors.push(color.r,color.g,color.b);
+      }
+    }
+    const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+    geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geometry.computeVertexNormals();
+    const mesh=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({vertexColors:true,roughness:1}));
+    mesh.name=id;mesh.castShadow=true;mesh.receiveShadow=true;parent.add(mesh);
   };
 
   // Den: clear central runway and props near the perimeter, leaving room to charge.
@@ -131,7 +163,10 @@ export function furnishHouse({ ground: g, upper: u, outside: o, solid: s, detail
     stool(g, x, 0, z, 1.1, 1.1, .68, P.sage);
     s(g, 0xb8c69f, x, 1.12, z + (z < 15 ? -.5 : .5), 1.04, 1.15, .13);
   }
-  chest(g, 10.7, 0, 15, 1.25, 1.12, 1.6, 0xe7bd96, 'dining-climb');
+  // Extend the final stepping chest just beneath the table's western edge.
+  // A small horizontal overlap leaves her grounded while lining up the hop,
+  // instead of dropping into the old 27.5 cm gap before reaching the tabletop.
+  chest(g, 10.7, 0, 15, 1.9, 1.12, 1.6, 0xe7bd96, 'dining-climb');
   stool(g, 9.5, 0, 15, 1.2, 1.4, .72, P.peach); book(g, 8.4, 0, 15, .9, .32, 1.1, P.blue);
   label(g, 'KITCHEN & DINING', 12, 2.3, 2.14, 3.2, .5);
   for (const x of [-20, -8, 10, 22]) plant(g, x, 0, -.5, .9);
@@ -199,7 +234,7 @@ export function furnishHouse({ ground: g, upper: u, outside: o, solid: s, detail
   for (const x of [-5.65, -4.35, 7.35, 8.65]) stool(u, x, H, -12, .9, 2.1, .32, 0xdacdaa, 'carpet');
   label(u, 'ONE MORE CHAPTER', 3.9, H + 3, -19.85, 3.5, .5);
 
-  // Studio: desktop route and a second secret passage behind the linen cupboards.
+  // Studio: desktop route and two open shelf tiers with carpeted access ramps.
   table(u, 14, H, -12, 4.4, 2.1, 1.46, 0xdcc199, 'studio-desk');
   book(u, 14, H, -8.6, 1.1, .29, .9, P.peach, 'desk-book-step');
   stool(u, 14, H, -9.6, 1.3, 1.2, .65, P.blue, 'carpet', 'desk-stool');
@@ -209,12 +244,25 @@ export function furnishHouse({ ground: g, upper: u, outside: o, solid: s, detail
   d(u,0xafd0d0,15.5,H+1.91,-12.533,.96,.6,.01);
   s(u,0x7c8993,15.5,H+1.52,-12.6,.5,.12,.35,'wood','computer-base');
   s(u,0xc7d3d0,15.5,H+1.49,-11.9,.8,.06,.3,'wood','keyboard');
-  for (const z of [-13.8, -10]) {
-    s(u, 0xc1d0c5, 20.4, H + 1.35, z, 1, 2.7, 3);
-    for (let i = 0; i < 4; i++) d(u, 0x9fb9ac, 19.88, H + .5 + i * .58, z, .02, .03, 2.8);
-  }
-  s(u, 0xc9d7c6, 22.5, H + 1.72, -11.5, 2.8, .22, 16.04, 'wood', 'linen-tunnel-ceiling');
-  for (let z = -16; z < -6; z += 1.5) paw(u, 22.5, H, z);
+  const linenShelf=Object.freeze({id:'linen-shelf',baseY:H,
+    spawnKeepClear:Object.freeze({x:19.95,z:-12.3,radius:1.3})});
+  const shelfPart=(mesh,deck=false)=>{
+    mesh.userData.collider.reachableShelf=linenShelf;
+    if(deck)mesh.userData.collider.shelfDeck=true;
+    return mesh;
+  };
+  // Staggered decks give Shidan's tall ears open headroom on both levels.
+  // The east aisle remains wide enough for the mistress to reach either side.
+  shelfPart(s(u,0xb6cdbd,21.1,H+.83,-9.5,2.8,.14,2.4,'carpet','linen-shelf-lower'),true);
+  shelfPart(s(u,0xa8c5b8,21.1,H+1.83,-13.55,2.8,.14,2.9,'carpet','linen-shelf-upper'),true);
+  for(const x of [19.85,22.35])for(const z of [-14.85,-12.25])
+    shelfPart(s(u,0xc9b28e,x,H+.88,z,.12,1.76,.12,'wood',`linen-shelf-post-${x}-${z}`));
+  for(const x of [19.85,22.35])
+    shelfPart(s(u,0xc9b28e,x,H+.38,-8.45,.12,.76,.12,'wood',`linen-shelf-post-${x}-front`));
+  shelfRamp(u,linenShelf,{id:'linen-ramp-lower',x:21.8,width:1.1,startZ:-5.3,endZ:-8.3,startHeight:0,endHeight:.9});
+  shelfRamp(u,linenShelf,{id:'linen-ramp-upper',x:20.4,width:1.1,startZ:-9.3,endZ:-12.2,startHeight:.9,endHeight:1.9});
+  label(u,'1 · SNACK SHELF',21.1,H+.82,-8.292,2.1,.24);
+  label(u,'2 · SPRINGBOARD',21.1,H+1.82,-12.092,2.1,.24);
   chest(u, 10.5, H, -18, 2.5, .8, 1.3, 0xe1bf9e, 'studio-trunk');
   blanket(u, 10.5, H + .8, -18, 2.4, 1.25, P.blue, 'studio-blanket');
   picture(u, 12, H + 2.5, -19.85, 2.8, 1.5);
@@ -255,7 +303,9 @@ export function furnishHouse({ ground: g, upper: u, outside: o, solid: s, detail
     cylinder(o, 0xe0c89a, x, h + .003, z, .46, .006, .46, 12);
   }
   table(o, 10, 0, -32, 4.5, 2.6, 1.6, 0xc0a57a, 'picnic');
-  for (const z of [-34, -30]) stool(o, 10, 0, z, 4.5, .8, .65, 0xc7af83);
+  // Leave a human-width aisle on each long side, including a navigation-grid
+  // stance within normal arm's reach of the table centre.
+  for (const z of [-35, -29]) stool(o, 10, 0, z, 4.5, .8, .65, 0xc7af83, 'wood', `picnic-bench-${z}`);
   for (const [x, z] of [[-23, -27], [24, -27], [16, -36], [-22, -36]]) {
     world.addBox(x, 1.9, z, .7, 3.8, .7);
     cylinder(o, 0xb49b75, x, 1.9, z, .35, 3.8, .25, 10);

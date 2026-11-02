@@ -2,7 +2,7 @@ import { DEN } from './layout.js';
 import { consumableDetails } from './consumable-data.js';
 
 export const INITIAL_POOP = 10;
-export const MAX_CARRIED_POOP = 50;
+export const MAX_CARRIED_POOP = 20;
 export const POOP_COOLDOWN = 1;
 
 const withinDen = player => player && Math.hypot(player.x - DEN.x, player.z - DEN.z) < DEN.radius;

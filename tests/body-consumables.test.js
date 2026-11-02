@@ -31,7 +31,7 @@ function complete(f) {
   return f.advance(consumptionSeconds(f.system.target));
 }
 
-const rewards = {carrot:5,book:5,apple:5,hay:10,rabbitFood:5,banana:5,bread:5,noodles:15,cake:15,wire:0,cardboard:0,slippers:0};
+const rewards = {carrot:2,book:2,apple:2,hay:3,rabbitFood:2,banana:2,bread:2,noodles:5,cake:5,wire:0,cardboard:0,slippers:0};
 for (const [type,reward] of Object.entries(rewards)) {
   test(`completing ${type} grants exactly ${reward} carried poop balls`, () => {
     const item = {id:`test-${type}`,type,x:0,y:0,z:0}, f = fixture([item]);
@@ -46,24 +46,26 @@ for (const [type,reward] of Object.entries(rewards)) {
   });
 }
 
-test('special den hay refills energy each time but gives ten carried balls once per actual den visit', () => {
+test('special den hay refills energy each time but gives three carried balls once per actual den visit', () => {
   const f = fixture(); Object.assign(f.player,{x:DEN.x,z:DEN.z}); f.player.energy.value = 1;
-  assert.equal(consumableDetails(DEN_HAY).poop,10);
+  assert.equal(consumableDetails(DEN_HAY).poop,3);
   f.system.begin(f.player); assert.equal(f.system.target.id,'den-hay');
   assert.deepEqual(f.advance(consumptionSeconds(DEN_HAY)-.01),[]);
   assert.equal(f.player.energy.value,1); assert.equal(f.poop.supply.value,10);
-  assert.equal(f.advance(.01)[0].item.id,'den-hay'); assert.equal(f.player.energy.value,100); assert.equal(f.poop.supply.value,20);
-  f.player.energy.value = 2; complete(f); assert.equal(f.player.energy.value,100); assert.equal(f.poop.supply.value,20);
+  assert.equal(f.advance(.01)[0].item.id,'den-hay'); assert.equal(f.player.energy.value,100); assert.equal(f.poop.supply.value,13);
+  f.player.energy.value = 2; complete(f); assert.equal(f.player.energy.value,100); assert.equal(f.poop.supply.value,13);
   f.player.x = DEN.x+DEN.radius+1; f.poop.update(0,f.player);
   Object.assign(f.player,{x:DEN.x,z:DEN.z}); f.poop.update(0,f.player);
-  complete(f); assert.equal(f.poop.supply.value,30);
+  complete(f); assert.equal(f.poop.supply.value,16);
 });
 
-test('a full consumed reward stops at fifty even when it would overflow the carried capacity', () => {
-  const f = fixture([{id:'noodles-cap',type:'noodles',x:0,y:0,z:0}]);
-  f.poop.supply.grant(39); assert.equal(f.poop.supply.value,49);
-  assert.equal(complete(f)[0].poop,15); assert.equal(f.poop.supply.value,50);
-});
+for(const [type,reward] of [['carrot',2],['hay',3],['noodles',5]]) {
+  test(`a completed ${type} reward reports ${reward} but only fills the last carried slot`,()=>{
+    const f=fixture([{id:`${type}-cap`,type,x:0,y:0,z:0}]);
+    f.poop.supply.grant(9);assert.equal(f.poop.supply.value,19);
+    assert.equal(complete(f)[0].poop,reward);assert.equal(f.poop.supply.value,20);
+  });
+}
 
 test('a real dropped ball shares held consumption and gives exactly five energy once without new poop', () => {
   const f = fixture(); f.player.facing = 0;
@@ -102,7 +104,7 @@ for(const includeWater of [false,true]) {
     const water = includeWater ? new WaterSystem(world,{items:[{id:'test-fountain',x:1,y:0,z:0}]}) : undefined;
     if(water) {
       Object.assign(controller,{x:.8,y:0,z:0,grounded:true}); assert.equal(water.start(controller),true);
-      water.advance(1,controller); assert.equal(water.bladder.value,10); assert.ok(water.pee(controller));
+      water.advance(10,controller); assert.equal(water.bladder.value,100); assert.ok(water.pee(controller));
       assert.equal(water.cooldownRemaining,60);
     }
     poop.drop(controller,0); poop.supply.grant(40); poop.sync();

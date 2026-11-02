@@ -35,7 +35,7 @@ All exterior elevations now have glazed windows: four broad front windows, six p
 1. **Downstairs loop:** lounge → entrance → dining → cross-hall → lounge. The kitchen island and table interrupt a straight chase; wide doors keep the main route accessible to a standing adult.
 2. **Rear loop:** cross-hall → library → garden room → craft room → cross-hall. Each dividing wall has two doorways plus a low jump window, so a pursuer cannot guard one exit to seal off a room.
 3. **Vertical loop:** entrance stairs → upstairs gallery → reading room → balcony → outdoor stairs → backyard → garden door → cross-hall. Both flights are walkable in either direction.
-4. **Upper room loop:** gallery → bedroom → reading room → studio → gallery. A second linen passage connects the studio's two rear-side openings.
+4. **Upper room loop:** gallery → bedroom → reading room → studio → gallery. The studio has an exposed two-level shelf and ramp for climbing and charged-jump escapes.
 5. **Outdoor loop:** garden doors / library window → raised beds and hedge → second garden door. The front porch and narrow paths on both sides connect around the exterior.
 
 The future AI should use the wide doors and stairs, choose an alternate exit when Shidan enters a small passage, and search around the far end. The paths are not intended as permanent invulnerability zones.
@@ -44,9 +44,9 @@ The future AI should use the wide doors and stairs, choose an alternate exit whe
 
 - **Eight jump windows:** 0.42 m sills, 2.4–3 m widths. They are open apertures with blue trim, not glass decals. Normal hops can clear them; rear ground windows reach the garden, and the bedroom window reaches the balcony.
 - **Library passage:** x −22.5, between z −17 and −6, behind shelves. Both entrances are 1.8 m wide and 1.6 m high. A low overhead panel preserves the enclosed feel.
-- **Studio linen passage:** same two-ended arrangement at x 22.5, on the upper floor.
+- **Studio shelf:** the former upstairs linen passage wall and low roof are removed. A ramp reaches both exposed shelf levels; Shidan can launch charged jumps toward the desk or other parts of the room. The carpeted decks stand 0.9 m and 1.9 m above the upstairs floor, with two walkable access ramps. A clear west-edge takeoff reaches the studio desk. Both levels allow items and mistress catches; the surrounding floor remains accessible to the mistress.
 - **Hedge hideaway:** x −20…−12, centred at z −33. Low entrances at both ends and a solid leafy roof form a garden shortcut.
-- **Under tables:** individual legs and a raised top leave floor-level routes through the coffee, dining, library, craft and picnic furniture.
+- **Under tables:** individual legs and a raised top leave floor-level routes through the coffee, dining, library, craft and picnic furniture. These routes break sightlines but provide no capture or cleanup immunity; the mistress can approach an edge and reach underneath. Picnic benches leave human standing clearance along the long sides.
 
 ## Climbing vocabulary
 
@@ -56,10 +56,11 @@ Climbable routes use books, stools, poufs, trunks, and stacked crates. Each succ
 | --- | --- |
 | Lounge sofa | books 0.27 → footstool 0.50 → cushion 0.84 → blanket 0.92 |
 | Coffee table | books 0.28 → stool 0.66 → trunk 1.05 → table 1.44 |
-| Dining table | book 0.32 → stool 0.72 → chest 1.12 → table 1.52 |
+| Dining table | book 0.32 → stool 0.72 → widened chest 1.12 → table 1.52; final step overlaps the table edge by 0.05 m |
 | Craft stack | crates 0.32 → 0.69 → 1.08 → 1.48 → folded blanket 1.56 |
 | Bedroom | pouf 0.30 → trunk 0.61 → mattress 0.88 → quilt 0.96 |
 | Studio desk | books 0.29 → stool 0.65 → trunk 1.06 → desk 1.46 |
+| Studio shelf | walking ramp → lower tier 0.90 → connecting ramp → upper tier 1.90; charged jump west onto desk |
 
 Normal hops recover forward motion after an initial contact with a ledge. Indoor wood has moderate slip and still permits only short hops. The garden, front yard, side paths and balcony have firm grip, stop immediately on input release, and support long jumps. Sprint speed is 8.2 m/s on indoor wood and 8.8 m/s outdoors, versus 3 m/s walking; stairs use 7 m/s sprinting.
 

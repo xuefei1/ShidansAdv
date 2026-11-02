@@ -80,9 +80,37 @@ export function createRabbit() {
   shadow.rotation.x = -Math.PI / 2; shadow.position.y = .012; root.add(shadow);
   // Each animated joint stays independent; rigid details share one draw.
   for (const joint of [body, head, ...eyes, ...ears, ...paws]) batchStaticGeometry(joint, { recursive: false, cellSize: Infinity });
+  // Cache the ten rigid local bounds once. Tight-ceiling poses need only their
+  // transformed extrema, never another geometry merge or vertex scan.
+  const clearanceParts=[];
+  body.traverse(mesh=>{if(mesh.isMesh){mesh.geometry.computeBoundingBox();clearanceParts.push({mesh,bounds:mesh.geometry.boundingBox});}});
+  function visualTop() {
+    root.updateWorldMatrix(true,true);
+    let top=-Infinity;
+    for(const {mesh,bounds} of clearanceParts) {
+      const e=mesh.matrixWorld.elements;
+      top=Math.max(top,e[13]+Math.max(e[1]*bounds.min.x,e[1]*bounds.max.x)+
+        Math.max(e[5]*bounds.min.y,e[5]*bounds.max.y)+Math.max(e[9]*bounds.min.z,e[9]*bounds.max.z));
+    }
+    return top-root.matrixWorld.elements[13];
+  }
+  // Interior fur points follow the articulated silhouette, including folded
+  // ears beneath ceilings. Perception reuses them independently of the lower
+  // physics/contact samples, without walking the geometry each sight check.
+  const sightJoints=[body,body,head,head,ears[0],ears[1],ears[0],ears[1]];
+  const sightLocal=[new THREE.Vector3(0,.38,-.12),new THREE.Vector3(0,.38,.18),
+    new THREE.Vector3(0,0,.035),new THREE.Vector3(0,.15,.035),
+    new THREE.Vector3(0,.235,0),new THREE.Vector3(0,.235,0),
+    new THREE.Vector3(0,.49,0),new THREE.Vector3(0,.49,0)];
+  const sightPoints=sightLocal.map(()=>new THREE.Vector3());
+  function getSightPoints() {
+    root.updateWorldMatrix(true,true);
+    for(let index=0;index<sightPoints.length;index++)sightPoints[index].copy(sightLocal[index]).applyMatrix4(sightJoints[index].matrixWorld);
+    return sightPoints;
+  }
   return {
-    root, joints: { body, head, eyes, ears, paws },
-    animate(time, speed = 0, grounded = true, charge = 0, floorY = 0, action = 'idle') {
+    root, getSightPoints, joints: { body, head, eyes, ears, paws },
+    animate(time, speed = 0, grounded = true, charge = 0, floorY = 0, action = 'idle', headroom = Infinity) {
       const gait = time * (speed > 3 ? 20 : 14), moving = Math.min(speed / 2, 1);
       body.position.y = grounded ? Math.abs(Math.sin(gait)) * .045 * moving : .015;
       body.scale.set(1 + charge * .1, 1 - charge * .22, 1 + charge * .08);
@@ -121,6 +149,24 @@ export function createRabbit() {
         });
       }
       const blink = Math.sin(time * .77) > .997 ? .12 : 1; eyes.forEach(eye => eye.scale.y = blink);
+      if(Number.isFinite(headroom)&&headroom<1.6&&visualTop()>Math.max(.12,headroom)) {
+        const available=Math.max(.12,headroom),tuck=Math.max(0,Math.min(1,(1.6-available)/.9));
+        // Fold the ears over her back and lower the head before flattening the
+        // torso slightly. Every ordinary pose above resets these joints again.
+        body.position.y+=(.005-body.position.y)*tuck;body.scale.y*=1-.14*tuck;
+        body.rotation.x*=1-tuck;head.position.y+=(.44-head.position.y)*tuck;
+        head.position.z+=(.22-head.position.z)*tuck;head.rotation.x+=(.08-head.rotation.x)*tuck;
+        ears.forEach(ear=>{ear.rotation.x+=(-Math.PI/2-ear.rotation.x)*tuck;});
+        let top=visualTop();
+        if(top>available) {
+          // Remove at most a few centimetres of gait bob, keeping the room
+          // anchor and shadow fixed, then make the smallest remaining local
+          // flattening necessary for the real ceiling clearance.
+          body.position.y=Math.max(0,body.position.y-Math.min(.035,top-available+.002));
+          body.rotation.x=0;top=visualTop();
+          if(top>available)body.scale.y*=Math.max(.05,(available-.002-body.position.y)/Math.max(.001,top-body.position.y));
+        }
+      }
       shadow.position.y = floorY - root.position.y + .014; shadow.material.opacity = Math.max(.03, .17 - (root.position.y - floorY) * .065);
       shadow.scale.setScalar(1 + Math.max(0, root.position.y - floorY) * .2);
     },

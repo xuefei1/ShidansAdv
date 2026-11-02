@@ -4,7 +4,7 @@ import { PoopSupply, INITIAL_POOP, MAX_CARRIED_POOP, POOP_COOLDOWN } from '../sr
 import { DEN } from '../src/layout.js';
 
 const denPosition = () => ({x:DEN.x,y:0,z:DEN.z});
-const denHay = () => ({kind:'consume',item:{id:'den-hay',type:'hay',permanent:true},poop:10});
+const denHay = () => ({kind:'consume',item:{id:'den-hay',type:'hay',permanent:true},poop:3});
 
 test('supply starts at ten and resets inventory, cooldown and visit allowance for a new day', () => {
   const supply = new PoopSupply();
@@ -12,10 +12,10 @@ test('supply starts at ten and resets inventory, cooldown and visit allowance fo
   supply.trySpend(20); supply.grantFromConsumption(denHay(),denPosition()); supply.reset();
   assert.equal(supply.value,10); assert.equal(supply.denHayRewardAvailable,true); assert.equal(supply.trySpend(0),true);
 });
-test('carrying capacity is fifty and excess rewards are discarded', () => {
+test('carrying capacity is twenty and excess rewards are discarded', () => {
   const supply = new PoopSupply();
-  assert.equal(MAX_CARRIED_POOP,50); assert.equal(supply.grant(45),40); assert.equal(supply.value,50);
-  assert.equal(supply.grant(15),0); supply.trySpend(0); assert.equal(supply.value,49);
+  assert.equal(MAX_CARRIED_POOP,20); assert.equal(supply.grant(45),10); assert.equal(supply.value,20);
+  assert.equal(supply.grant(5),0); supply.trySpend(0); assert.equal(supply.value,19);
 });
 test('empty inventory rejects drops without reserving a new cooldown', () => {
   const supply = new PoopSupply();
@@ -37,10 +37,10 @@ test('invalid rewards and clock values cannot corrupt the inventory', () => {
 });
 test('only a completed food consumption grants its listed poop reward', () => {
   const supply = new PoopSupply(), player = denPosition(), item = {id:'carrot-test',type:'carrot'};
-  assert.equal(supply.grantFromConsumption({kind:'spawn',item,poop:5},player),0);
-  assert.equal(supply.grantFromConsumption({kind:'consume',item,poop:5},player),5);
+  assert.equal(supply.grantFromConsumption({kind:'spawn',item,poop:2},player),0);
+  assert.equal(supply.grantFromConsumption({kind:'consume',item,poop:2},player),2);
   assert.equal(supply.grantFromConsumption({kind:'consume',item:{id:'wire-test',type:'wire'},poop:0},player),0);
-  assert.equal(supply.value,15);
+  assert.equal(supply.value,12);
 });
 test('poop eating never grants new carried poop', () => {
   const supply = new PoopSupply();
@@ -49,18 +49,18 @@ test('poop eating never grants new carried poop', () => {
 });
 test('normal food rewards can come directly from the food data without an event override', () => {
   const supply = new PoopSupply();
-  assert.equal(supply.grantFromConsumption({kind:'consume',item:{id:'hay-test',type:'hay'}},denPosition()),10);
-  assert.equal(supply.value,20);
+  assert.equal(supply.grantFromConsumption({kind:'consume',item:{id:'hay-test',type:'hay'}},denPosition()),3);
+  assert.equal(supply.value,13);
 });
-test('den hay grants ten once per visit and recharges after leaving and re-entering', () => {
+test('den hay grants three once per visit and recharges after leaving and re-entering', () => {
   const supply = new PoopSupply(), player = denPosition();
-  assert.equal(supply.grantFromConsumption(denHay(),player),10);
+  assert.equal(supply.grantFromConsumption(denHay(),player),3);
   assert.equal(supply.grantFromConsumption(denHay(),player),0); supply.observePosition(player);
   assert.equal(supply.grantFromConsumption(denHay(),player),0);
   player.x += DEN.radius+1; supply.observePosition(player);
   assert.equal(supply.grantFromConsumption(denHay(),player),0);
   Object.assign(player,denPosition()); supply.observePosition(player);
-  assert.equal(supply.grantFromConsumption(denHay(),player),10); assert.equal(supply.value,30);
+  assert.equal(supply.grantFromConsumption(denHay(),player),3); assert.equal(supply.value,16);
 });
 test('jumping vertically within the den does not create another visit', () => {
   const supply = new PoopSupply(), player = denPosition();
@@ -73,10 +73,19 @@ test('moving above the den on the upper floor does not count as re-entering', ()
   supply.grantFromConsumption(denHay(),player); player.x += DEN.radius+1; supply.observePosition(player);
   Object.assign(player,denPosition(),{y:4.2}); supply.observePosition(player);
   assert.equal(supply.grantFromConsumption(denHay(),player),0);
-  player.y = 0; supply.observePosition(player); assert.equal(supply.grantFromConsumption(denHay(),player),10);
+  player.y = 0; supply.observePosition(player); assert.equal(supply.grantFromConsumption(denHay(),player),3);
 });
 test('den hay visit allowance is spent even when carried inventory is full', () => {
-  const supply = new PoopSupply(), player = denPosition(); supply.grant(40);
+  const supply = new PoopSupply(), player = denPosition(); supply.grant(10);
   assert.equal(supply.grantFromConsumption(denHay(),player),0); assert.equal(supply.denHayRewardAvailable,false);
-  supply.trySpend(0); assert.equal(supply.grantFromConsumption(denHay(),player),0); assert.equal(supply.value,49);
+  supply.trySpend(0); assert.equal(supply.grantFromConsumption(denHay(),player),0); assert.equal(supply.value,19);
+});
+
+test('each new reward tier fills exact remaining capacity and truncates only the excess',()=>{
+  for(const [type,reward] of [['carrot',2],['hay',3],['cake',5]])for(const room of [0,1,reward,reward+1]) {
+    const supply=new PoopSupply();supply.value=MAX_CARRIED_POOP-room;
+    const granted=supply.grantFromConsumption({kind:'consume',item:{id:type,type}},denPosition());
+    assert.equal(granted,Math.min(room,reward),`${type} with ${room} free slots`);
+    assert.equal(supply.value,Math.min(MAX_CARRIED_POOP,MAX_CARRIED_POOP-room+reward));
+  }
 });

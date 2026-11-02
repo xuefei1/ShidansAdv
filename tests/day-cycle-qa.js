@@ -40,6 +40,7 @@ document.getElementById('run').onclick=async()=>{
   results.replaceChildren(); document.querySelectorAll('button').forEach(b=>b.disabled=true);
   try {
     await loadGame();
+    const initialConsumables=canvas().dataset.consumableCount;
     check('A fresh adventure starts at noon with ten minutes',remaining()>599 && canvas().dataset.dayPhase==='Noon');
     advance(60); await until(()=>remaining()<541,'minute passes');
     check('A delayed frame still counts a full real minute',remaining()===540);
@@ -69,10 +70,21 @@ document.getElementById('run').onclick=async()=>{
     canvas().dispatchEvent(new w.KeyboardEvent('keydown',{code:'KeyP',bubbles:true}));
     canvas().dispatchEvent(new w.KeyboardEvent('keyup',{code:'KeyP',bubbles:true}));
     await until(()=>canvas().dataset.poopCount==='1','leave a ball');
-    advance(remaining()+1); await until(()=>canvas().dataset.mode==='title','automatic timeout');
-    check('Timeout automatically returns to the main screen',!game().getElementById('welcome').hidden && !game().getElementById('day-ended').hidden);
-    check('Timeout clears the old run and restores noon',canvas().dataset.poopCount==='0' && canvas().dataset.energy==='100.00' && canvas().dataset.consumableCount==='41' && canvas().dataset.dayPhase==='Noon');
-    game().getElementById('play').click(); await until(()=>canvas().dataset.mode==='play','new adventure');
+    advance(remaining()+1); await until(()=>canvas().dataset.mode==='gameover','bedtime result screen');
+    check('Timeout opens Game Over with the completed score and local rank',!game().getElementById('game-over').hidden && game().getElementById('welcome').hidden && game().getElementById('game-over-score').textContent==='0' && game().getElementById('game-over-rank').textContent==='#1 of 1');
+    const finalStats=canvas().dataset.roundStats,stats=JSON.parse(finalStats),position=canvas().dataset.position;
+    check('Results count the successful poop action and retain zero-valued item and water statistics',stats.poopDropped===1 && stats.consumedTotal===0 && stats.waterDrunk===0 && stats.urineProduced===0 && Object.values(stats.consumed).every(count=>count===0));
+    check('Bedtime preserves the ended world until a result-screen choice',canvas().dataset.poopCount==='1' && canvas().dataset.dayRemaining==='0.00' && canvas().dataset.dayPhase==='Night');
+    advance(30);canvas().dispatchEvent(new w.KeyboardEvent('keydown',{code:'KeyP',bubbles:true}));canvas().dispatchEvent(new w.KeyboardEvent('keyup',{code:'KeyP',bubbles:true}));
+    await new Promise(resolve=>w.requestAnimationFrame(()=>w.requestAnimationFrame(resolve)));
+    check('Game Over freezes gameplay, statistics and the once-only saved result',canvas().dataset.mode==='gameover' && canvas().dataset.position===position && canvas().dataset.roundStats===finalStats && canvas().dataset.poopCount==='1' && game().querySelectorAll('#leaderboard-rows tr').length===1);
+    game().getElementById('game-over-new').click();await until(()=>canvas().dataset.mode==='play','start a new game from results');
+    check('New game keeps the player and restores the full fresh-round state',game().getElementById('player-name').value==='Daylight QA' && canvas().dataset.poopCount==='0' && canvas().dataset.energy==='100.00' && canvas().dataset.consumableCount===initialConsumables && canvas().dataset.dayPhase==='Noon' && canvas().dataset.freeDenJump==='true' && canvas().dataset.roundStats==='' && game().getElementById('game-over').hidden);
+    advance(600);await until(()=>canvas().dataset.mode==='gameover','finish the next zero-score round');
+    check('Tied zero scores share first rank across both completed rounds',canvas().dataset.finalRank==='1' && canvas().dataset.finalRankTotal==='2' && game().getElementById('game-over-rank').textContent==='#1 of 2');
+    game().getElementById('game-over-menu').click();await until(()=>canvas().dataset.mode==='title','return to main menu');
+    check('Main-menu choice clears the old round, restores noon and retains saved scores',!game().getElementById('welcome').hidden && game().getElementById('game-over').hidden && canvas().dataset.dayRemaining==='600.00' && canvas().dataset.dayPhase==='Noon' && canvas().dataset.poopCount==='0' && canvas().dataset.consumableCount===initialConsumables && game().querySelectorAll('#leaderboard-rows tr').length===2);
+    game().getElementById('play').click(); await until(()=>canvas().dataset.mode==='play','new adventure from menu');
     check('The next adventure starts with a fresh ten minutes',remaining()>599 && game().getElementById('day-ended').hidden);
     check('No fatal browser error',game().getElementById('fatal').hidden);
   } catch(error) {
