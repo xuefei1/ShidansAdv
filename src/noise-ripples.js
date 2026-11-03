@@ -6,7 +6,7 @@ export const RIPPLE_SECONDS = .92;
 export const RIPPLE_DELAY = .13;
 export const RIPPLE_CLEARANCE = .035;
 
-const localTint = new THREE.Color(0xb2cdd0), houseTint = new THREE.Color(0xd6ba7c);
+const localTint = new THREE.Color(0xb2cdd0), houseTint = new THREE.Color(0xd6ba7c), footstepTint=new THREE.Color(0xcd787b);
 const validPosition = position => position && ['x','y','z'].every(axis => Number.isFinite(position[axis]));
 const upperInterior = ripple => ripple.y >= FLOOR_HEIGHT-.1 && ripple.x >= HOUSE.minX && ripple.x <= HOUSE.maxX && ripple.z >= HOUSE.minZ && ripple.z <= HOUSE.maxZ;
 
@@ -83,11 +83,12 @@ export function createNoiseRipples(scene, world) {
         }
         const position=event.position, y=world.support(position.x,position.z,position.y+.1,true).y+RIPPLE_CLEARANCE;
         const age=Number.isFinite(elapsed)&&Number.isFinite(event.time) ? Math.max(0,elapsed-event.time) : 0;
-        const house=event.scope==='house', count=house ? 3 : 2;
+        const footstep=household&&event.kind==='footstep',running=footstep&&event.gait==='run';
+        const house=event.scope==='house', count=footstep?(running?2:1):house ? 3 : 2;
         for(let ring=0;ring<count;ring++) if(age-ring*RIPPLE_DELAY<RIPPLE_SECONDS) ripples.push({
           x:position.x,y,z:position.z,age:age-ring*RIPPLE_DELAY,
-          startRadius:house ? .4 : .32,endRadius:house ? 2.05 : 1.5,
-          tint:house ? houseTint : localTint,opacity:house ? .26 : .22,
+          startRadius:footstep ? .18 : house ? .4 : .32,endRadius:footstep?(running?1.25:.85):house ? 2.05 : 1.5,
+          tint:footstep?footstepTint:house ? houseTint : localTint,opacity:footstep?(running ? .19 : .12):house ? .26 : .22,
         });
         if(ripples.length>MAX_NOISE_RIPPLES)ripples.splice(0,ripples.length-MAX_NOISE_RIPPLES);
         changed=true;

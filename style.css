@@ -179,6 +179,22 @@
 .chase-warning svg{width:34px;height:34px;flex:none;fill:#f2d4b2;stroke:#b54146;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
 .chase-warning strong{display:block;font-size:16px;line-height:1.3}
 .chase-warning span{display:block;font-size:10px;line-height:1.5;margin-top:3px}
+.audio-settings{position:relative;color:var(--ink);pointer-events:auto}
+.topbar{z-index:6}
+.audio-settings summary{padding:9px 12px;border:1px solid #fff9;border-radius:22px;background:#fffdf0e6;font-size:11px;line-height:13px;cursor:pointer;list-style:none}
+.audio-settings summary::-webkit-details-marker{display:none}
+.audio-settings summary:focus-visible,.audio-panel input:focus-visible{outline:3px solid #a97a42;outline-offset:4px}
+.audio-panel{position:absolute;right:0;top:44px;width:244px;max-width:calc(100vw - 30px);padding:16px;border:1px solid #e1e4cf;border-radius:13px;background:#fffcef;box-shadow:0 9px 30px #34453825}
+.audio-panel label{display:flex;justify-content:space-between;gap:12px;font-size:12px;font-weight:600}
+.audio-panel output{font-variant-numeric:tabular-nums;color:#6d8059}
+.audio-panel input{width:100%;margin:14px 0 4px;accent-color:#6a8458;cursor:pointer}
+.volume-scale{display:flex;justify-content:space-between;font-size:9px;color:#89917c}
+.toolbar .audio-panel button{width:100%;margin-top:13px;border:1px solid #cdd8bb;background:#e6edd9;border-radius:7px;font-size:12px;font-weight:600;color:#4d6842}
+.audio-panel #audio-status{display:block;font-size:10px;line-height:1.5;color:#79856d;margin-top:9px}
+.chase-message{flex:1;min-width:0}
+.chase-distance{flex:none;text-align:right;padding-left:12px;border-left:1px solid currentColor;font-variant-numeric:tabular-nums}
+.chase-distance b{display:block;white-space:nowrap;font-size:20px;line-height:1.2}
+.chase-warning .chase-distance span{font-size:8px;letter-spacing:1.4px;margin-top:2px;opacity:.7}
 .chase-warning[data-phase=search]{border-color:#b3934f;color:#8c713b;background:#fff7e8f5}
 .chase-warning[data-phase=search] svg{stroke:#a48341;fill:#f6e4b8}
 .chase-warning[data-phase=scolding]{border-color:#b3934f;color:#8c713b;background:#fff7e8f5}
@@ -197,6 +213,7 @@
 @media(prefers-reduced-motion:reduce){.danger-vignette{animation:none}}
 @media(max-width:1000px){.chase-warning{max-width:calc(100vw - 455px);padding:10px 12px;gap:8px}.chase-warning strong{font-size:14px}.chase-warning svg{width:27px;height:27px}}
 @media(max-width:700px){.chase-warning{top:8px;width:300px;max-width:46vw;padding:7px 9px}.chase-warning strong{font-size:12px}.chase-warning span{font-size:8px}}
+@media(max-width:700px){.chase-warning{gap:6px}.chase-warning svg{width:22px;height:22px}.chase-distance{padding-left:6px}.chase-distance b{font-size:16px}.chase-warning .chase-distance span{font-size:7px}}
 
 /* The minimap stays visible independently of the item-reward disclosure. */
 .minimap{position:fixed;display:grid;grid-template-rows:12px 168px 12px 24px;gap:3px;top:auto;right:30px;bottom:98px;width:190px;height:245px;padding:9px 10px}

@@ -113,10 +113,23 @@ export class World {
     const r = this.rampAt(x, z);
     return r ? (r.startZ - z) / (r.startZ - r.endZ) * r.height : null;
   }
-  support(x, z, maxHeight = Infinity, ignorePushables = false) {
+  support(x, z, maxHeight = Infinity, ignorePushables = false, radius = 0) {
     const outdoors = x < HOUSE.minX || x > HOUSE.maxX || z < HOUSE.minZ || z > HOUSE.maxZ;
     let y = 0, surface = Math.hypot(x - DEN.x, z - DEN.z) < DEN.radius ? 'bedding' : outdoors ? 'grass' : 'wood';
-    for (const b of this.query(x, z)) if ((!ignorePushables || !b.pushable) && b.maxY <= maxHeight + .001 && b.maxY > y && inside(x, z, b)) { y = b.maxY; surface = b.surface; }
+    const footprint=Number.isFinite(radius)&&radius>0?radius:0;
+    for (const b of this.query(x-footprint, z-footprint, x+footprint, z+footprint)) {
+      if((ignorePushables&&b.pushable)||b.maxY>maxHeight+.001||b.maxY<=y)continue;
+      // A rabbit's feet can rest across a narrow seam even when her centre is
+      // just outside a platform. Point-only support let opposing furniture
+      // sides push her on/off an edge every substep. Require positive overlap,
+      // so merely touching a vertical side cannot hold her in mid-air.
+      let supported=inside(x,z,b);
+      if(!supported&&footprint) {
+        const dx=x-clamp(x,b.minX,b.maxX),dz=z-clamp(z,b.minZ,b.maxZ);
+        supported=dx*dx+dz*dz<Math.max(0,footprint-.001)**2;
+      }
+      if(supported) {y=b.maxY;surface=b.surface;}
+    }
     // Outdoor benches, stone paths and deck furniture have the same firm grip.
     if (outdoors) surface = y >= FLOOR_HEIGHT - .3 ? 'deck' : 'grass';
     const ramp = this.rampHeight(x, z);
@@ -165,7 +178,11 @@ export class RabbitController {
   step(dt, input) {
     const oldX = this.x, oldY = this.y, oldZ = this.z;
     this.pushing=false;
-    const ground = this.world.support(this.x, this.z, this.y + .24,true);
+    let ground = this.world.support(this.x, this.z, this.y + .24,true);
+    if(this.grounded&&this.y-ground.y>.001) {
+      const edge=this.world.support(this.x,this.z,this.y+.001,true,this.radius);
+      if(edge.y>ground.y)ground=edge;
+    }
     if (this.grounded && this.y - ground.y > .26) this.grounded = false;
     if (this.grounded) this.surface = ground.surface;
     const tuning = SURFACES[this.surface];
@@ -274,7 +291,13 @@ export class RabbitController {
         this.y = b.minY - this.height; this.vy = 0;
       }
     }
-    const below = this.world.support(this.x, this.z, Math.max(oldY, this.y) + (this.grounded ? .25 : .01),true);
+    let below = this.world.support(this.x, this.z, Math.max(oldY, this.y) + (this.grounded ? .25 : .01),true);
+    if(this.grounded&&oldY-below.y>.001) {
+      // Retain an existing ledge only while the feet still overlap it. Higher
+      // neighbours and airborne landings keep their ordinary centre test.
+      const edge=this.world.support(this.x,this.z,oldY+.001,true,this.radius);
+      if(edge.y>below.y)below=edge;
+    }
     if (this.vy <= 0 && this.y <= below.y + .001) {
       this.lastLanding ||= !this.grounded;
       this.y = below.y; this.vy = 0; this.grounded = true; this.surface = below.surface; this.longJumping = false;

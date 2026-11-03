@@ -47,3 +47,5 @@ The noise-cover badge, angry eyebrows/scolding gesture and additional household 
 Waste cleanup reuses the original cloth/mop geometry with procedural pickup/wiping poses, plus original rage-badge styling. No external art, animation or audio assets were added.
 
 The Game Over layout, score cards and statistics table are original HTML/CSS and reuse the existing rabbit favicon. No external assets or dependencies were added.
+
+The movement-feedback revision adds original synthesized routine/search/run heel-toe profiles, red instanced footstep rings, a distance readout and procedural pickup/carry animation in `src/mistress-capture.js`. The carry pose follows the existing animated hand geometry; no motion-capture clip, sound recording, music, texture or other external asset is used. These additions use the project Apache-2.0 license and add no runtime dependency.

@@ -1,6 +1,6 @@
 # Clover House — playable level design
 
-Revision 0.2.3 improves rendering and increases ordinary walking speed while retaining the 0.2.2 layout: 32 solid glazed exterior windows, moderate wood slide, and a ceiling that stays visible while upstairs rooms appear before a stair climb. The layout prioritizes escape choices for a future pursuit game: broad circulation loops, corners that break sightlines, short rabbit-only alternatives, and elevated routes. Food, happiness, the mistress and noise/visibility AI are still future work.
+Revision 0.2.3 improves rendering and increases ordinary walking speed while retaining the 0.2.2 layout: 32 solid glazed exterior windows, moderate wood slide, and a ceiling that stays visible while upstairs rooms appear before a stair climb. The layout prioritizes escape choices for pursuit: broad circulation loops, corners that break sightlines, short rabbit-only alternatives, and elevated routes. Food, happiness, the mistress's routine and noise/visibility pursuit are implemented; the current balance is described below.
 
 ## Scale and spaces
 
@@ -10,7 +10,7 @@ Coordinates are metres, X east/west, Z north/south, Y up. The garden is north (n
 | --- | --- | --- |
 | Ground house | x −24…24, z −20…20 | 48 × 40 m footprint, roughly 3.8× the previous ground area |
 | Den | (−16, 12), radius 4, fence 1.1 high | 50.3 m² of bedding, over 3× the previous den area; clear charge runway |
-| Lounge | x −24…−5, z 2…20 | Spawn, future mistress couch, sofa and table climbing |
+| Lounge | x −24…−5, z 2…20 | Spawn, mistress couch, sofa and table climbing |
 | Entrance | x −5…5, z 2…20 | Wide stair approach; two lounge and kitchen door choices |
 | Kitchen / dining | x 5…24, z 2…20 | Island circling, table-underpass, chair/trunk climbing |
 | Cross-hall | x −24…24, z −3…2 | East–west connection between all six adjacent areas |
@@ -38,7 +38,7 @@ All exterior elevations now have glazed windows: four broad front windows, six p
 4. **Upper room loop:** gallery → bedroom → reading room → studio → gallery. The studio has an exposed two-level shelf and ramp for climbing and charged-jump escapes.
 5. **Outdoor loop:** garden doors / library window → raised beds and hedge → second garden door. The front porch and narrow paths on both sides connect around the exterior.
 
-The future AI should use the wide doors and stairs, choose an alternate exit when Shidan enters a small passage, and search around the far end. The paths are not intended as permanent invulnerability zones.
+The mistress uses the wide doors and stairs, while Shidan can break sight through small passages and alternate exits. The paths are not intended as permanent invulnerability zones.
 
 ## Rabbit shortcuts
 
@@ -64,7 +64,30 @@ Climbable routes use books, stools, poufs, trunks, and stacked crates. Each succ
 
 Normal hops recover forward motion after an initial contact with a ledge. Indoor wood has moderate slip and still permits only short hops. The garden, front yard, side paths and balcony have firm grip, stop immediately on input release, and support long jumps. Sprint speed is 8.2 m/s on indoor wood and 8.8 m/s outdoors, versus 3 m/s walking; stairs use 7 m/s sprinting.
 
-## Collision and future AI foundation
+The bedroom trunk now extends beneath the bed edge, closing its former 15 cm slit. The lounge book/footstool/sofa and reading-room pouf/sofa handoffs also overlap, with matching visible and physical bounds. Grounded support can retain a ledge while Shidan's circular foot area overlaps it; leaving that area still causes a normal fall. This prevents narrow seams from alternating between falling and landing, which previously repeated the landing sound.
+
+## Recovery and pursuit balance
+
+Ordinary hay starts with twelve stacks, up from six. The six added recovery points are below; H is the upper-floor height, 4.2 m. Each still grants 40 energy, no happiness and three carried poop balls after a 1.6-second hold.
+
+| Added hay location | X | Y | Z |
+| --- | ---: | ---: | ---: |
+| Bedroom | −9.5 | H | −18 |
+| Reading room | −0.7 | H | −17.1 |
+| Study | 16.8 | H | −17.2 |
+| Balcony | 3.7 | H | −22.6 |
+| Front yard | −11 | 0 | 23 |
+| Backyard | 14 | 0 | −30 |
+
+There are 47 authored snack placements and 46 available at the start of play: 45 regular snacks plus one cake. The book in the downstairs rabbit-only library passage is excluded by the spawn safety check. Permanent den hay remains separate. Passive energy recovery is continuous at 0.01 per half second (0.02 per second), with no recovery during pauses; the simultaneous sprint drain still gives a full bar 30 seconds of uninterrupted sprinting.
+
+Shidan walks silently for both audio and AI hearing. Only moving sprints generate footstep effects and local movement noise; actual long jumps and happiness-granting chewing retain their existing noise rules. The mistress starts chasing at 60% of the current terrain sprint speed, increasing to 65%, 70%, 75% and 80% after 2, 4, 6 and 8 minutes. Puddle rage still adds its existing movement bonus.
+
+During the full one-second pee action Shidan stays visible but cannot be caught. A completed, visible and reachable puddle has cleanup priority and requires 15 active seconds of mopping after arrival. The pee action never contributes time to that timer. Pauses freeze the action and cleanup.
+
+Fountains provide water without becoming safe spots. Beside a fountain, the mistress chooses the closest clear standing approach and can reach Shidan within 1.2 m on the same floor. Actual walls and closed panes still block her hand path; drinking stops immediately when a catch begins.
+
+## Collision and pursuit foundation
 
 `src/layout.js` owns room bounds, `WALLS`, opening dimensions, `PORTALS`, `RAMPS`, and discovery markers. `house.js` builds wall segments around the openings. `furnishings.js` uses one solid helper to create each visible box and its exact collider, including every blanket, mattress, quilt, seat and pillow.
 
@@ -72,6 +95,6 @@ Perpendicular wall sections butt against one another and split at T-junctions, a
 
 The existing sphere solver uses both ramp directions, and all furnishings remain obstacles for poop balls. The persistent 10,000-ball limit is unchanged. Foliage and cylindrical props use conservative box colliders; thin seams, printed labels and floor decals are decorative. Step meshes approximate continuous ramps within 7 cm to avoid stair snagging.
 
-Automated route tests drive the actual rabbit controller through the loops, both stairways, both hidden passages and the hedge. Separate tests check all window clearances, normal-hop window crossing, sofa/bed climbing, blanket landing, and exact mesh/box agreement. Wide door portals are checked for a 0.4 m radius, 1.9 m high adult planning capsule. This is a geometric clearance check, **not an implemented navigation mesh or AI**.
+Automated route tests drive the actual rabbit controller through the loops, both stairways, the library passage, studio shelf and hedge. Separate tests check all window clearances, normal-hop window crossing, sofa/bed climbing, blanket landing, and exact mesh/box agreement. The mistress uses a cached human navigation graph with a 0.5 m radius and 2.72 m clearance height; its routes cover the house, both stairs, balcony and yards.
 
-Next: use these routes to place happiness rewards and develop the mistress's navigation, hearing, search and chase behavior. Tune chase speed and shortcut advantage with an actual NPC before declaring the level balanced.
+Continue playtesting chase speed, recovery placement and shortcut advantage against the implemented mistress before declaring the level balanced.

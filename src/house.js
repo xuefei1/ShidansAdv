@@ -55,8 +55,9 @@ export function createHouse(scene) {
       return;
     }
     const parent = w.floor ? upper : ground, y = w.floor * H;
-    solid(parent, w.color, w.axis === 'x' ? (a + b) / 2 : w.fixed, y + (low + high) / 2,
-      w.axis === 'x' ? w.fixed : (a + b) / 2, w.axis === 'x' ? b - a : .24, high - low, w.axis === 'x' ? .24 : b - a, 'wood', `${w.id}:${a}:${low}`).userData.wall = w.id;
+    const segment=solid(parent, w.color, w.axis === 'x' ? (a + b) / 2 : w.fixed, y + (low + high) / 2,
+      w.axis === 'x' ? w.fixed : (a + b) / 2, w.axis === 'x' ? b - a : .24, high - low, w.axis === 'x' ? .24 : b - a, 'wood', `${w.id}:${a}:${low}`);
+    segment.userData.wall=w.id;segment.userData.collider.verticalBarrier=true;
     // Shorten the skirting at each segment end. Flush end caps used to compete
     // with the differently coloured door/window reveals on the same plane.
     if (low === 0 && b-a>.024) detail(parent, 0xf9f0dc, w.axis === 'x' ? (a + b) / 2 : w.fixed, y + .09,
@@ -81,6 +82,7 @@ export function createHouse(scene) {
       if (o.kind === 'glazed-window') {
         const x = w.axis === 'x' ? o.at : w.fixed, z = w.axis === 'x' ? w.fixed : o.at, midY = y + (o.bottom + o.top) / 2;
         const pane = solid(p, 0xa7d4df, x, midY, z, w.axis === 'x' ? o.width : .06, o.top - o.bottom, w.axis === 'x' ? .06 : o.width, 'wood', `glass:${w.id}:${o.at}`);
+        pane.userData.collider.verticalBarrier=true;
         pane.material = glassMaterial; pane.castShadow = pane.receiveShadow = false; pane.userData.batchTransparent = true;
         // White crossbars distinguish closed glass from blue-framed jump windows.
         detail(p, 0xfdf3df, x, midY, z, w.axis === 'x' ? .065 : .10, o.top - o.bottom, w.axis === 'x' ? .10 : .065);

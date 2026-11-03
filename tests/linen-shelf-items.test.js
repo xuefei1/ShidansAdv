@@ -29,7 +29,7 @@ function eaterFor(system,item) {
 
 test('both linen tiers have supported, edible fixed snacks without increasing the authored population',t=>{
   const system=new ConsumableSystem(world,{canSpawn,wires:[],randomLimits:{}});t.after(()=>release(system));
-  assert.equal(CONSUMABLE_SLOTS.length,41);assert.equal(system.count,40);
+  assert.equal(CONSUMABLE_SLOTS.length,47);assert.equal(system.count,46);
   for(const [id,level] of [['book-11',H+.9],['banana-2',H+1.9]]) {
     const item=system.items.get(id);assert.ok(item);assert.ok(Math.abs(item.y-level)<1e-9);assert.ok(canSpawn(item));
     assert.ok(Math.abs(world.support(item.x,item.z,item.y+.02,true).y-item.y)<1e-9);

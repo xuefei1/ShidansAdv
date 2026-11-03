@@ -79,7 +79,7 @@ test('a real dropped ball shares held consumption and gives exactly five energy 
   assert.equal(f.poop.physics.count,0); assert.equal(f.poop.supply.value,9);
   assert.deepEqual(f.player.energy.recoveries,[{rate:5,remaining:1}]);
   assert.deepEqual(f.advance(2),[]); f.player.energy.update(1);
-  assert.ok(Math.abs(f.player.energy.value-25.01)<1e-9); assert.equal(f.poop.supply.value,9);
+  assert.ok(Math.abs(f.player.energy.value-25.02)<1e-9); assert.equal(f.poop.supply.value,9);
 });
 
 for(const reason of ['removed','evicted']) {

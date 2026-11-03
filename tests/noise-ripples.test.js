@@ -117,3 +117,17 @@ test('invalid events are silent and support is sampled only once per accepted ev
   ripples.emit([event(3,'eat','house')]);assert.equal(queries,1);
   for(let i=0;i<30;i++)ripples.update(1/60);assert.equal(queries,1);
 });
+
+test('walking footfalls use one subtle red ring and chasing footfalls use two stronger rings',()=>{
+  const {ripples}=setup();
+  const footfall=(id,gait)=>({...event(id,'footstep','local'),source:'mistress',gait});
+  ripples.emit([footfall(1,'walk')]);assert.equal(ripples.count,1);ripples.update(.3);
+  const slowAlpha=ripples.mesh.geometry.attributes.rippleOpacity.getX(0),slowRadius=scaleAt(ripples.mesh).x;
+  const color=ripples.mesh.geometry.attributes.rippleTint;
+  assert.ok(color.getX(0)>color.getZ(0));assert.ok(slowAlpha>0&&slowAlpha<.13);assert.ok(slowRadius<.85);
+  ripples.clear();ripples.emit([footfall(1,'run')]);assert.equal(ripples.count,2);ripples.update(.3);
+  assert.equal(ripples.visibleCount,2);assert.ok(ripples.mesh.geometry.attributes.rippleOpacity.getX(0)>slowAlpha);
+  assert.ok(scaleAt(ripples.mesh).x>slowRadius);assert.ok(scaleAt(ripples.mesh).x<1.25);
+  ripples.emit([footfall(1,'run')]);assert.equal(ripples.count,2,'one footfall never duplicates');
+  ripples.update(RIPPLE_SECONDS+RIPPLE_DELAY);assert.equal(ripples.count,0);
+});

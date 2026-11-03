@@ -170,12 +170,21 @@ test('sprint re-alert has an exact two-second grace period and never replays a r
 });
 
 test('the chase multiplier rises at two-minute boundaries and follows the supplied sprint speed',()=>{
-  for(const [time,multiplier] of [[0,.7],[119.999,.7],[120,.75],[240,.8],[360,.85],[480,.9],[600,.9]]) {
+  for(const [time,multiplier] of [[-1,.6],[0,.6],[119.999,.6],[120,.65],[239.999,.65],[240,.7],
+    [359.999,.7],[360,.75],[479.999,.75],[480,.8],[600,.8],[10000,.8],[NaN,.6]]) {
     near(chaseSpeedMultiplier(time),multiplier);
-    const npc=actor();npc.update(0,{...quietContext,dayElapsed:time,sprintSpeed:8.8});near(npc.chaseSpeed,8.8*multiplier);
+    for(const {run} of Object.values(SURFACES)) {
+      const npc=actor();npc.update(0,{...quietContext,dayElapsed:time,sprintSpeed:run});near(npc.chaseSpeed,run*multiplier);
+    }
   }
   const npc=actor();start(npc);npc.update(1,{...quietContext,seen:true,sprintSpeed:8.5,dayElapsed:240});
-  near(npc.chaseSpeed,6.8);assert.ok(npc.speed>3.5&&npc.speed<=6.8);
+  near(npc.chaseSpeed,5.95);assert.ok(npc.speed>3.5&&npc.speed<=5.95);
+});
+
+test('reset derives the starting chase speed from the same tier schedule before any update',()=>{
+  const npc=actor();near(npc.chaseMultiplier,chaseSpeedMultiplier(0));near(npc.chaseSpeed,8.2*.6);
+  npc.update(0,{...quietContext,dayElapsed:480,sprintSpeed:8.8});near(npc.chaseSpeed,8.8*.8);
+  npc.reset();near(npc.chaseMultiplier,chaseSpeedMultiplier(0));near(npc.chaseSpeed,8.2*.6);
 });
 
 test('chasing follows cached 3D routes and does not replan every frame for a stationary target',()=>{
@@ -217,6 +226,26 @@ test('capture cannot reach a high platform or bypass explicit opaque-contact rej
   npc.update(0,{player:high,seen:true,contactClear:true});assert.equal(npc.phase,'chase');
   assert.equal(npc.canAttemptCapture(high),false);
   npc.update(0,{player:p(.1,0,0),seen:true,contactClear:false});assert.equal(npc.phase,'chase');
+});
+
+test('peeing blocks capture rays during chase and search while preserving sight and ordinary detection',()=>{
+  const alerted=actor(),visible=p(.3,0,0);
+  alerted.update(0,{player:visible,seen:true,peeing:true,contactClear:()=>assert.fail('a peeing rabbit cannot reach a capture ray')});
+  assert.equal(alerted.phase,'chase','the pee action still permits initial visual detection');
+  for(const searching of [false,true]) {
+    const npc=actor(),player=p(.3,0,0);start(npc,player);
+    if(searching)search(npc,player);
+    let contacts=0;
+    assert.equal(npc.canAttemptCapture(player),true);
+    assert.equal(npc.canAttemptCapture(player,{peeing:true}),false);
+    npc.update(.999,{player,seen:!searching,peeing:true,movementScale:0,contactClear:()=>{contacts++;return true;}});
+    assert.equal(npc.phase,searching?'search':'chase');assert.equal(npc.playerLocked,false);assert.equal(contacts,0);
+    assert.equal(npc.takeEvents().some(event=>event.kind==='caught'),false);
+    npc.update(0,{player,seen:true,peeing:true,contactClear:()=>{contacts++;return true;}});
+    assert.equal(npc.phase,'chase','peeing does not hide an otherwise visible rabbit');assert.equal(contacts,0);
+    npc.update(0,{player,seen:true,peeing:false,contactClear:()=>{contacts++;return true;}});
+    assert.equal(npc.phase,'caught','ordinary capture resumes when the action ends without reachable waste');assert.equal(contacts,1);
+  }
 });
 
 test('capture teleports to a den-side stance, scolds for five seconds, then resumes a random routine there',()=>{
@@ -352,7 +381,7 @@ test('real furnished-house diagonal doorway turns trigger pursuit pauses',()=>{
 
 test('the shared movement budget preserves chase-to-sprint ratios at 60, 10 and 5 FPS',()=>{
   const run=SURFACES.grass.run;
-  for(const fps of [60,10,5])for(const [day,multiplier] of [[0,.7],[480,.9]]) {
+  for(const fps of [60,10,5])for(const [day,multiplier] of [[0,.6],[120,.65],[240,.7],[360,.75],[480,.8]]) {
     const rabbit=new RabbitController(new World());Object.assign(rabbit,p(0,0,22));
     const npc=actor();start(npc,p(0,0,30));npc.update(1,{player:p(0,0,30),seen:true,sprintSpeed:run,dayElapsed:day});
     const rabbitStart=rabbit.z,npcStart=npc.position.z,wallDt=1/fps;
@@ -450,16 +479,26 @@ test('visible waste interrupts a chase, stays targeted out of view and is cleane
   npc.update(1,{player,cleanupTarget:mess.target});assert.equal(mess.calls,1,'a removed ball cannot be cleaned twice');
 });
 
-test('pee preempts unfinished poop work, cannot be preempted by poop, and needs ten active seconds',()=>{
+test('pee preempts unfinished poop work, cannot be preempted by poop, and needs fifteen active seconds',()=>{
   const npc=actor(),poop=waste('poop'),pee=waste('pee','pee'),player=p(0,0,30);
   npc.update(POOP_CLEAN_SECONDS*.6,{player,cleanupTarget:poop.target});near(npc.cleanupRemaining,POOP_CLEAN_SECONDS*.4);
   npc.update(0,{player,cleanupTarget:pee.target});assert.equal(npc.cleanupKind,'pee');near(npc.cleanupRemaining,PEE_CLEAN_SECONDS);
   assert.equal(poop.calls,0);assert.equal(poop.present,true);
-  npc.update(4,{player,cleanupTarget:poop.target,movementScale:0});assert.equal(npc.cleanupKind,'pee');near(npc.cleanupRemaining,6);
-  const elapsed=npc.elapsed;npc.update(30,{player,active:false});near(npc.elapsed,elapsed);near(npc.cleanupRemaining,6);
-  npc.update(5.999,{player,movementScale:0});assert.equal(npc.phase,'cleanup');near(npc.cleanupRemaining,.001);
+  npc.update(4,{player,cleanupTarget:poop.target,movementScale:0});assert.equal(npc.cleanupKind,'pee');near(npc.cleanupRemaining,11);
+  const elapsed=npc.elapsed;npc.update(30,{player,active:false});near(npc.elapsed,elapsed);near(npc.cleanupRemaining,11);
+  npc.update(10.999,{player,movementScale:0});assert.equal(npc.phase,'cleanup');near(npc.cleanupRemaining,.001);
   npc.update(.001,{player,movementScale:0});assert.equal(npc.phase,'search');assert.equal(pee.calls,1);near(npc.rageBonus,PEE_RAGE_BONUS);
   assert.equal(npc.cleanupKind,'');assert.equal(npc.cleanupTargetId,null);near(npc.cleanupRemaining,0);
+});
+
+test('unfinished pee cannot preempt pending poop work until its live descriptor becomes ready',()=>{
+  const npc=actor(),poop=waste('poop'),pee=waste('pee','pee'),player=p(0,0,30);
+  pee.target.ready=false;
+  npc.update(POOP_CLEAN_SECONDS*.25,{player,cleanupTarget:poop.target});
+  const before=npc.cleanupRemaining;npc.update(0,{player,cleanupTarget:pee.target,peeing:true});
+  assert.equal(npc.cleanupKind,'poop');near(npc.cleanupRemaining,before);assert.equal(pee.calls,0);
+  pee.target.ready=true;npc.update(0,{player,cleanupTarget:pee.target,peeing:false});
+  assert.equal(npc.cleanupKind,'pee');near(npc.cleanupRemaining,15);assert.equal(poop.calls,0);
 });
 
 test('cleanup cancellation and failed removal never award rage or remove another waste object',()=>{
@@ -517,7 +556,7 @@ test('each successful pee clean adds a persistent top-sprint bonus to chase, sea
   for(let count=1;count<=2;count++) {
     const pee=waste(`pee-${count}`,'pee');npc.update(PEE_CLEAN_SECONDS,{player,cleanupTarget:pee.target,sprintSpeed:7,topSprintSpeed:8.8,movementScale:0});
     assert.equal(pee.calls,1);near(npc.rageBonus,.05*count);near(npc.rageSpeedBonus,.44*count);
-    near(npc.chaseSpeed,7*.7+.44*count);near(npc.walkSpeed,3.5+.44*count);assert.equal(npc.phase,'search');
+    near(npc.chaseSpeed,7*.6+.44*count);near(npc.walkSpeed,3.5+.44*count);assert.equal(npc.phase,'search');
   }
   const at={...npc.position};npc.update(.2,{player,sprintSpeed:7,topSprintSpeed:8.8});
   near(distance(npc.position,at),.2,1e-6);assert.ok(npc.speed>0&&npc.speed<=npc.walkSpeed);
@@ -529,7 +568,7 @@ test('each successful pee clean adds a persistent top-sprint bonus to chase, sea
   for(let frame=0;frame<1000&&npc.state!=='walking';frame++)npc.update(.05,{player});
   assert.equal(npc.state,'walking');const from={...npc.position};npc.update(.1,{player});
   near(distance(npc.position,from),(3.5+.88)*.1);near(npc.speed,3.5+.88);
-  npc.update(0,{player,sprintSpeed:8.5,topSprintSpeed:8.8,dayElapsed:480});near(npc.chaseSpeed,8.5*.9+.88);
+  npc.update(0,{player,sprintSpeed:8.5,topSprintSpeed:8.8,dayElapsed:480});near(npc.chaseSpeed,8.5*.8+.88);
   npc.reset();near(npc.rageBonus,0);near(npc.rageSpeedBonus,0);near(npc.walkSpeed,3.5);
 });
 

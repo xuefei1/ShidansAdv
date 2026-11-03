@@ -2,8 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from '../vendor/three.module.js';
 import { createHouse, batchStaticGeometry } from '../src/house.js';
-import { MistressSight, MistressFootsteps, MISTRESS_FOOTSTEP_INTERVAL,
-  MISTRESS_FOOTSTEP_SECONDS, MAX_MISTRESS_FOOTSTEPS } from '../src/mistress-awareness.js';
+import { MistressSight, MistressFootsteps, MISTRESS_FOOTSTEP_SECONDS } from '../src/mistress-awareness.js';
 
 const p=(x=0,y=0,z=0)=>({x,y,z});
 const camera=(origin=p(0,1,5),target=p(0,1,0))=>{
@@ -94,94 +93,76 @@ test('real batched house sight distinguishes closed glass, solid walls, doors an
   assert.equal(see(p(-16,.71,12),p(-15.8,.71,7)),true,'a wire-den gap permits a sighting');
 });
 
-test('only actual walking within the inclusive 3D five-metre hearing radius emits footsteps',()=>{
+function footfallAt(source,player=p()) {
+  const steps=new MistressFootsteps();
+  steps.update(.01,{player,mistress:walk(p(source.x-1,source.y,source.z))});
+  steps.update(1/3.5,{player,mistress:walk(source)});return steps;
+}
+
+test('only actual travel within the inclusive 3D five-metre radius reaches the minimap',()=>{
   for(const [source,heard] of [[p(5,0,0),true],[p(5.000001,0,0),false],[p(3,4,0),true],[p(3,4.000001,0),false],[p(0,4.2,0),true]]) {
-    const steps=new MistressFootsteps();steps.update(.01,{player:p(),mistress:walk(source)});
-    assert.equal(steps.events.length>0,heard,JSON.stringify(source));
+    const steps=footfallAt(source);assert.equal(steps.events.length>0,heard,JSON.stringify(source));
+    assert.equal(steps.cues.length,1,'world/audio cues exist independently of minimap hearing');
   }
-  for(const state of ['acting','entering','leaving']) {
-    const steps=new MistressFootsteps();steps.update(.5,{player:p(),mistress:{...walk(),state}});assert.equal(steps.sequence,0,state);
+  for(const state of ['acting','entering','leaving','idle']) {
+    const steps=new MistressFootsteps();steps.update(.01,{player:p(),mistress:walk()});
+    steps.update(.5,{player:p(),mistress:{...walk(p(1,0,0)),state}});assert.equal(steps.cueSequence,0,state);
   }
-  const stopped=new MistressFootsteps();stopped.update(.5,{player:p(),mistress:{...walk(),speed:0}});assert.equal(stopped.sequence,0);
+  const stopped=new MistressFootsteps();for(let frame=0;frame<60;frame++)stopped.update(1/60,{player:p(),mistress:walk()});
+  assert.equal(stopped.cueSequence,0,'reported walking speed without physical travel makes no footfalls');
 });
 
-test('footsteps ignore walls and sight, but do not reveal a permanent hidden dot',()=>{
-  const steps=new MistressFootsteps();steps.update(.1,{player:p(),mistress:walk(p(2,0,0)),visible:false});
-  assert.equal(steps.events.length,1);assert.equal(steps.ripples.length,1);
-  const event=steps.events[0],ripple=steps.ripples[0];
+test('heard footfalls ignore walls and visibility but reveal only expiring uncertainty rings',()=>{
+  const steps=footfallAt(p(2,0,0)),event=steps.events[0],ripple=steps.ripples[0];
   assert.equal(event.source,'mistress');assert.equal(event.kind,'footstep');assert.equal(event.scope,'local');assert.equal(event.radius,5);
   assert.equal(steps.canHear(event,p(7,0,0)),true);assert.equal(steps.canHear(event,p(7.01,0,0)),false);
   assert.equal(ripple.mistress,undefined);assert.equal(ripple.dot,undefined);
+  assert.equal(steps.audibleTo(p()).length,1);assert.equal(steps.audibleTo(p(20,0,0)).length,0);
   steps.update(MISTRESS_FOOTSTEP_SECONDS,{player:p(),mistress:{...walk(),state:'acting'}});
-  assert.equal(steps.ripples.length,0);assert.equal(steps.events.length,0);assert.equal(steps.canHear(event,p()),false);
+  assert.equal(steps.events.length,0);assert.equal(steps.cues.length,0);assert.equal(steps.ripples.length,0);assert.equal(steps.canHear(event,p()),false);
 });
 
-test('footstep positions are immutable last-heard snapshots with metre-based expanding fading rings',()=>{
-  const steps=new MistressFootsteps(),source=p(2,0,1),player=p();
-  steps.update(.01,{player,mistress:walk(source)});
-  const event=steps.events[0],initial=steps.ripples[0];
-  assert.ok(Object.isFrozen(event));assert.ok(Object.isFrozen(event.position));assert.ok(Object.isFrozen(initial));
-  source.x=30;steps.update(.2,{player,mistress:{...walk(source),state:'acting'}});
+test('footfalls and rings preserve immutable last-heard snapshots while their cue identity links audio and world effects',()=>{
+  const source=p(2,0,1),steps=footfallAt(source),event=steps.events[0],cue=steps.cues[0],initial=steps.ripples[0];
+  assert.ok(Object.isFrozen(event));assert.ok(Object.isFrozen(event.position));assert.ok(Object.isFrozen(cue));assert.ok(Object.isFrozen(initial));
+  assert.equal(event.cueId,cue.id);assert.equal(event.position,cue.position);assert.equal(event.gait,'walk');assert.equal(event.phase,'routine');
+  source.x=30;steps.update(.2,{player:p(),mistress:{...walk(source),state:'acting'}});
   const later=steps.ripples[0];assert.equal(later.x,2);assert.equal(later.z,1);
   assert.ok(later.radius>initial.radius&&later.radius<=5);assert.ok(later.opacity<initial.opacity);
-  const returned=steps.events;returned.length=0;assert.equal(steps.events.length,1);
+  const events=steps.events,cues=steps.cues;events.length=cues.length=0;assert.equal(steps.events.length,1);assert.equal(steps.cues.length,1);
 });
 
-test('cadence is frame-rate independent and delayed updates discard expired sound bursts',()=>{
-  const fine=new MistressFootsteps(),coarse=new MistressFootsteps(),options={player:p(),mistress:walk(p(2,0,0))};
-  for(let frame=0;frame<180;frame++)fine.update(1/60,options);
-  coarse.update(3,options);
-  assert.equal(fine.sequence,Math.floor(3/MISTRESS_FOOTSTEP_INTERVAL)+1);
-  // Coarse updates deliberately omit already-expired events instead of
-  // reconstructing an inaudible historic burst for the minimap or sound.
-  assert.deepEqual(fine.events.map(event=>event.time),coarse.events.map(event=>event.time));
-  assert.ok(coarse.events.length<=3);assert.ok(coarse.events.every(event=>event.expiresAt>coarse.elapsed));
-  const still=new MistressFootsteps();still.update(100000,options);
-  assert.ok(still.events.length<=MAX_MISTRESS_FOOTSTEPS);assert.ok(still.sequence<=MAX_MISTRESS_FOOTSTEPS);
+test('distance cadence interpolates source and listener at the actual footfall time',()=>{
+  const steps=new MistressFootsteps();steps.update(.01,{player:p(),mistress:walk()});
+  steps.update(.5,{player:p(1,0,0),mistress:walk(p(2,0,0))});
+  assert.equal(steps.events.length,2);close(steps.events[0].time,.26);close(steps.events[0].position.x,1);
+  close(steps.events[1].time,.51);close(steps.events[1].position.x,2);
+  close(steps.events[0].speed,4);assert.equal(steps.events[0].foot,'left');assert.equal(steps.events[1].foot,'right');
 });
 
-test('walking source and listener interpolate at pulse time rather than smearing a frame-end position',()=>{
-  const steps=new MistressFootsteps();steps.update(.1,{player:p(),mistress:walk(p(2,0,0))});
-  steps.update(.4,{player:p(1,0,0),mistress:walk(p(4,0,0))});
-  const pulse=steps.events.at(-1);close(pulse.time,.45);close(pulse.position.x,3.75);
+test('listener relocation preserves cadence and heard snapshots without hearing a ghost path',()=>{
+  const steps=new MistressFootsteps();steps.update(.01,{player:p(-10,0,0),mistress:walk()});
+  steps.relocateListener(p(10,0,0));steps.update(1/3.5,{player:p(10,0,0),mistress:walk(p(1,0,0))});
+  assert.equal(steps.sequence,0);assert.equal(steps.cueSequence,1);
+  steps.relocateListener(p(2,0,0));steps.update(1/3.5,{player:p(2,0,0),mistress:walk(p(2,0,0))});
+  assert.equal(steps.sequence,1);assert.equal(steps.events[0].cueId,2);const event=steps.events[0];
+  steps.relocateListener(p(30,0,0));assert.equal(steps.events[0],event);assert.equal(steps.sequence,1);
 });
 
-test('listener relocation preserves heard cues and rhythm without hearing a ghost path through intervening rooms',()=>{
-  const steps=new MistressFootsteps(),mistress=walk(p());
-  steps.update(.1,{player:p(-10,0,0),mistress});assert.equal(steps.sequence,0);
-  const elapsed=steps.elapsed;steps.relocateListener(p(10,0,0));
-  assert.equal(steps.elapsed,elapsed);steps.update(.7,{player:p(10,0,0),mistress});
-  assert.equal(steps.sequence,0,'both actual listener positions are inaudible; teleporting never crosses the source');
-  steps.relocateListener(p(2,0,0));steps.update(.1,{player:p(2,0,0),mistress});
-  assert.equal(steps.sequence,1,'the original .9-second footstep rhythm remains intact');
-  const event=steps.events[0];steps.relocateListener(p(30,0,0));
-  assert.equal(steps.sequence,1);assert.equal(steps.events[0],event,'already-heard sounds remain last-heard snapshots');
-  steps.relocateListener(null);steps.update(.1,{player:p(30,0,0),mistress});assert.equal(steps.sequence,1);
+test('pause, invalid deltas and reset keep heard and global footstep state consistent',()=>{
+  const steps=footfallAt(p(2,0,0)),options={player:p(),mistress:walk(p(2,0,0))};
+  const snapshot=()=>JSON.stringify({elapsed:steps.elapsed,sequence:steps.sequence,cueSequence:steps.cueSequence,events:steps.events,cues:steps.cues,ripples:steps.ripples});
+  const before=snapshot();for(const dt of [0,-1,NaN,Infinity])steps.update(dt,options);steps.update(20,{...options,active:false});assert.equal(snapshot(),before);
+  steps.reset();assert.equal(steps.elapsed,0);assert.equal(steps.sequence,0);assert.equal(steps.cueSequence,0);assert.deepEqual(steps.ripples,[]);
+  steps.update(.01,{player:p(),mistress:walk()});assert.equal(steps.cueSequence,0);
+  steps.update(1/3.5,{player:p(),mistress:walk(p(1,0,0))});assert.equal(steps.cues[0].id,1);assert.equal(steps.events[0].id,1);
 });
 
-test('inaudible movement retains step rhythm while stopping and restarting creates a new first step',()=>{
-  const steps=new MistressFootsteps();steps.update(.1,{player:p(),mistress:walk(p(20,0,0))});assert.equal(steps.sequence,0);
-  steps.update(.1,{player:p(),mistress:walk(p(2,0,0))});assert.equal(steps.sequence,0,'no arbitrary pulse on entering range');
-  steps.update(.3,{player:p(),mistress:walk(p(2,0,0))});assert.equal(steps.sequence,1);
-  steps.update(.1,{player:p(),mistress:{...walk(),state:'acting'}});
-  steps.update(.1,{player:p(),mistress:walk(p(2,0,0))});assert.equal(steps.sequence,2);
-});
-
-test('pause and invalid deltas freeze footstep cadence and existing ripple lifetime; reset clears everything',()=>{
-  const steps=new MistressFootsteps(),options={player:p(),mistress:walk(p(2,0,0))};steps.update(.1,options);
-  const before=JSON.stringify({elapsed:steps.elapsed,sequence:steps.sequence,events:steps.events,ripples:steps.ripples});
-  for(const dt of [0,-1,NaN,Infinity])steps.update(dt,options);
-  steps.update(20,{...options,active:false});
-  assert.equal(JSON.stringify({elapsed:steps.elapsed,sequence:steps.sequence,events:steps.events,ripples:steps.ripples}),before);
-  steps.reset();assert.equal(steps.elapsed,0);assert.equal(steps.sequence,0);assert.deepEqual(steps.ripples,[]);
-  steps.update(.1,options);assert.equal(steps.events[0].id,1);
-});
-
-test('bad positions emit no footsteps, expire old cues and do not poison a later walk',()=>{
-  const steps=new MistressFootsteps();steps.update(.1,{player:p(),mistress:walk()});
-  for(const options of [{},{player:p(),mistress:walk(p(NaN,0,0))},{player:p(Infinity,0,0),mistress:walk()}])steps.update(1,options);
-  assert.equal(steps.events.length,0);assert.equal(steps.elapsed,3.1);
-  steps.update(.1,{player:p(),mistress:walk()});assert.equal(steps.events.length,1);
+test('invalid positions expire old cues, safely rebase and cannot cause an unbounded cadence',()=>{
+  const steps=footfallAt(p(2,0,0));
+  for(const options of [{},{player:p(),mistress:walk(p(NaN,0,0))}])steps.update(1,options);
+  assert.equal(steps.events.length,0);assert.equal(steps.cues.length,0);
+  steps.update(.01,{player:p(),mistress:walk()});steps.update(1/3.5,{player:p(),mistress:walk(p(1,0,0))});assert.equal(steps.events.length,1);
   steps.reset();steps.update(Number.MAX_VALUE/2,{player:p(),mistress:walk()});
-  assert.equal(steps.events.length,0);assert.equal(steps.sequence,0,'unrepresentable cadence cannot cause an unbounded loop');
+  assert.equal(steps.events.length,0);assert.equal(steps.cueSequence,0);
 });

@@ -32,7 +32,7 @@ function release(system) {for(const item of [...system.availableItems()])remove(
 test('real-world food, cable and random spawn pools exclude rabbit-only hiding places',t=>{
   const rawPlaces=createChewablePlaces(world),eligiblePlaces=rawPlaces.filter(canSpawn),system=new ConsumableSystem(world,{canSpawn,random:seeded(8)});
   t.after(()=>release(system));
-  assert.equal(system.slots.length,40);assert.equal(system.wires.length,WIRE_SLOTS.length);
+  assert.equal(system.slots.length,46);assert.equal(system.wires.length,WIRE_SLOTS.length);
   assert.deepEqual(system.randomPlaces,eligiblePlaces);assert.ok(eligiblePlaces.length<rawPlaces.length);
   assert.deepEqual(CONSUMABLE_SLOTS.filter(place=>!canSpawn(place)).map(item=>item.id),['book-5']);
   for(const hiding of [{x:-22.5,y:0,z:-12},{x:-16,y:0,z:-33}]) {
@@ -43,10 +43,10 @@ test('real-world food, cable and random spawn pools exclude rabbit-only hiding p
   const cake=system.items.get('cake-0');assert.ok(cake,'the shared production spawn filter keeps the kitchen-table cake');
   assert.deepEqual({x:cake.x,y:cake.y,z:cake.z},cakeSource);
   assert.ok(system.slots.some(item=>item.id==='book-6'&&item.y>4.2),'reachable elevated bed snack remains');
-  assert.equal(system.items.size,40);assert.equal(system.chewables.size,22);assertEligible(system);
+  assert.equal(system.items.size,46);assert.equal(system.chewables.size,22);assertEligible(system);
   assert.deepEqual([...new Set([...system.availableItems()].map(item=>item.type))].sort(),Object.keys(CONSUMABLE_TYPES).sort());
   assert.equal(canSpawn(system.denHay),false);assert.equal(system.denHay.permanent,true);
-  system.reset();assertEligible(system);assert.equal(system.items.size,40);
+  system.reset();assertEligible(system);assert.equal(system.items.size,46);
 });
 
 test('authored food and books stay on exposed tabletops without clipping furniture or one another',()=>{

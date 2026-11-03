@@ -11,6 +11,6 @@ test('capture holds an airborne rabbit in place without spending energy or renew
   assert.deepEqual([rabbit.vx,rabbit.vy,rabbit.vz],[0,0,0]);
   assert.equal(rabbit.charge,0);assert.equal(rabbit.charging,false);assert.equal(rabbit.sprinting,false);
   assert.equal(rabbit.lastJump,null);assert.equal(rabbit.hasFreeDenJump,false);
-  assert.ok(Math.abs(rabbit.energy.value-80.03)<1e-8,'normal recovery continues while held');
+  assert.ok(Math.abs(rabbit.energy.value-80.06)<1e-8,'normal recovery continues while held');
   rabbit.reset();assert.equal(rabbit.y,0);assert.equal(rabbit.hasFreeDenJump,false);assert.ok(rabbit.energy.value>80);
 });

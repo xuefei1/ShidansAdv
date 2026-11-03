@@ -25,7 +25,7 @@ test('reward-based durations have a one-second floor and use the full listed rew
 
 test('all visible consumables have enclosing colliders and remain reachable on the furnished level',()=>{
   const scene=new THREE.Scene(),{world}=createHouse(scene),view=createConsumables(scene,world);
-  assert.equal(world.dynamicBoxes.size,64);
+  assert.equal(world.dynamicBoxes.size,70);
   const indices=new Map();
   for(const item of view.system.availableItems()) {
     const floor=item.y>=4.1?1:0,group=scene.getObjectByName(`Consumables floor ${floor}`);
@@ -46,7 +46,7 @@ test('all visible consumables have enclosing colliders and remain reachable on t
     }
     assert.ok(reachable,`Reachable ${item.id}`);
   }
-  for(let i=0;i<5;i++) {view.reset();assert.equal(world.dynamicBoxes.size,64);}
+  for(let i=0;i<5;i++) {view.reset();assert.equal(world.dynamicBoxes.size,70);}
 });
 
 test('each consumable supports poop balls, and eating removes only its own solid',()=>{

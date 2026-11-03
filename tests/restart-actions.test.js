@@ -20,7 +20,7 @@ test('action lock cancels a charged jump and stops sliding, sprinting and steeri
   for(let i=0;i<20;i++) rabbit.update(.05,{x:1,z:1,run:true,jump:i%2===0,locked:true});
   assert.equal(rabbit.x,origin.x);assert.equal(rabbit.z,origin.z);assert.equal(rabbit.y,0);
   assert.equal(rabbit.charging,false);assert.equal(rabbit.lastJump,null);assert.equal(rabbit.sprinting,false);
-  assert.equal(rabbit.hasFreeDenJump,true);assert.ok(Math.abs(rabbit.energy.value-60.01)<1e-8);
+  assert.equal(rabbit.hasFreeDenJump,true);assert.ok(Math.abs(rabbit.energy.value-60.02)<1e-8);
   rabbit.update(.1,{x:1,run:true});assert.ok(rabbit.x>origin.x);assert.ok(rabbit.energy.value<60);
 });
 
@@ -40,7 +40,9 @@ test('restart during a partially completed pee resets the full world and resourc
   const water=createWaterFountains(scene,world),consumables=createConsumables(scene,world),poop=createPoopBalls(scene,world);
   const noise=new NoiseSystem(),noiseRipples=createNoiseRipples(scene,world);
   const mistress=new MistressAI(world,{random:()=>.5}),mistressRipples=createNoiseRipples(scene,world),navigation=mistress.navigation;
-  const mistressFootsteps=new MistressFootsteps();mistressFootsteps.update(.1,{player:controller,mistress:{position:controller,state:'walking',speed:3.5}});
+  const mistressFootsteps=new MistressFootsteps();
+  mistressFootsteps.update(.01,{player:controller,mistress:{position:{x:controller.x-1,y:controller.y,z:controller.z},state:'walking',speed:3.5}});
+  mistressFootsteps.update(1/3.5,{player:controller,mistress:{position:controller,state:'walking',speed:3.5}});
   assert.equal(mistressFootsteps.sequence,1);
   mistressRipples.emit(mistress.update(6),mistress.elapsed);
   assert.equal(mistress.noise.sequence,1);assert.ok(mistressRipples.count>0);
@@ -61,7 +63,7 @@ test('restart during a partially completed pee resets the full world and resourc
   assert.equal(controller.x,DEN.x);assert.equal(controller.z,DEN.z);assert.equal(controller.energy.value,100);
   assert.equal(controller.hasFreeDenJump,true);assert.equal(controller.sprintExhausted,false);
   assert.equal(poop.supply.value,10);assert.equal(poop.physics.count,0);assert.equal(poop.supply.nextPoopAt,0);
-  assert.equal(consumables.system.count,41);assert.equal(consumables.system.chewableCount,22);
+  assert.equal(consumables.system.count,47);assert.equal(consumables.system.chewableCount,22);
   assert.equal(consumables.system.target,null);assert.equal(water.system.peeing,false);
   assert.equal(water.system.bladder.value,0);assert.equal(water.system.cooldownRemaining,0);
   assert.equal(water.puddles.length,0);assert.deepEqual(scene.children,nodes);

@@ -119,7 +119,7 @@ test('rendering eating compacts instances and supports eating the final ball', (
   assert.equal(poop.consume(first,rabbit),false);
   assert.equal(poop.consume(second,rabbit),true); poop.sync(); assert.equal(mesh.count,0);
   assert.equal(poop.physics.count,0); rabbit.energy.update(1);
-  assert.ok(Math.abs(rabbit.energy.value-30.01)<.00001);
+  assert.ok(Math.abs(rabbit.energy.value-30.02)<.00001);
   assert.equal(poop.supply.value,8);
 });
 test('drop consumes carried supply once per second and never below zero', () => {

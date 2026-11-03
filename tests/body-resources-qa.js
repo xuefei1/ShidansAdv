@@ -21,13 +21,14 @@ async function until(condition,label) {
   status.textContent=label;const deadline=performance.now()+240000;
   while(!condition()) {status.dataset.game=JSON.stringify(data());if(performance.now()>deadline || !game().getElementById('fatal').hidden) throw Error(`Timed out: ${label} (${JSON.stringify(data())})`);await wait(40);}
 }
-async function walk(x,z,{run=false}={}) {
+async function walk(x,z,{run=false,observe=null}={}) {
   const held=new Set(),deadline=performance.now()+240000;
   const setKeys=codes=>{for(const code of [...held])if(!codes.includes(code)){key('keyup',code);held.delete(code);}for(const code of codes)if(!held.has(code)){key('keydown',code);held.add(code);}};
   status.textContent=`Walking to (${x}, ${z})`;
   try {
     while(performance.now()<deadline) {
       const p=pos(),dx=x-p[0],dz=z-p[2];
+      observe?.(p);
       if(Math.hypot(dx,dz)<.23) {setKeys([]);await wait(600);if(Math.hypot(x-pos()[0],z-pos()[2])<.23)return;}
       const yaw=Number(data().camera.split(',')[0]),forward=-Math.sin(yaw)*dx-Math.cos(yaw)*dz,right=Math.cos(yaw)*dx-Math.sin(yaw)*dz;
       setKeys([...(run&&Math.hypot(dx,dz)>2.5?['ShiftLeft']:[]),...(Math.abs(right)>.14?[right>0?'KeyD':'KeyA']:[]),...(Math.abs(forward)>.14?[forward>0?'KeyW':'KeyS']:[])]);await wait(40);
@@ -35,7 +36,7 @@ async function walk(x,z,{run=false}={}) {
     throw Error(`Could not walk to ${x},${z}: ${pos()}`);
   } finally {setKeys([]);}
 }
-async function runPursuitChecks() {
+async function runPursuitChecks(pickupOnly=false) {
   document.title='Shidan · Pursuit QA';document.querySelector('header b').textContent='Detection, chase & capture';
   await until(()=>data().mistressConeVisible==='true','Show the forward floor cone');
   check('Shidan starts protected in the den with the forward cone visible',data().mistressPhase==='routine'&&game().getElementById('chase-warning').hidden);
@@ -45,26 +46,31 @@ async function runPursuitChecks() {
   for(const code of codes)key('keydown',code);key('keyup','Space');
   await until(()=>pos()[0]>-11,'Escape into the forward view');for(const code of codes)key('keyup',code);
   await until(()=>data().grounded==='true','Land outside the den');await until(()=>data().mistressPhase==='chase','Be spotted outside the den');
+  if(new URLSearchParams(location.search).has('fountain-catch')) {await runDrinkingCaptureChecks();return;}
+  if(new URLSearchParams(location.search).has('balance')) {await runPeeSafetyChecks();return;}
+  if(new URLSearchParams(location.search).has('window-walk')) {await runWindowWallChecks();return;}
+  if(new URLSearchParams(location.search).has('feedback')&&!pickupOnly) {await runFeedbackPursuitChecks();return;}
   if(new URLSearchParams(location.search).has('shelf')) {await runShelfChecks();return;}
   if(new URLSearchParams(location.search).has('scold-escape')) {await runScoldEscapeChecks();return;}
   if(new URLSearchParams(location.search).has('tables')) {await runKitchenTableChecks();return;}
   if(new URLSearchParams(location.search).has('cleanup')) {await runCleanupChecks();return;}
   if(new URLSearchParams(location.search).has('search-noise')) {await runSearchNoiseChecks();return;}
   check('Forward sight starts a chase and displays the warning graphic',data().mistressDetection==='sight'&&!game().getElementById('chase-warning').hidden&&game().getElementById('chase-warning').dataset.phase==='chase');
-  check('Initial chase pace is seventy percent of the wood-floor sprint',data().mistressChaseMultiplier==='0.70'&&Math.abs(Number(data().mistressChaseSpeed)-5.74)<.001);
+  check('Initial chase pace is sixty percent of the wood-floor sprint',data().mistressChaseMultiplier==='0.60'&&Math.abs(Number(data().mistressChaseSpeed)-4.92)<.001);
   click('menu-button');await until(()=>data().mode==='pause','Pause a live chase');
   const beforePause=data().mistressElapsed;await advance(2);
   check('Pause freezes the pursuit rather than spending the lost-sight timer',data().mistressElapsed===beforePause);
   // Circle the coffee-table legs and trunk; the long jump can land on either
   // side of that furniture depending on the held-input frame boundary.
   click('resume');await walk(-6,6);await walk(-6,4.8);await walk(-12,4.8);await walk(-12,7.4);await walk(-15.8,7.4);
-  if(new URLSearchParams(location.search).has('capture')) {
+  if(new URLSearchParams(location.search).has('capture')&&!pickupOnly) {
     await advance(.75);document.querySelector('header').hidden=true;results.hidden=true;
     Object.assign(frame.style,{position:'fixed',inset:'0',height:'100vh',minHeight:'0'});return;
   }
   for(let i=0;i<35&&data().mistressPhase!=='caught';i++)await advance(.1);
   await until(()=>data().mistressPhase==='caught','Allow clear close contact');
   check('Clear close contact begins a three-second capture',Number(data().mistressCaptureRemaining)>2.8&&data().captureCount==='1'&&game().getElementById('chase-title').textContent==='Caught!');
+  if(pickupOnly||new URLSearchParams(location.search).has('pickup')) {await runPickupAnimationChecks();return;}
   const capturedAt=data().position,supply=data().poopSupply,score=data().happiness;
   key('keydown','KeyD');key('keydown','ShiftLeft');key('keydown','Space');key('keydown','KeyP');key('keydown','KeyQ');mouse('mousedown',2);await wait(200);
   for(const code of ['KeyD','ShiftLeft','Space','KeyP','KeyQ'])key('keyup',code);
@@ -87,15 +93,168 @@ async function runPursuitChecks() {
   check('Scolding lasts the full five active seconds',data().mistressPhase==='scolding'&&Number(data().mistressScoldRemaining)>.0001);
   await advance(.002);
   check('She resumes a random routine from the den instead of teleporting to the couch',data().mistressPhase==='routine'&&data().mistressActivity!=='angry'&&Math.hypot(...data().mistressPosition.split(',').map((v,i)=>Number(v)-scoldPosition[i]))<.05&&game().getElementById('chase-warning').hidden);
-  for(const [elapsed,multiplier] of [[120,.75],[240,.80],[360,.85],[480,.90]]) {
+  for(const [elapsed,multiplier] of [[120,.65],[240,.70],[360,.75],[480,.80]]) {
     const now=600-Number(data().dayRemaining);await advance(elapsed+.01-now);
     check(`Chase pace increases to ${Math.round(multiplier*100)}% after ${elapsed/60} minutes`,Math.abs(Number(data().mistressChaseMultiplier)-multiplier)<.001);
   }
   check('Pursuit and floor patterns reuse warmed shaders and cached shadows',data().shaderPrograms===programs&&data().shadowRevision===shadow);
   click('menu-button');click('reset');await until(()=>data().dayRemaining==='600.00','Restart the pursuit state');
-  check('Restart clears alert, capture and difficulty state',data().mistressPhase==='routine'&&data().captureCount==='0'&&data().mistressChaseMultiplier==='0.70'&&game().getElementById('chase-warning').hidden);
+  check('Restart clears alert, capture and difficulty state',data().mistressPhase==='routine'&&data().captureCount==='0'&&data().mistressChaseMultiplier==='0.60'&&game().getElementById('chase-warning').hidden);
   check('The actual game has no fatal pursuit/rendering error',game().getElementById('fatal').hidden);
   status.textContent='All pursuit checks passed.';
+}
+async function runWindowWallChecks() {
+  document.querySelector('header b').textContent='Window-wall pose regression';
+  const previousYaw=Number(data().camera.split(',')[0]);mouse('mousedown');
+  frame.contentWindow.dispatchEvent(new frame.contentWindow.MouseEvent('mousemove',{clientX:300+previousYaw/.003,clientY:400}));mouse('mouseup');
+  await until(()=>Math.abs(Number(data().camera.split(',')[0]))<.001,'Face the front window route');
+  await walk(-6,17);await walk(-6,19.55);
+  let ducked=false,frames=0,runSeen=false;const panes=new Set(),seen=new Set();
+  const observe=p=>{
+    if(seen.has(data().position))return;seen.add(data().position);frames++;
+    ducked||=data().rabbitDucking==='true';runSeen||=data().sprinting==='true';
+    if(p[2]>19.2)for(const x of [-19,-11])if(Math.abs(p[0]-x)<1.5)panes.add(x);
+  };
+  await walk(-22,19.55,{observe});
+  check('Ordinary walking beside both closed front windows keeps Shidan upright',!ducked&&panes.size===2&&frames>10);
+  seen.clear();panes.clear();frames=0;
+  await walk(-6,19.55,{run:true,observe});
+  check('Sprinting across window and solid-wall sections never alternates into ducking',!ducked&&runSeen&&panes.size===2&&frames>10);
+  check('Wall-parallel travel remains on the floor and inside the house',data().grounded==='true'&&Math.abs(pos()[1])<.01&&pos()[2]<19.8);
+  await walk(-11,19.55);
+  check('Standing immediately beside glass also preserves the normal pose',data().rabbitDucking==='false'&&(data().rabbitHeadroom==='open'||Number(data().rabbitHeadroom)>=1.6));
+  const [yaw,pitch]=data().camera.split(',').map(Number);mouse('mousedown');
+  frame.contentWindow.dispatchEvent(new frame.contentWindow.MouseEvent('mousemove',{clientX:300+(yaw-Math.PI/2)/.003,clientY:400+(.3-pitch)/.0027}));mouse('mouseup');
+  check('The window route has no fatal controller or rendering error',game().getElementById('fatal').hidden);
+  status.textContent='All window-wall checks passed.';
+  if(new URLSearchParams(location.search).has('capture')) {
+    document.querySelector('header').hidden=true;results.hidden=true;Object.assign(frame.style,{position:'fixed',inset:'0',height:'100vh',minHeight:'0'});
+  }
+}
+const audio=()=>JSON.parse(data().audio);
+const renderPos=()=>data().rabbitRenderPosition.split(',').map(Number);
+async function runDrinkingCaptureChecks() {
+  await walk(-10.5,17);await until(()=>data().consumeTarget==='fountain-living','Reach the living-room fountain');
+  mouse('mousedown');await until(()=>data().drinking==='true'&&data().rabbitAction==='drink','Start drinking during the chase');
+  check('Drinking starts normally and does not activate pee protection',data().rabbitAction==='drink'&&data().peeing==='false'&&data().captureCount==='0');
+  await advance(.1);
+  check('The fountain transfers water before capture',Number(data().bladder)>0&&Number(data().bladder)<100);
+  for(let i=0;i<90&&data().mistressPhase!=='caught';i++)await advance(.1);
+  check('The mistress catches Shidan while the drink button is still held',data().mistressPhase==='caught'&&data().captureCount==='1'&&Number(data().bladder)<100);
+  const bladder=data().bladder,water=JSON.parse(data().fountainWater)['fountain-living'];
+  check('Capture cancels drinking and starts the ordinary pickup animation',data().drinking==='false'&&data().rabbitAction==='carried'&&Number(data().mistressCaptureRemaining)>2.8);
+  await advance(.5);
+  check('Water stops transferring once Shidan is caught',data().bladder===bladder&&JSON.parse(data().fountainWater)['fountain-living']===water);
+  mouse('mouseup');
+  check('Fountain capture has no fatal error',game().getElementById('fatal').hidden);
+  status.textContent='All drinking-capture checks passed.';
+  if(new URLSearchParams(location.search).has('capture')) {
+    document.querySelector('header').hidden=true;results.hidden=true;Object.assign(frame.style,{position:'fixed',inset:'0',height:'100vh',minHeight:'0'});
+    key('keydown','KeyC');key('keyup','KeyC');
+  }
+}
+async function runBalanceChecks() {
+  document.querySelector('header b').textContent='Movement, recovery & pee safety';
+  check('The level starts with twelve ordinary hay stacks and 46 snacks',data().hayCount==='12'&&data().consumableCount==='46');
+  check('The initial mistress chase multiplier is sixty percent',data().mistressChaseMultiplier==='0.60');
+  const steps=audio().rabbitFootstepsPlayed,sequence=data().noiseSequence;
+  await walk(-14,12);await walk(-14,10.7);
+  check('Ordinary walking generates neither footstep sounds nor gameplay noise',audio().rabbitFootstepsPlayed===steps&&data().noiseSequence===sequence);
+  const previousYaw=Number(data().camera.split(',')[0]);mouse('mousedown');
+  frame.contentWindow.dispatchEvent(new frame.contentWindow.MouseEvent('mousemove',{clientX:300+previousYaw/.003,clientY:400}));mouse('mouseup');
+  key('keydown','ShiftLeft');key('keydown','KeyA');
+  try {await until(()=>pos()[0]<-17.1,'Sprint across the den');}
+  finally {key('keyup','KeyA');key('keyup','ShiftLeft');}
+  await until(()=>data().sprinting==='false','Release sprint');
+  check('Sprinting produces footsteps and local five-metre noise',audio().rabbitFootstepsPlayed>steps&&data().lastNoiseKind==='sprint'&&data().lastNoiseRadius==='5');
+  const stoppedSteps=audio().rabbitFootstepsPlayed,stoppedSequence=data().noiseSequence;
+  await walk(-15,10.7);
+  check('Returning to a walk stops new movement audio and noise',audio().rabbitFootstepsPlayed===stoppedSteps&&data().noiseSequence===stoppedSequence);
+  check('The energy panel explains half-second passive recovery',game().getElementById('energy-status').textContent.includes('0.5 seconds'));
+  click('menu-button');click('reset');await until(()=>data().mode==='play','Restart for close pee protection');
+  await runPursuitChecks();
+}
+async function runPeeSafetyChecks() {
+  await walk(-10.5,17);await until(()=>data().consumeTarget==='fountain-living','Reach a full fountain');
+  mouse('mousedown');await advance(10);mouse('mouseup');
+  check('A real fountain fills the bladder for the close-chase test',data().bladder==='100.00'&&data().captureCount==='0');
+  const distance=()=>Math.hypot(...data().mistressRenderPosition.split(',').map((value,i)=>Number(value)-pos()[i]));
+  for(let i=0;i<300&&distance()>1.5;i++)await advance(.05);
+  check('The mistress approaches just outside catching distance',data().mistressPhase==='chase'&&distance()>.8&&distance()<=1.5);
+  key('keydown','KeyQ');key('keyup','KeyQ');const anchor=data().position;
+  for(let i=0;i<4;i++)await advance(.2);
+  check('At close range Shidan remains uncatchable while the puddle forms',data().peeing==='true'&&data().captureCount==='0'&&distance()<=.82&&data().mistressCleanupKind!=='pee'&&data().position===anchor);
+  await advance(.199);
+  check('Pee protection lasts through 0.999 seconds',data().peeing==='true'&&data().captureCount==='0');
+  await advance(.001);
+  check('Completion immediately selects the puddle with a fresh fifteen-second timer',data().peeing==='false'&&data().captureCount==='0'&&data().mistressPhase==='cleanup'&&data().mistressCleanupKind==='pee'&&data().mistressCleanupRemaining==='15.000');
+  click('menu-button');await advance(2);
+  check('Pause freezes the newly started cleaning interval',data().mistressCleanupRemaining==='15.000'&&data().puddleCount==='1');click('resume');
+  await walk(-7.5,17);
+  check('Shidan can leave while the mistress is occupied',data().captureCount==='0'&&data().mistressPhase==='cleanup'&&Math.hypot(...pos().map((value,i)=>value-Number(anchor.split(',')[i])))>2);
+  await advance(14.999);
+  check('The completed puddle stays for the full cleaning time without an early rage bonus',data().puddleCount==='1'&&data().mistressCleanupRemaining==='0.001'&&data().mistressRageBonus==='0.00');
+  await advance(.001);
+  check('Fifteen seconds removes the puddle and grants the existing rage bonus',data().puddleCount==='0'&&data().mistressRageBonus==='0.05'&&data().captureCount==='0');
+  check('Movement and pee safety changes have no fatal error',game().getElementById('fatal').hidden);
+  status.textContent='All balance and pee-safety checks passed.';
+  if(new URLSearchParams(location.search).has('capture')) {
+    document.querySelector('header').hidden=true;results.hidden=true;Object.assign(frame.style,{position:'fixed',inset:'0',height:'100vh',minHeight:'0'});
+  }
+}
+function checkDistance(label) {
+  const npc=data().mistressRenderPosition.split(',').map(Number),p=pos(),distance=Math.hypot(...npc.map((value,i)=>value-p[i]));
+  check(label,!game().getElementById('chase-distance').hidden&&game().getElementById('chase-distance-value').textContent===`${distance.toFixed(1)} m`);
+}
+async function runFeedbackChecks() {
+  document.querySelector('header b').textContent='Footsteps, distance & pickup';
+  check('Sound starts enabled and the real Play gesture unlocks audio',data().soundEnabled==='true'&&audio().contextState==='running'&&game().getElementById('sound').textContent==='Sound on');
+  check('Routine activities do not show a chase distance',game().getElementById('chase-distance').hidden);
+  await advance(Number(data().mistressRemaining)+.01);
+  for(let i=0;i<60&&!JSON.parse(data().mistressStepCues).some(cue=>cue.gait==='walk');i++)await advance(.1);
+  check('Routine travel emits footsteps, red floor ripples and audible steps',JSON.parse(data().mistressStepCues).some(cue=>cue.gait==='walk')&&Number(data().mistressStepRipples)>0&&audio().footstepsPlayed>0&&audio().lastFootstep.profile==='routine');
+  click('sound');const count=audio().footstepsPlayed;
+  await advance(.5);key('keydown','KeyW');key('keyup','KeyW');
+  check('Muting suppresses footsteps and movement does not turn sound back on',data().soundEnabled==='false'&&audio().footstepsPlayed===count);
+  click('sound');click('menu-button');click('reset');await until(()=>data().mode==='play','Restart for pursuit feedback');
+  check('Restart clears footfall ripples and preserves enabled sound',data().mistressStepSequence==='0'&&data().mistressStepRipples==='0'&&data().soundEnabled==='true');
+  await runPursuitChecks();
+}
+async function runFeedbackPursuitChecks() {
+  checkDistance('The chase warning reports the actual three-dimensional distance');
+  const before=audio().footstepsPlayed;
+  for(let i=0;i<20&&(!JSON.parse(data().mistressStepCues).some(cue=>cue.gait==='run')||audio().footstepsPlayed<=before);i++)await advance(.1);
+  check('Chasing produces running footfalls and denser red floor ripples',JSON.parse(data().mistressStepCues).some(cue=>cue.gait==='run')&&Number(data().mistressStepRipples)>=2&&audio().lastFootstep.profile==='run');
+  await walk(-6,17);await walk(0,17);await advance(2.01);
+  for(let i=0;i<25&&data().mistressPhase!=='search';i++)await advance(.1);
+  check('Breaking sight changes pursuit to searching',data().mistressPhase==='search');checkDistance('The distance remains visible while she searches through walls');
+  for(let i=0;i<25&&!JSON.parse(data().mistressStepCues).some(cue=>cue.gait==='search');i++)await advance(.1);
+  check('Search walking uses its own softer footstep profile',JSON.parse(data().mistressStepCues).some(cue=>cue.gait==='search')&&audio().lastFootstep.profile==='search');
+  click('menu-button');const frozen=data().mistressStepSequence;await advance(2);
+  check('Pause freezes footfalls and their ripples',data().mistressStepSequence===frozen);
+  click('reset');await until(()=>data().mode==='play','Restart for pickup');await runPursuitChecks(true);
+}
+async function runPickupAnimationChecks() {
+  const physics=data().position,start=renderPos(),supply=data().poopSupply;
+  check('A catch starts at Shidan’s real location without snapping',Math.hypot(...start.map((value,i)=>value-pos()[i]))<.03&&data().rabbitAction==='carried');
+  check('The chase distance disappears while she is held',game().getElementById('chase-distance').hidden);
+  await advance(.9);const reach=renderPos();
+  check('The pickup moves Shidan toward the mistress without changing collision or supplies',Math.hypot(...reach.map((value,i)=>value-start[i]))>.05&&data().position===physics&&data().poopSupply===supply);
+  click('menu-button');const paused=data().rabbitRenderPosition,progress=data().mistressCaptureProgress;await advance(1);
+  check('Pause freezes both bodies at the current pickup pose',data().rabbitRenderPosition===paused&&data().mistressCaptureProgress===progress);
+  click('resume');await advance(1.65);
+  check('Shidan finishes curled in her arms before the three-second return',data().mistressPhase==='caught'&&Number(data().captureCarryWeight)>.99&&renderPos()[1]>1&&data().position===physics);
+  const [yaw,pitch]=data().camera.split(',').map(Number),npc=data().mistressRenderPosition.split(',').map(Number),r=renderPos();
+  const view=Math.atan2(r[0]-npc[0],r[2]-npc[2])+.55;
+  mouse('mousedown');frame.contentWindow.dispatchEvent(new frame.contentWindow.MouseEvent('mousemove',{clientX:300+(yaw-view)/.003,clientY:400+(.3-pitch)/.0027}));mouse('mouseup');
+  await until(()=>Math.abs(Number(data().camera.split(',')[0])-view)<.01,'Look at the completed pickup');
+  check('Pickup and feedback cause no fatal error',game().getElementById('fatal').hidden);
+  status.textContent='All mistress feedback and pickup checks passed.';
+  if(new URLSearchParams(location.search).has('capture')) {
+    document.querySelector('header').hidden=true;results.hidden=true;Object.assign(frame.style,{position:'fixed',inset:'0',height:'100vh',minHeight:'0'});return;
+  }
+  await advance(Number(data().mistressCaptureRemaining)+.001);
+  check('After three seconds Shidan returns to the den and the pickup pose clears',data().mistressPhase==='scolding'&&data().rabbitAction==='idle'&&data().captureCarryWeight==='0.0000'&&Math.hypot(pos()[0]+16,pos()[2]-12)<.03);
 }
 async function runScoldEscapeChecks() {
   document.querySelector('header b').textContent='Escaping during the angry rant';
@@ -191,7 +350,7 @@ async function runShelfChecks() {
   await walk(20.4,-8.8);await walk(20.4,-12.5);
   check('The connecting ramp reaches level two',data().grounded==='true'&&Math.abs(pos()[1]-(H+1.9))<.03);
   await walk(21,-13.6);await until(()=>data().consumeTarget==='banana-2','Reach the upper shelf snack');
-  check('The upper tier has an accessible snack',data().consumeTarget==='banana-2'&&data().consumableCount==='40');
+  check('The upper tier has an accessible snack',data().consumeTarget==='banana-2'&&data().consumableCount==='46');
   await walk(19.95,-12.3);const before=Number(data().energy);
   key('keydown','Space');await until(()=>!game().getElementById('charge').hidden&&game().getElementById('charge-percent').textContent==='100%','Charge a jump from shelf level two');
   key('keydown','KeyA');key('keyup','Space');
@@ -286,15 +445,15 @@ async function runCleanupChecks() {
   key('keydown','KeyP');key('keyup','KeyP');await wait(150);
   check('A pee puddle has priority even when another poop ball is available',data().puddleCount==='1'&&data().poopCount==='1'&&data().mistressPhase==='cleanup'&&data().mistressCleanupKind==='pee');
   for(let i=0;i<100&&data().mistressState!=='acting';i++)await advance(.1);
-  check('The mistress reaches the puddle and starts the ten-second mop animation',data().mistressCleanupKind==='pee'&&data().mistressState==='acting'&&Number(data().mistressCleanupRemaining)>9.8);
+  check('The mistress reaches the puddle and starts the fifteen-second mop animation',data().mistressCleanupKind==='pee'&&data().mistressState==='acting'&&Number(data().mistressCleanupRemaining)>14.8);
   if(new URLSearchParams(location.search).has('cleaning')) {
     await advance(2);document.querySelector('header').hidden=true;results.hidden=true;Object.assign(frame.style,{position:'fixed',inset:'0',height:'100vh',minHeight:'0'});status.textContent='Pee cleanup preview';return;
   }
   const left=Number(data().mistressCleanupRemaining);await advance(left-.001);
-  check('The puddle remains and rage is unchanged just before ten seconds',data().puddleCount==='1'&&data().mistressRageBonus==='0.00'&&Number(data().mistressCleanupRemaining)>.0001);
+  check('The puddle remains and rage is unchanged just before fifteen seconds',data().puddleCount==='1'&&data().mistressRageBonus==='0.00'&&Number(data().mistressCleanupRemaining)>.0001);
   await advance(.002);
   check('Completed puddle cleanup removes it and adds five percent of top sprint speed',data().puddleCount==='0'&&data().mistressRageBonus==='0.05'&&data().mistressRageSpeedBonus==='0.440'&&!game().getElementById('mistress-rage').hidden);
-  check('Cleanup preserves the drinking cooldown and does not refill the bladder',Number(data().drinkCooldown)>40&&data().bladder==='0.00');
+  check('Cleanup preserves the drinking cooldown and does not refill the bladder',Number(data().drinkCooldown)>35&&data().bladder==='0.00');
   check('The cleanup flow has no fatal rendering or action errors',game().getElementById('fatal').hidden);
   if(new URLSearchParams(location.search).has('results')) {await runResultsChecks();return;}
   if(new URLSearchParams(location.search).has('capture')) {
@@ -362,6 +521,7 @@ async function runMinimapChecks() {
   status.textContent='All minimap checks passed.';
 }
 async function runMistressChecks() {
+  if(data().soundEnabled==='true')click('sound');
   document.title='Shidan · Mistress routine QA';document.querySelector('header b').textContent='Household routines';
   const npcPos=()=>data().mistressPosition.split(',').map(Number),npcTime=()=>Number(data().mistressElapsed);
   check('Mistress starts using her phone on the couch while Shidan stays in her den',data().mistressActivity==='phone'&&data().mistressState==='acting'&&pos()[0]===-16&&pos()[2]===12);
@@ -415,6 +575,7 @@ async function runMistressChecks() {
   status.textContent='All mistress checks passed.';
 }
 async function runNoiseChecks() {
+  if(data().soundEnabled==='true')click('sound');
   const sequence=()=>Number(data().noiseSequence),quiet=()=>data().noiseCount==='0'&&data().noiseRipples==='0';
   document.title='Shidan · Noise QA';document.querySelector('header b').textContent='Noise integration';
   check('A fresh round starts with no noise events or ripples',sequence()===0&&quiet());
@@ -491,7 +652,7 @@ document.getElementById('run').onclick=async()=>{
     const html=await(await fetch('/')).text();
     // Test-only clock injection; player state is driven solely by real handlers.
     const livePreview=new URLSearchParams(location.search).has('live');
-    const normalMovement=livePreview||new URLSearchParams(location.search).has('cleanup');
+    const normalMovement=livePreview||['cleanup','feedback','balance','fountain-catch'].some(key=>new URLSearchParams(location.search).has(key));
     const seededResults=new URLSearchParams(location.search).has('results');
     const seed=seededResults?`const rows=[{id:'qa-high',name:'Sunny',score:100,finishedAt:'2026-01-01T00:00:00Z'},{id:'qa-mid',name:'Clover',score:20,finishedAt:'2026-01-02T00:00:00Z'},{id:'qa-tie',name:'Bunny',score:10,finishedAt:'2026-01-03T00:00:00Z'}];const store=new Map([['shidans-adventure.leaderboard.v1',JSON.stringify(rows)]]);const scores={getItem:key=>store.get(key)??null,setItem:(key,value)=>store.set(key,value)};`:'';
     const entry=`<script type="module">import {boot} from '/src/main.js';let now=0;document.addEventListener('qa-advance',event=>now+=event.detail*1000);${seed}boot({clockNow:${livePreview?'()=>performance.now()':'()=>now'},scoreStorage:${seededResults?'scores':'null'},maxNpcMovementPerFrame:${normalMovement?'.1':'Infinity'}});<\/script>`;
@@ -506,7 +667,11 @@ document.getElementById('run').onclick=async()=>{
       Object.assign(frame.style,{position:'fixed',inset:'0',height:'100vh',minHeight:'0'});
       game().getElementById('player-name').value='Preview';return;
     }
-    game().getElementById('player-name').value='Body QA';click('play');await until(()=>data().mode==='play','Start adventure');
+    game().getElementById('player-name').value='Body QA';
+    if(!['feedback','pickup','balance','fountain-catch'].some(key=>new URLSearchParams(location.search).has(key)))click('play');
+    await until(()=>data().mode==='play','Start adventure with the Play button');
+    if(new URLSearchParams(location.search).has('balance')) {await runBalanceChecks();return;}
+    if(new URLSearchParams(location.search).has('feedback')) {await runFeedbackChecks();return;}
     if(new URLSearchParams(location.search).has('pursuit')) {await runPursuitChecks();return;}
     if(new URLSearchParams(location.search).has('minimap')) {await runMinimapChecks();return;}
     if(new URLSearchParams(location.search).has('mistress')) {await runMistressChecks();return;}
@@ -597,7 +762,7 @@ document.getElementById('run').onclick=async()=>{
     check('Escape menu offers Restart game',game().getElementById('reset').textContent==='Restart game');
     click('reset');await until(()=>data().mode==='play'&&data().dayRemaining==='600.00','Restart a partially peed round');
     check('Restart clears the active pee, bladder, balls, puddles and cooldowns',data().peeing==='false'&&data().bladder==='0.00'&&data().poopCount==='0'&&data().poopSupply==='10'&&data().puddleCount==='0'&&data().drinkCooldown==='0.000');
-    check('Restart preserves the name and restores a fresh complete round',data().happiness==='0'&&data().energy==='100.00'&&data().consumableCount==='40'&&data().chewableCount==='22'&&data().discoveries==='0'&&data().freeDenJump==='true'&&game().getElementById('score-player').textContent==='Body QA'&&Math.hypot(pos()[0]+16,pos()[2]-12)<.03);
+    check('Restart preserves the name and restores a fresh complete round',data().happiness==='0'&&data().energy==='100.00'&&data().consumableCount==='46'&&data().chewableCount==='22'&&data().discoveries==='0'&&data().freeDenJump==='true'&&game().getElementById('score-player').textContent==='Body QA'&&Math.hypot(pos()[0]+16,pos()[2]-12)<.03);
     check('Restart restores all fourteen fountain reservoirs',Object.values(JSON.parse(data().fountainWater)).length===14&&Object.values(JSON.parse(data().fountainWater)).every(value=>value===100));
     await advance(600);await until(()=>data().mode==='gameover','Finish day');
     click('game-over-new');await until(()=>data().mode==='play','Start the next day from results');

@@ -23,11 +23,13 @@ export class MistressCleanupSight {
       };
       descriptor={id:`${kind}:${++this.serial}`,kind,
         get position(){return position();},
+        get ready(){return kind!=='pee'||source.progress>=1;},
         exists:()=>kind==='pee'?this.water.puddles.includes(source):this.poop.hasBall(source),
         remove:()=>kind==='pee'?this.water.removePuddle(source):this.poop.remove(source),
         canClean,
       };
       Object.defineProperty(descriptor,'goal',{get:()=>{
+        if(!descriptor.ready)return null;
         const target=position(),goal=this.navigation.cleanupTarget?this.navigation.cleanupTarget(target,descriptor.stance):
           this.navigation.pursuitTarget(target,descriptor.stance);
         const interaction=this.navigation.reachInteraction?.(target)??this.navigation.tableInteraction?.(target);
@@ -39,14 +41,14 @@ export class MistressCleanupSight {
   }
   scan(observer,active=null) {
     if(observer.asleep)return null;
-    if(active?.kind==='pee'&&active.exists()&&active.goal)return active;
+    if(active?.kind==='pee'&&active.ready!==false&&active.exists()&&active.goal)return active;
     let budget=this.rayBudget;
     for(const kind of ['pee','poop']) {
       if(kind==='poop'&&active?.kind==='poop'&&active.exists()&&active.goal)return active;
       const sources=kind==='pee'?this.water.puddles:this.poop.physics.balls;
       const candidates=[];
       for(const source of sources) {
-        if(kind==='pee'&&!(source.progress>0))continue;
+        if(kind==='pee'&&!(source.progress>=1))continue;
         const position={x:source.x,y:source.y+(kind==='pee'?.045:0),z:source.z};
         if(this.navigation.isDen(position)||!inMistressViewCone(observer.position,observer.yaw,position))continue;
         candidates.push({source,position,distance:distance(observer.position,position)});

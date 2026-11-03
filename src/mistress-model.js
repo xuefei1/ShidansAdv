@@ -124,8 +124,9 @@ export function createMistressModel() {
   }));
   shadow.name='Mistress contact shadow';shadow.rotation.x=-Math.PI/2;shadow.position.y=.018;root.add(shadow);
   const props={phone,book,towel,bowl,spoon,pot,mop};
+  const capturePoint=new THREE.Vector3();
 
-  function animate(time,{activity='idle',moving=false,speed=0,activityTime=0,laughing=false,poseWeight=1,cleanupKind='poop',enraged=false}={}) {
+  function animate(time,{activity='idle',moving=false,speed=0,activityTime=0,laughing=false,poseWeight=1,cleanupKind='poop',enraged=false,captureProgress=null,captureTarget=null,captureSupport=null}={}) {
     time=Number.isFinite(time)?time:0;activityTime=Number.isFinite(activityTime)?activityTime:0;
     const weight=clamp01(poseWeight),walk=moving?Math.min(1,Math.max(0,Number.isFinite(speed)?speed:0)/3.5):0;
     const gait=time*11*(1+(Number.isFinite(speed)?Math.max(0,speed-3.5):0)*.12),swing=Math.sin(gait)*.23*walk;
@@ -254,6 +255,37 @@ export function createMistressModel() {
       if(weight>.5){eyes.visible=false;closedEyes.visible=true;}
       shadow.visible=weight<.5;
     }
+    if(Number.isFinite(captureProgress)&&captureProgress>0) {
+      const progress=clamp01(captureProgress),engage=smooth(progress/.22),cradle=smooth((progress-.38)/.45);
+      let targetHeight=.3;
+      if(captureTarget&&['x','y','z'].every(axis=>Number.isFinite(captureTarget[axis]))) {
+        root.updateWorldMatrix(true,false);
+        capturePoint.copy(captureTarget);root.worldToLocal(capturePoint);targetHeight=capturePoint.y;
+      }
+      // Deeply bend for a floor rabbit, or reach over the edge for a rabbit on
+      // furniture. Rise again as the forearms fold into a supporting cradle.
+      const high=Math.max(0,Math.min(1,(targetHeight-.3)/1.5));
+      const reaching=smooth(progress/.28)*(1-smooth((progress-.38)/.48));
+      const lean=mix(.55,.15,high)*reaching,knee=mix(.95,.22,high)*reaching;
+      const carryHeight=Number.isFinite(captureSupport?.maxY)?Math.max(targetHeight,captureSupport.maxY-root.matrixWorld.elements[13]):targetHeight;
+      const carryArm=-.85-.52*Math.max(0,Math.min(1,(carryHeight-.9)/.7));
+      body.position.set(0,MISTRESS_STANDING_PELVIS-MISTRESS_BODY_SCALE*.39*(1-Math.cos(knee))+
+        MISTRESS_BODY_SCALE*.03*(Math.cos(lean)-1),-MISTRESS_BODY_SCALE*.39*Math.sin(knee)+MISTRESS_BODY_SCALE*.03*Math.sin(lean));
+      body.rotation.set(lean,0,0);
+      legs.forEach(leg=>{leg.rotation.set(-lean-knee,0,0);});
+      shins.forEach(shin=>{shin.position.y=-.39;shin.rotation.set(knee,0,0);});
+      head.rotation.set(mix(.34,.10,cradle)*engage,0,0);
+      arms.forEach((arm,index)=>{
+        const side=index===0?1:-1;
+        // Fold first beside the chest, then extend above a high slab rather
+        // than swinging a hanging hand straight through its edge.
+        const upper=high>.35?smooth((progress-.10)/.18):engage,lower=high>.35?smooth(progress/.12):engage;
+        arm.rotation.set(mix(arm.rotation.x,mix(-lean+mix(.04,-1.05,high),carryArm,cradle),upper),0,side*mix(.07,.10,engage));
+        forearms[index].rotation.set(mix(forearms[index].rotation.x,mix(mix(-.30,-1.15,high),-1.10,cradle),lower),0,side*.24*engage);
+      });
+      Object.values(props).forEach(prop=>{prop.visible=false;});
+      eyes.visible=true;closedEyes.visible=false;shadow.visible=true;
+    }
     // Rage is an expression layered over the active pose, including the normal
     // run gait. It does not restart a scold or replace the current animation.
     if(enraged)brows.forEach((brow,index)=>{brow.rotation.z=(index===0?-1:1)*.38;});
@@ -265,6 +297,15 @@ export function createMistressModel() {
     body.localToWorld(sightPoints[1].set(0,.23,.08));
     return sightPoints;
   }
+  const cradlePoint=new THREE.Vector3(),otherHand=new THREE.Vector3(),cradleOffset=new THREE.Vector3(),rootOrigin=new THREE.Vector3();
+  function getCradlePoint() {
+    root.updateWorldMatrix(true,true);
+    forearms[0].localToWorld(cradlePoint.set(0,-.216,.008));
+    forearms[1].localToWorld(otherHand.set(0,-.216,.008));
+    cradlePoint.add(otherHand).multiplyScalar(.5);
+    root.localToWorld(cradleOffset.set(0,-.34,.06));rootOrigin.setFromMatrixPosition(root.matrixWorld);
+    return cradlePoint.add(cradleOffset.sub(rootOrigin));
+  }
   animate(0);
-  return {root,animate,getSightPoints,joints:{body,head,eyes,closedEyes,brows,arms,forearms,legs,shins},props,shadow};
+  return {root,animate,getSightPoints,getCradlePoint,joints:{body,head,eyes,closedEyes,brows,arms,forearms,legs,shins},props,shadow};
 }

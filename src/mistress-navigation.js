@@ -1,5 +1,6 @@
 import { DEN, FLOOR_HEIGHT, HOUSE, STAIRS, GARDEN_STAIRS, RAMPS, BOUNDS, roomAt } from './layout.js';
 import { tableAt, tableInteraction, withinInteractionReach } from './table-refuges.js';
+import { WATER_REACH } from './water.js';
 
 export const MISTRESS_RADIUS = .50;
 export const MISTRESS_HEIGHT = 2.72;
@@ -7,6 +8,7 @@ export const MISTRESS_HEIGHT = 2.72;
 // centre. This allowance is only used at that final stair/slab junction.
 export const MISTRESS_STAIR_STEP = .22;
 export const MISTRESS_GROUND_STEP = .12;
+export const MISTRESS_FOUNTAIN_REACH = 1.2;
 const GRID = .5;
 const CELL = 4;
 const EPSILON = 1e-6;
@@ -80,6 +82,7 @@ export class MistressNavigation {
     this.tabletops=this.obstacles.filter(box=>box.tabletop);
     this._buildReachShelves();
     this._buildReachSurfaces();
+    this._buildReachFountains();
     this.cells=new Map();
     for(const box of this.obstacles) {
       for(let x=Math.floor(box.minX/CELL);x<=Math.floor(box.maxX/CELL);x++) {
@@ -307,6 +310,27 @@ export class MistressNavigation {
   tableAt(position) {return tableAt(position,this.tabletops);}
   tableInteraction(position) {return tableInteraction(position,this.tabletops);}
 
+  _buildReachFountains() {
+    const groups=new Map();
+    for(const box of this.obstacles) {
+      if(!box.fountainId)continue;
+      if(!groups.has(box.fountainId))groups.set(box.fountainId,{id:box.fountainId,
+        minX:Infinity,maxX:-Infinity,minY:Infinity,maxY:-Infinity,minZ:Infinity,maxZ:-Infinity});
+      const fountain=groups.get(box.fountainId);
+      for(const axis of ['X','Y','Z']) {
+        fountain[`min${axis}`]=Math.min(fountain[`min${axis}`],box[`min${axis}`]);
+        fountain[`max${axis}`]=Math.max(fountain[`max${axis}`],box[`max${axis}`]);
+      }
+    }
+    this.reachableFountains=[...groups.values()];
+  }
+
+  fountainAt(position) {
+    if(!validPoint(position))return null;
+    return this.reachableFountains.find(fountain=>Math.abs(position.y-fountain.minY)<=.45+EPSILON&&
+      Math.hypot(position.x-(fountain.minX+fountain.maxX)/2,position.z-(fountain.minZ+fountain.maxZ)/2)<=WATER_REACH+EPSILON)??null;
+  }
+
   _buildReachShelves() {
     const groups=new Map();
     for(const box of this.obstacles) {
@@ -362,6 +386,8 @@ export class MistressNavigation {
     }
     const table=this.tableInteraction(position);
     if(table)return {...table,support:table.table,key:table.table.id,kind:'table'};
+    const fountain=this.fountainAt(position);
+    if(fountain)return {support:fountain,key:fountain.id,kind:'fountain',under:false,reach:MISTRESS_FOUNTAIN_REACH,height:1.35};
     const base=this.floorPoint(position);
     if(!base||position.y<=base.y+.12||position.y>base.y+2.4+.001)return null;
     let support=null;
@@ -441,7 +467,10 @@ export class MistressNavigation {
     }
     for(const node of candidates) {
       const d=distance(base,node);
-      const score=validPoint(from)?distance(from,node)+d*.08:d;
+      // A drinking rabbit may fit between a low bowl and a wall where the
+      // human cannot stand. Use the nearest clear hand approach, rather than
+      // stopping on the NPC-facing edge just outside ordinary capture range.
+      const score=interaction?.kind==='fountain'?d:validPoint(from)?distance(from,node)+d*.08:d;
       if(d>maxDistance+EPSILON||score>=best||Math.abs(node.y-base.y)>.4||this.region(node)!==region)continue;
       if(interaction?.edgeReach!==undefined&&!withinInteractionReach(player,node,interaction))continue;
       if((node.continuous?this.componentAt(node):node.component??this.components[node.id])!==component)continue;

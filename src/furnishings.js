@@ -117,8 +117,10 @@ export function furnishHouse({ ground: g, upper: u, outside: o, solid: s, detail
   rug(g, -17, 0, 5.8, 8, 5.6, 0xd9ddbf);
   sofa(g, -17, 0, 5.2, 5.4, P.sage, 'lounge-sofa');
   blanket(g, -17, .84, 5.65, 1.25, 1.1, 0xe3c89c, 'sofa-blanket');
-  book(g, -19, 0, 7.9, 1.1, .27, .75, P.peach, 'sofa-book-step');
-  stool(g, -19, 0, 6.95, 1.2, 1.1, .5, 0xc5cda9, 'wood', 'sofa-footstool');
+  // Overlapping treads keep the rabbit supported while she lines up each hop;
+  // narrow gaps here used to drop her feet between two opposing colliders.
+  book(g, -19, 0, 7.9, 1.1, .27, .85, P.peach, 'sofa-book-step');
+  stool(g, -19, 0, 6.75, 1.2, 1.5, .5, 0xc5cda9, 'wood', 'sofa-footstool');
   d(g, 0x424953, -15.2, .854, 5.5, .28, .025, .5); d(g, 0xaecbd3, -15.2, .87, 5.5, .23, .006, .43);
   table(g, -9, 0, 7.5, 3.2, 2.1, 1.44, 0xdab482, 'coffee');
   book(g, -9, 0, 10.8, 1.2, .28, .9, P.blue, 'coffee-books');
@@ -218,7 +220,9 @@ export function furnishHouse({ ground: g, upper: u, outside: o, solid: s, detail
   s(u, 0xc4ac8c, -15, H + .94, -16.4, 5.25, 1.88, .2, 'carpet', 'headboard');
   for (const x of [-16.4, -13.6]) s(u, 0xf6e5c7, x, H + 1.01, -15.7, 1.9, .26, .9, 'carpet', 'bed-pillow-' + x);
   stool(u, -15, H, -9.8, 1.6, 1.1, .3, P.peach, 'carpet', 'bed-pouf');
-  chest(u, -15, H, -10.9, 2.4, .61, 1.2, 0xc7b092, 'bed-trunk');
+  // Tuck the rear of the trunk beneath the bed, leaving its front edge beside
+  // the pouf unchanged. The former 15cm slit trapped her against the mattress.
+  chest(u, -15, H, -11.1, 2.4, .61, 1.6, 0xc7b092, 'bed-trunk');
   for (const x of [-19, -11]) { chest(u, x, H, -15, 1.4, .9, 1.35, 0xd7ba94, 'nightstand-' + x); plant(u, x, H + .9, -15, .6); }
   sofa(u, -20, H, -7.5, 3, 0xb3c3a4, 'bedroom-chair');
   plant(u, -7.2, H, -9, 1.4);
@@ -228,7 +232,7 @@ export function furnishHouse({ ground: g, upper: u, outside: o, solid: s, detail
   rug(u, 2, H, -12, 8, 9, 0xc4d1a6);
   sofa(u, 2.4, H, -13.5, 3.8, 0xb2c4a0, 'reading-sofa');
   blanket(u, 2.4, H + .84, -13, 1.4, 1.2, 0xead5a3, 'reading-blanket');
-  stool(u, 2, H, -11.3, 2.2, 1.6, .4, P.peach, 'carpet', 'reading-pouf');
+  stool(u, 2, H, -11.6, 2.2, 2.2, .4, P.peach, 'carpet', 'reading-pouf');
   shelves(u, 4.5, H, -18.8, 4, 1, 2.7, 0xc2ac86, 'reading-shelves');
   plant(u, -3.1, H, -8.5, 1.5); plant(u, 6, H, -6, 1.1);
   for (const x of [-5.65, -4.35, 7.35, 8.65]) stool(u, x, H, -12, .9, 2.1, .32, 0xdacdaa, 'carpet');

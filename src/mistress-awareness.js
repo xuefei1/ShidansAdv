@@ -3,6 +3,7 @@ import { canHearNoise } from './noise.js';
 
 export const MISTRESS_FOOTSTEP_RADIUS = 5;
 export const MISTRESS_FOOTSTEP_INTERVAL = .45;
+export const MISTRESS_FOOTSTEP_STRIDES = Object.freeze({walk:1,search:.9,run:1.15});
 export const MISTRESS_FOOTSTEP_SECONDS = 1.2;
 export const MAX_MISTRESS_FOOTSTEPS = 16;
 const CELL = 4;
@@ -106,9 +107,8 @@ export class MistressSight {
 export class MistressFootsteps {
   constructor() { this.reset(); }
   reset() {
-    this.elapsed=0;this.sequence=0;this._events=[];
-    this._walking=false;this._start=0;this._next=0;
-    this._previousMistress=null;this._previousPlayer=null;
+    this.elapsed=0;this.sequence=0;this.cueSequence=0;this._events=[];this._cues=[];
+    this._progress=0;this._previousMistress=null;this._previousPlayer=null;this._previousSpeed=0;
   }
   relocateListener(player) {
     // R/Home is an instantaneous relocation, not a listening path through
@@ -117,11 +117,13 @@ export class MistressFootsteps {
     this._previousPlayer=validPoint(player)?{x:player.x,y:player.y,z:player.z}:null;
   }
   get events() { return this._events.slice(); }
+  get cues() { return this._cues.slice(); }
   get ripples() {
     return this._events.map(event=>{
       const age=Math.max(0,this.elapsed-event.time),progress=Math.min(1,age/MISTRESS_FOOTSTEP_SECONDS);
       return Object.freeze({id:event.id,x:event.position.x,y:event.position.y,z:event.position.z,
-        age,progress,radius:1.2+3.8*progress,opacity:.9*(1-progress)**1.2});
+        age,progress,radius:1.2+3.8*progress,opacity:.9*(1-progress)**1.2,
+        gait:event.gait,phase:event.phase,strength:event.strength});
     });
   }
   canHear(event,listener) {
@@ -132,37 +134,54 @@ export class MistressFootsteps {
     if(!active || !Number.isFinite(dt) || dt<=0 || !Number.isFinite(this.elapsed+dt)) return [];
     const frameStart=this.elapsed;this.elapsed+=dt;
     this._events=this._events.filter(event=>event.expiresAt>this.elapsed+EPSILON);
+    this._cues=this._cues.filter(event=>event.expiresAt>this.elapsed+EPSILON);
     const position=mistress?.position??mistress?.renderPosition;
-    const walking=mistress?.state==='walking' && mistress.speed>0 && validPoint(position) && validPoint(player);
-    if(!walking) {
-      this._walking=false;this._previousMistress=this._previousPlayer=null;return [];
+    const previous=this._previousMistress,previousPlayer=this._previousPlayer;
+    const speed=Number.isFinite(mistress?.speed)?Math.max(0,mistress.speed):0;
+    const previousSpeed=this._previousSpeed;
+    const snapshot=point=>validPoint(point)?{x:point.x,y:point.y,z:point.z}:null;
+    this._previousMistress=snapshot(position);this._previousPlayer=snapshot(player);this._previousSpeed=speed;
+    if(!validPoint(position)||!previous||mistress?.state!=='walking') {this._progress=0;return [];}
+    const travel=Math.hypot(position.x-previous.x,position.y-previous.y,position.z-previous.z);
+    // A return-to-den/scold or debug teleport is not a walking path. Ordinary
+    // movement remains valid at any reported speed, including accumulated rage.
+    const allowance=Math.max(speed,previousSpeed)*dt*1.5+1;
+    if(!Number.isFinite(travel)||!Number.isFinite(allowance)||travel>allowance) {this._progress=0;return [];}
+    if(speed<=0||travel<=EPSILON)return [];
+    const phase=typeof mistress.phase==='string'?mistress.phase:'routine';
+    const gait=phase==='search'?'search':phase==='chase'||phase==='cleanup'?'run':'walk';
+    const stride=MISTRESS_FOOTSTEP_STRIDES[gait],cycles=travel/stride,before=this._progress,total=before+cycles;
+    const count=Math.floor(total+EPSILON);
+    if(!Number.isSafeInteger(count)||!Number.isSafeInteger(this.cueSequence+count)) {this._progress=0;return [];}
+    this._progress=Math.max(0,total-count);
+    if(!count)return [];
+    const baseId=this.cueSequence;this.cueSequence+=count;
+    const measuredSpeed=travel/dt;
+    const strength=gait==='run'?Math.min(1.35,.65+measuredSpeed/10):
+      gait==='search'?Math.min(.75,.35+measuredSpeed/12):Math.min(1,.45+measuredSpeed/12);
+    const interpolate=(a,b,t)=>({x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t,z:a.z+(b.z-a.z)*t});
+    // Only materialize still-live recent footfalls. A suspended tab cannot
+    // allocate a long trail or replay an audio backlog on the next frame.
+    const first=Math.max(1,count-MAX_MISTRESS_FOOTSTEPS+1,
+      Math.floor(before+cycles*Math.max(0,1-MISTRESS_FOOTSTEP_SECONDS/dt))+1);
+    const emitted=[];
+    const playerSpeed=Math.max(12,Math.hypot(player?.vx??0,player?.vy??0,player?.vz??0));
+    const playerContinued=validPoint(player)&&previousPlayer&&
+      Math.hypot(player.x-previousPlayer.x,player.y-previousPlayer.y,player.z-previousPlayer.z)<=playerSpeed*dt+1;
+    for(let index=first;index<=count;index++) {
+      const t=Math.max(0,Math.min(1,(index-before)/cycles)),time=frameStart+t*dt;
+      if(time+MISTRESS_FOOTSTEP_SECONDS<=this.elapsed+EPSILON)continue;
+      const id=baseId+index,source=Object.freeze(interpolate(previous,position,t));
+      const cue=Object.freeze({id,cueId:id,source:'mistress',kind:'footstep',scope:'local',
+        radius:MISTRESS_FOOTSTEP_RADIUS,position:source,time,lifetime:MISTRESS_FOOTSTEP_SECONDS,
+        expiresAt:time+MISTRESS_FOOTSTEP_SECONDS,speed:measuredSpeed,phase,gait,strength,stride,foot:id%2?'left':'right'});
+      this._cues.push(cue);
+      if(!validPoint(player))continue;
+      const listener=playerContinued?interpolate(previousPlayer,player,t):player;
+      if(Math.hypot(source.x-listener.x,source.y-listener.y,source.z-listener.z)>MISTRESS_FOOTSTEP_RADIUS)continue;
+      const event=Object.freeze({...cue,id:++this.sequence});this._events.push(event);emitted.push(event);
     }
-    const continued=this._walking;
-    if(!continued) {this._start=frameStart;this._next=0;}
-    this._walking=true;
-    const last=Math.floor((this.elapsed-this._start+EPSILON)/MISTRESS_FOOTSTEP_INTERVAL);
-    const earliestLive=Math.floor((this.elapsed-MISTRESS_FOOTSTEP_SECONDS-this._start+EPSILON)/MISTRESS_FOOTSTEP_INTERVAL)+1;
-    if(!Number.isSafeInteger(last) || !Number.isSafeInteger(earliestLive)) {
-      this._walking=false;this._previousMistress=this._previousPlayer=null;return [];
-    }
-    const first=Math.max(this._next,earliestLive,last-MAX_MISTRESS_FOOTSTEPS+1),emitted=[];
-    for(let index=first,count=0;index<=last&&count<MAX_MISTRESS_FOOTSTEPS;index++,count++) {
-      const time=this._start+index*MISTRESS_FOOTSTEP_INTERVAL;
-      const t=Math.max(0,Math.min(1,(time-frameStart)/dt));
-      const interpolate=(before,after)=>continued&&before ? {
-        x:before.x+(after.x-before.x)*t,y:before.y+(after.y-before.y)*t,z:before.z+(after.z-before.z)*t,
-      } : {x:after.x,y:after.y,z:after.z};
-      const source=interpolate(this._previousMistress,position),listener=interpolate(this._previousPlayer,player);
-      if(Math.hypot(source.x-listener.x,source.y-listener.y,source.z-listener.z)>MISTRESS_FOOTSTEP_RADIUS) continue;
-      const event=Object.freeze({id:++this.sequence,source:'mistress',kind:'footstep',scope:'local',
-        radius:MISTRESS_FOOTSTEP_RADIUS,position:Object.freeze(source),time,lifetime:MISTRESS_FOOTSTEP_SECONDS,
-        expiresAt:time+MISTRESS_FOOTSTEP_SECONDS});
-      this._events.push(event);emitted.push(event);
-    }
-    this._next=last+1;
-    if(this._events.length>MAX_MISTRESS_FOOTSTEPS)this._events.splice(0,this._events.length-MAX_MISTRESS_FOOTSTEPS);
-    this._previousMistress={x:position.x,y:position.y,z:position.z};
-    this._previousPlayer={x:player.x,y:player.y,z:player.z};
+    for(const events of [this._events,this._cues])if(events.length>MAX_MISTRESS_FOOTSTEPS)events.splice(0,events.length-MAX_MISTRESS_FOOTSTEPS);
     return emitted;
   }
 }

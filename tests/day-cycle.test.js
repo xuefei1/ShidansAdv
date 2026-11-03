@@ -93,7 +93,7 @@ test('timeout resets clock, energy, snacks, hay and ball physics without rebuild
   assert.equal(clock.remaining,600);assert.equal(clock.active,false);
   assert.equal(controller.energy.value,100);assert.equal(controller.energy.recovering,false);assert.equal(controller.sprintExhausted,false);
   assert.equal(controller.x,DEN.x);assert.equal(controller.z,DEN.z);
-  assert.equal(consumables.system.count,41);assert.equal(consumables.system.target,null);assert.equal(consumables.system.restockTime,0);
+  assert.equal(consumables.system.count,47);assert.equal(consumables.system.target,null);assert.equal(consumables.system.restockTime,0);
   assert.equal(consumables.system.nearest(controller).id,'den-hay');
   assert.equal(poop.physics.count,0);assert.equal(poop.physics.grid.cells.size,0);assert.equal(poop.physics.active.size,0);
   assert.equal(scene.getObjectByName('Persistent poop balls').count,0);assert.deepEqual(scene.children,objects);

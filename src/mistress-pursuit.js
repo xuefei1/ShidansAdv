@@ -12,7 +12,7 @@ export const CAPTURE_HEIGHT=1.35;
 export const CHASE_REPLAN_SECONDS=.35;
 export const CORNER_PAUSE_SECONDS=.25;
 export const POOP_CLEAN_SECONDS=.2;
-export const PEE_CLEAN_SECONDS=10;
+export const PEE_CLEAN_SECONDS=15;
 export const CLEANUP_REACH=1.3;
 export const CLEANUP_HEIGHT=2;
 export const PEE_RAGE_BONUS=.05;
@@ -30,7 +30,7 @@ const key=p=>`${p.x.toFixed(2)},${p.y.toFixed(2)},${p.z.toFixed(2)}`;
 const couch=MISTRESS_ACTIVITIES.find(activity=>activity.id==='phone');
 
 export function chaseSpeedMultiplier(elapsed) {
-  return .7+.05*Math.min(4,Math.max(0,Math.floor((Number.isFinite(elapsed)?elapsed:0)/120)));
+  return .6+.05*Math.min(4,Math.max(0,Math.floor((Number.isFinite(elapsed)?elapsed:0)/120)));
 }
 
 // The ordinary household controller remains independently testable. This layer
@@ -55,7 +55,7 @@ export class MistressPursuit {
     this._rageBonus=0;this._sprintSpeed=8.2;this._topSprintSpeed=8.8;this._walkingSpeed=MISTRESS_WALK_SPEED;
     this._cornerPause=0;this._turnYaw=0;this._handledCorners=new Map();
     this._detach=null;this._dock=null;this._lookUntil=0;this._returnReason='';
-    this.chaseMultiplier=.7;this.chaseSpeed=8.2*.7;this.blocked=false;this.lastDetection='';
+    this.chaseMultiplier=chaseSpeedMultiplier(0);this._refreshSpeeds();this.blocked=false;this.lastDetection='';
   }
   get noise() {return this.routine.noise;}
   get definition() {return this.phase==='routine'?this.routine.definition:this._activity==='phone'?couch:null;}
@@ -198,13 +198,14 @@ export class MistressPursuit {
     if(this._contactClear(context))this._catch();
     return {safe,visible,heard};
   }
-  canAttemptCapture(player) {
+  canAttemptCapture(player,{peeing=false}={}) {
+    if(peeing)return false;
     const table=this.navigation.reachInteraction?.(player)??this.navigation.tableInteraction?.(player);
     return (this.phase==='chase'||this.phase==='search')&&!this._detach&&!this._safe(player)&&
       withinInteractionReach(player,this.renderPosition,table,{reach:CAPTURE_RADIUS,height:CAPTURE_HEIGHT});
   }
   _contactClear(context) {
-    if(!this.canAttemptCapture(context.player))return false;
+    if(!this.canAttemptCapture(context.player,context))return false;
     return typeof context.contactClear==='function'?!!context.contactClear(this):context.contactClear===true;
   }
   _beginChase() {
@@ -236,7 +237,7 @@ export class MistressPursuit {
   }
   _cleanupExists(target) {
     return !!target&&(target.kind==='pee'||target.kind==='poop')&&target.id!==undefined&&target.id!==null&&
-      valid(target.position)&&typeof target.exists==='function'&&target.exists();
+      target.ready!==false&&valid(target.position)&&typeof target.exists==='function'&&target.exists();
   }
   _beginCleanup(target) {
     if(this.phase==='cleanup')this._emit('cleanup-cancelled',{id:this.cleanupTargetId,cleanupKind:this.cleanupKind,reason:'preempted'});
@@ -488,7 +489,7 @@ export class MistressPursuit {
           // fresh zero-time observation a chance before leaving a table's
           // perimeter, where ordinary eye rays may be blocked by the slab.
           if((this.navigation.reachInteraction?.(context.player)??this.navigation.tableInteraction?.(context.player))&&
-            this.canAttemptCapture(context.player)&&!this._tableArrivalPending) {
+            this.canAttemptCapture(context.player,context)&&!this._tableArrivalPending) {
             this._tableArrivalPending=true;return [];
           }
           if(this._rememberedChew&&distance(this._rememberedChew,this._investigationSource)<.05)this._rememberedChew=null;

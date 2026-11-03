@@ -75,10 +75,17 @@ test('reachable elevated messes use raised hands while physically blocked messes
   assert.equal(setup({balls:[p(0,3,3)]}).sensor.scan(observer),null);
 });
 
-test('puddle edges respect the current growing footprint and cleanup keeps its chosen puddle',()=>{
+test('forming puddles wait for exact completion before sight or cleanup, while complete edges remain visible',()=>{
   const patch={...puddle(),progress:.01};let examined=[];
   const {sensor}=setup({puddles:[patch],visible:point=>{examined.push(point);return point.x>0;}});
-  const active=sensor.scan(observer);assert.equal(active.kind,'pee');assert.ok(examined.every(point=>Math.abs(point.x)<.2));
+  for(const progress of [0,.01,.5,.999]) {
+    patch.progress=progress;assert.equal(sensor.scan(observer),null);
+  }
+  assert.equal(examined.length,0,'in-progress pee does not spend visibility rays or begin cleaning');
+  const waiting=sensor.descriptor('pee',patch,observer.stance);assert.equal(waiting.ready,false);assert.equal(waiting.goal,null);
+  patch.progress=1;
+  const active=sensor.scan(observer);assert.equal(active,waiting);assert.equal(active.kind,'pee');assert.equal(active.ready,true);
+  assert.ok(examined.some(point=>point.x>.8),'a complete puddle can reveal its visible outer edge');
   assert.equal(sensor.scan({...observer,yaw:Math.PI},active),active);
   assert.equal(active.remove(),true);assert.equal(sensor.scan(observer,active),null);
 });

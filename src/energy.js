@@ -1,5 +1,6 @@
 export const MAX_ENERGY = 100;
-export const PASSIVE_REGEN = .01;
+// Recover 0.01 percentage points per half second, continuously across frames.
+export const PASSIVE_REGEN = .01 / .5;
 // Include the simultaneous passive recovery so a full bar lasts 30 seconds.
 export const SPRINT_DRAIN = MAX_ENERGY / 30 + PASSIVE_REGEN;
 export const HIGH_JUMP_THRESHOLD = .22;

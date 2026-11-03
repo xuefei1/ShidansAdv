@@ -25,7 +25,8 @@ import { renderConsumableLegend } from './consumable-legend.js';
 import { MistressAI } from './mistress-ai.js';
 import { createMistressModel } from './mistress-model.js';
 import { MistressSight, MistressFootsteps } from './mistress-awareness.js';
-import { MistressPursuit } from './mistress-pursuit.js';
+import { MistressPursuit, CAPTURE_SECONDS } from './mistress-pursuit.js';
+import { MistressCapture } from './mistress-capture.js';
 import { MistressVision } from './mistress-vision.js';
 import { createMistressCone } from './mistress-cone.js';
 import { MistressCleanupSight } from './mistress-cleanup.js';
@@ -96,6 +97,8 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   mistressModel.root.traverseVisible(object=>{if(object.isMesh&&object!==mistressModel.shadow)mistressBounds.expandByObject(object);});
   setData('mistressStandingHeight',mistressBounds.max.y.toFixed(3));
   const mistressRipples=createNoiseRipples(scene,world);mistressRipples.mesh.name='Mistress noise ripples';
+  const mistressStepRipples=createNoiseRipples(scene,world);mistressStepRipples.mesh.name='Mistress footstep ripples';
+  const captureVisual=new MistressCapture();
   const mistressSight=new MistressSight([...layers,ceiling,...water.groups]),mistressFootsteps=new MistressFootsteps();
   const enemyVision=new MistressVision(mistressSight,world),mistressCone=createMistressCone(scene,world);
   const cleanupSight=new MistressCleanupSight({vision:enemyVision,navigation:mistress.navigation,poop,water});
@@ -105,6 +108,14 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   let enemySeen=false,visionTick=-Infinity,visionState='',visionYaw=NaN,captureCount=0,npcMovementSpent=0;
   const npcMovementLimit=maxNpcMovementPerFrame===Infinity?Infinity:.1;
   const sound = new Sound();
+  const volumeKey='shidans-adventure.effects-volume.v1';
+  try {
+    const stored=storage?.getItem(volumeKey),value=Number(stored);
+    if(stored!==null&&stored!==undefined&&Number.isFinite(value)&&value>=0&&value<=3)sound.setVolume(value);
+  } catch { /* Restricted storage leaves the default volume available. */ }
+  $('effects-volume').value=String(Math.round(sound.volume*100));
+  setText('effects-volume-value',`${Math.round(sound.volume*100)}%`);
+  $('effects-volume').setAttribute('aria-valuetext',`${Math.round(sound.volume*100)} percent`);
   const keys = new Set();
   let mode = 'title', previousMode = 'play', overview = false, mapOpen = false, surveyFloor = 0, gardenView = false;
   let roofView=false;
@@ -160,7 +171,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
         eye:mistressModel.getSightPoints()[0],yaw:mistress.yaw},mistress.cleanupTarget);
       cleanupTick=mistress.elapsed;cleanupRevision=revision;
     }
-    return {player:controller,seen:enemySeen,noiseEvents:noise.events,noiseElapsed:noise.elapsed,
+    return {player:controller,peeing:water.system.peeing,seen:enemySeen,noiseEvents:noise.events,noiseElapsed:noise.elapsed,
       cleanupTarget:cleanupCandidate,topSprintSpeed:TOP_SPRINT_SPEED,
       dayElapsed:dayClock.elapsed,sprintSpeed:SURFACES[controller.surface]?.run||8.2,contactClear:closeContactClear};
   }
@@ -171,7 +182,12 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
         controller.releaseInput();controller.vx=controller.vy=controller.vz=0;controller.sprinting=false;queuedHop=false;jumpSeen=false;
         noise.update(0,controller,{locked:true});
       }
-      if(event.kind==='caught') {captureCount++;roundStats.caught();sound.household('alert');}
+      if(event.kind==='caught') {
+        captureCount++;roundStats.caught();sound.household('alert');
+        const interaction=mistress.navigation.reachInteraction(controller);
+        captureVisual.begin({rabbit:controller,mistress:mistress.renderPosition,rabbitFacing:controller.facing,
+          mistressYaw:mistress.yaw,support:interaction?.support??interaction?.table,headroom:visualHeadroom(world,controller)});
+      }
       if(event.kind==='cleanup-finished')roundStats.cleanup(event.cleanupKind);
       if(event.kind==='chase-started')sound.household('alert',.7);
       if(event.kind==='cleanup-finished'&&event.cleanupKind==='pee') {
@@ -179,6 +195,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
         sound.household('alert',.8);
       }
       if(event.kind==='return-den') {
+        captureVisual.reset();
         controller.reset();mistressFootsteps.relocateListener(controller);poop.supply.observePosition(controller);
         enemySeen=false;visionTick=-Infinity;visionState='';visionYaw=NaN;cameraInitialized=false;yaw=-.45;pitch=.43;distance=5.2;
         toast('Back in the den. She has a few words for you…',5);
@@ -190,39 +207,55 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
       stance:mistress.position,reachInteraction:mistress.navigation.reachInteraction(controller)});
   }
   function senseCloseContact(context) {
-    if(!mistress.canAttemptCapture(controller))return;
+    if(!mistress.canAttemptCapture(controller,context))return;
     mistress.update(0,context);
+  }
+  function advanceWaterResources(delta) {
+    const before=water.system.bladder.value,wasDrinking=water.system.drinking,wasPeeing=water.system.peeing;
+    water.advance(delta,controller);
+    if(happiness.active) {
+      if(wasPeeing)roundStats.urinate(Math.max(0,before-water.system.bladder.value));
+      else if(wasDrinking)roundStats.drink(Math.max(0,water.system.bladder.value-before));
+    }
+    return wasPeeing&&!water.system.peeing;
   }
   function advanceResources() {
     if(mode==='gameover')return;
     dayClock.update(clockNow());
     const delta=Math.max(0,dayClock.elapsed-resourceElapsed); resourceElapsed=dayClock.elapsed;
-    const beforeWater=water.system.bladder.value,wasDrinking=water.system.drinking,wasPeeing=water.system.peeing;
-    water.advance(delta,controller);
-    if(happiness.active) {
-      if(wasPeeing)roundStats.urinate(Math.max(0,beforeWater-water.system.bladder.value));
-      else if(wasDrinking)roundStats.drink(Math.max(0,water.system.bladder.value-beforeWater));
-    }
     consumables.handle(consumables.system.update(0,controller,delta));
-    if(dayClock.finished)return;
-    const householdSequence=mistress.noise.sequence,stepSequence=mistressFootsteps.sequence;
+    if(dayClock.finished) {advanceWaterResources(delta);return;}
+    if(delta===0)advanceWaterResources(0);
+    const householdSequence=mistress.noise.sequence,stepSequence=mistressFootsteps.cueSequence;
     // Catch-up can cross both quiet activities and walking. Small simulation
     // slices keep footsteps attached to the walking intervals they came from.
     for(let left=delta;left>1e-9;) {
-      const step=Math.min(left,.05),context=enemyContext();context.dayElapsed=dayClock.elapsed-left+step;
+      const step=Math.min(left,.05,water.system.peeing?water.system.peeRemaining:Infinity),context=enemyContext();
+      context.dayElapsed=dayClock.elapsed-left+step;
       const movement=Math.min(step,Math.max(0,npcMovementLimit-npcMovementSpent));npcMovementSpent+=movement;
       context.movementScale=movement/step;mistress.update(step,context);
       senseCloseContact(context);settlePursuitEvents();
-      mistressFootsteps.update(step,{player:controller,mistress});left-=step;
+      mistressFootsteps.update(step,{player:controller,mistress});
+      // Keep capture protection for the whole interval, including a slow frame
+      // that crosses pee completion. Work on its puddle starts afterward.
+      const peeFinished=advanceWaterResources(step);left-=step;
+      if(peeFinished) {
+        cleanupTick=-Infinity;cleanupRevision='';
+        const completed=enemyContext(true);completed.dayElapsed=dayClock.elapsed-left;
+        mistress.update(0,completed);senseCloseContact(completed);settlePursuitEvents();
+      }
     }
     const householdEvents=mistress.noise.events.filter(event=>event.id>householdSequence);
     mistressRipples.update(delta);mistressRipples.emit(householdEvents,mistress.elapsed);
     // Sound follows the live episode, including its randomized cover duration.
     // The sound helper skips missed beats and never queues past its expiry.
     if(delta>0)sound.householdEpisode(mistress.noise.events.at(-1),mistress.elapsed,controller);
-    const stepEvents=mistressFootsteps.events.filter(event=>event.id>stepSequence);
+    const stepEvents=mistressFootsteps.cues.filter(event=>event.id>stepSequence);
+    mistressStepRipples.update(delta);mistressStepRipples.emit(stepEvents,mistressFootsteps.elapsed);
+    // Only the newest live footfall plays after a slow frame; old steps never
+    // build an audio backlog. The minimap keeps its separate five-metre cues.
     const step=stepEvents.at(-1);
-    if(step) sound.household('footstep',Math.max(0,1-Math.hypot(controller.x-step.position.x,controller.y-step.position.y,controller.z-step.position.z)/6));
+    if(step)sound.mistressFootstep(step,controller,mistressFootsteps.elapsed);
   }
   function nearestInteraction() {
     if(water.system.target) return water.system.target;
@@ -297,6 +330,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     $('view').innerHTML = overview ? '<kbd>V</kbd> Follow Shidan' : '<kbd>V</kbd> House view';
   }
   function startAdventure() {
+    sound.unlock();
     if(!happiness.start($('player-name').value)) {
       returnToTitle(); $('player-name').setCustomValidity('Enter your name to start your adventure.'); $('player-name').reportValidity(); $('player-name').focus(); return;
     }
@@ -309,15 +343,17 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   $('player-name').addEventListener('input',()=>{$('player-name').setCustomValidity('');});
   $('player-name').addEventListener('keydown',event=>{if(event.key==='Enter' && !$('play').disabled) startAdventure();});
   $('tour').addEventListener('click', () => {
+    sound.unlock();
     mode = 'tour'; overview = true;roofView=false;setText('roof-view','Show roof');clearInput(); surveyFloor = 0; renderAtlas(); document.body.classList.add('touring');
     $('welcome').hidden = true; $('intro-caption').hidden = true; $('menu-button').hidden = false;
     $('menu-button').innerHTML = 'Explore as Shidan <kbd>Enter</kbd>';
   });
-  $('menu-button').addEventListener('click', () => { if (mode === 'tour') startAdventure(); else pause(); });
+  $('menu-button').addEventListener('click', () => { if (mode === 'tour') startAdventure(); else if(mode==='pause')resume();else pause(); });
   $('resume').addEventListener('click', resume);
   $('reset').addEventListener('click', restartGame);
   function resetRunState() {
-    resetAdventure({clock:dayClock,controller,consumables,poop,water,noise,noiseRipples,mistress,mistressRipples,mistressFootsteps},clockNow());
+    resetAdventure({clock:dayClock,controller,consumables,poop,water,noise,noiseRipples,mistress,mistressRipples,mistressFootsteps,mistressStepRipples},clockNow());
+    captureVisual.reset();
     roundStats.reset();
     mistressInView=false;
     enemySeen=false;visionTick=-Infinity;visionState='';visionYaw=NaN;captureCount=0;npcMovementSpent=0;mistressCone.clear();
@@ -382,7 +418,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     if(!happiness.active||mode==='gameover')return;
     const result=happiness.finish(dayClock);
     if(!result)return;
-    const stats=roundStats.snapshot();mode='gameover';overview=false;mapOpen=false;
+    const stats=roundStats.snapshot();mode='gameover';overview=false;mapOpen=false;captureVisual.reset();
     clearInput();unlock();$('atlas').hidden=$('pause').hidden=$('survey').hidden=$('leaderboard').hidden=true;
     $('hud').hidden=$('menu-button').hidden=$('welcome').hidden=$('intro-caption').hidden=$('intro-footer').hidden=true;
     setHidden('toast',true);toastUntil=0;renderGameOver(result,stats);renderLeaderboard();
@@ -412,8 +448,33 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   $('sound').addEventListener('click', () => {
     const enabled = sound.toggle(); setText('sound', enabled ? 'Sound on' : 'Sound off');
     $('sound').setAttribute('aria-label', enabled ? 'Disable sound' : 'Enable sound');
+    setText('audio-status',enabled?(sound.volume===0?'Raise volume to hear effects.':'Footsteps fade with distance.'):'Sound is off. Use Sound on to hear effects.');
+    $('sound').setAttribute('aria-pressed',String(enabled));updateHUD();
   });
+  $('effects-volume').addEventListener('input',()=>{
+    sound.setVolume(Number($('effects-volume').value)/100);
+    const percent=Math.round(sound.volume*100);
+    setText('effects-volume-value',`${percent}%`);$('effects-volume').setAttribute('aria-valuetext',`${percent} percent`);
+    setText('audio-status',sound.enabled?(percent===0?'Raise volume to hear effects.':'Footsteps fade with distance.'):'Sound is off. Use Sound on to hear effects.');
+    sound.unlock();
+    try {storage?.setItem(volumeKey,String(sound.volume));}catch{/* The live control still works without storage. */}
+    updateHUD();
+  });
+  $('test-sound').addEventListener('click',async()=>{
+    if(!sound.enabled){setText('audio-status','Sound is off. Use Sound on to hear the test.');return;}
+    if(sound.volume===0){setText('audio-status','Raise volume to hear the test.');return;}
+    const ready=await sound.unlock();
+    if(ready){sound.previewFootsteps();setText('audio-status','Playing nearby footsteps.');}
+    else setText('audio-status','Audio could not start. Try Sound off, then Sound on.');
+    updateHUD();
+  });
+  $('audio-settings').addEventListener('toggle',()=>{
+    if(!$('audio-settings').open)return;
+    keys.clear();mouse.clear();controller.releaseInput();water.system.stop();consumables.system.cancel();queuedHop=false;jumpSeen=false;
+  });
+  canvas.addEventListener('mousedown',()=>sound.unlock());
   addEventListener('keydown', event => {
+    if(mode==='play'&&!event.repeat&&event.target===canvas)sound.unlock();
     if(mode==='gameover') {
       if(event.code==='Tab') {
         const stops=[...$('game-over').querySelectorAll('button,[tabindex="0"]')],first=stops[0],last=stops.at(-1);
@@ -425,6 +486,10 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     if(!$('leaderboard').hidden) {
       if(event.code==='Escape') $('close-leaderboard').click();
       if(event.code==='Tab') { event.preventDefault(); $('close-leaderboard').focus(); }
+      return;
+    }
+    if(event.target instanceof Element&&event.target.closest('#audio-settings')) {
+      if(event.code==='Escape') {event.preventDefault();$('audio-settings').open=false;canvas.focus();}
       return;
     }
     if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code) && mode === 'play' && event.target === canvas) event.preventDefault();
@@ -481,9 +546,10 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
       if (gardenView) { desiredCamera.set(-35, 38, -62); lookAt.set(0, 1.5, -12); }
       else { desiredCamera.set(46 + orbit, 60, 60); lookAt.set(0, 1, -3); }
     } else {
-      target.set(controller.x, controller.y + .62, controller.z);
-      desiredCamera.set(controller.x + Math.sin(yaw) * Math.cos(pitch) * distance,
-        target.y + Math.sin(pitch) * distance, controller.z + Math.cos(yaw) * Math.cos(pitch) * distance);
+      const follow=mistress.playerLocked&&captureVisual.active?rabbit.root.position:controller;
+      target.set(follow.x, follow.y + .62, follow.z);
+      desiredCamera.set(follow.x + Math.sin(yaw) * Math.cos(pitch) * distance,
+        target.y + Math.sin(pitch) * distance, follow.z + Math.cos(yaw) * Math.cos(pitch) * distance);
       // Prevent camera clipping through the real floor, furniture and back/side walls.
       desiredCamera.x = clamp(desiredCamera.x, BOUNDS.minX, BOUNDS.maxX); desiredCamera.z = clamp(desiredCamera.z, BOUNDS.minZ, BOUNDS.maxZ);
       cameraRay.origin.copy(target); cameraRay.direction.copy(desiredCamera).sub(target).normalize();
@@ -496,7 +562,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
         if (cameraRay.intersectBox(b, collisionPoint)) nearest = Math.min(nearest, target.distanceTo(collisionPoint) - .12);
       }
       desiredCamera.copy(target).addScaledVector(cameraRay.direction, Math.max(.55, nearest));
-      desiredCamera.y = Math.max(controller.y + .27, desiredCamera.y);
+      desiredCamera.y = Math.max(follow.y + .27, desiredCamera.y);
       lookAt.copy(target);
     }
     if (!cameraInitialized) { camera.position.copy(desiredCamera); cameraInitialized = true; }
@@ -508,6 +574,8 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   }
 
   function updateHUD() {
+    setData('soundEnabled',String(sound.enabled));
+    setData('audio',JSON.stringify(sound.diagnostics));
     setText('happiness-value',happiness.score.toLocaleString()); setText('score-player',happiness.name || 'Your little adventure');
     setData('happiness',String(happiness.score));
     setText('day-countdown',formatCountdown(dayClock.remaining));
@@ -524,7 +592,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     $('energy-meter').setAttribute('aria-valuenow', energy);
     $('energy-panel').dataset.low = String(controller.energy.value < 10);
     $('energy-panel').dataset.recovering = String(controller.energy.recovering);
-    setText('energy-status', controller.energy.recovering ? 'Restoring energy…' : controller.sprintExhausted ? 'Rest to recover · release Shift to sprint' : controller.sprinting ? 'Sprinting · using energy' : 'Restoring 0.01% per second');
+    setText('energy-status', controller.energy.recovering ? 'Restoring energy…' : controller.sprintExhausted ? 'Rest to recover · release Shift to sprint' : controller.sprinting ? 'Sprinting · using energy' : 'Restoring 0.01% every 0.5 seconds');
     const bladderValue=water.system.bladder.value;
     // Do not round a nearly full bladder up to a misleading 100.00%.
     const bladder=(bladderValue<100 ? Math.min(bladderValue,99.99) : bladderValue).toFixed(2), drinkWait=water.system.cooldownRemaining;
@@ -575,6 +643,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     setData('consumeTarget', nearby?.id || ''); setData('consumeProgress', consumables.system.progress.toFixed(2));
     setData('consumePosition',nearby?[nearby.x,nearby.y,nearby.z].map(v=>v.toFixed(3)).join(','):'');
     setData('energyRecovering', String(controller.energy.recovering));
+    setData('hayCount',String([...consumables.system.items.values()].filter(item=>item.type==='hay').length));
     const distFromDen = Math.hypot(controller.x - DEN.x, controller.z - DEN.z);
     const high = controller.y > FLOOR_HEIGHT - .3;
     const onStairs = controller.surface === 'stairs';
@@ -644,6 +713,9 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     setData('mistressCleanupTarget',mistress.cleanupTargetId??'');setData('mistressRageBonus',mistress.rageBonus.toFixed(2));
     setData('mistressRageSpeedBonus',mistress.rageSpeedBonus.toFixed(3));
     setData('captureCount',String(captureCount));
+    setData('mistressStepRipples',String(mistressStepRipples.count));
+    setData('mistressStepSequence',String(mistressFootsteps.cueSequence));
+    setData('mistressStepCues',JSON.stringify(mistressFootsteps.cues));
     const playing=mode==='play'&&!overview&&!mapOpen;
     setHidden('noise-cover',!playing||!mistress.maskingNoise);
     setHidden('mistress-rage',!playing||mistress.rageBonus<=0);
@@ -652,6 +724,10 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     setHidden('chase-warning',!warning);setHidden('danger-vignette',!warning||!['chase','caught'].includes(mistress.phase));
     $('chase-warning').dataset.phase=mistress.phase;
     setText('chase-title',mistress.phase==='cleanup'?(mistress.state==='acting'?'She’s cleaning…':'She spotted a mess!'):mistress.phase==='caught'?'Caught!':mistress.phase==='scolding'?'Someone’s in trouble…':mistress.phase==='search'?'She’s searching…':mistress.investigating?'She heard that!':'She’s after you!');
+    const showDistance=playing&&['chase','search'].includes(mistress.phase);
+    const separation=Math.hypot(controller.x-mistress.renderPosition.x,controller.y-mistress.renderPosition.y,controller.z-mistress.renderPosition.z);
+    setHidden('chase-distance',!showDistance);setText('chase-distance-value',`${separation.toFixed(1)} m`);
+    setData('mistressDistance',showDistance?separation.toFixed(3):'');
     setText('chase-detail',mistress.phase==='caught'?`Back in the den in ${(Math.ceil(mistress.captureRemaining*10-1e-8)/10).toFixed(1)}s`:mistress.phase==='scolding'?`A little talking-to · ${Math.ceil(mistress.scoldRemaining-1e-8)}s`:mistress.phase==='search'?'Stay hidden and quiet':mistress.investigating?'She’s checking the sound · move quietly':mistress.lastDetection==='sight'?'Break her sight · use cover and narrow passages':'She heard that · find cover and stay quiet');
     if(mistress.phase==='cleanup')setText('chase-detail',`${mistress.cleanupKind==='pee'?'Pee puddle':'Poop ball'} · ${mistress.state==='acting'?`${(Math.ceil(mistress.cleanupRemaining*10-1e-8)/10).toFixed(1)}s left`:'a little time to escape'}`);
     const latestPoop = poop.physics.balls.reduce((latest,ball)=>!latest||ball.id>latest.id?ball:latest,null);
@@ -660,16 +736,35 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   const map = $('map').getContext('2d');
   function syncMistressModel() {
     const position=mistress.renderPosition;
-    mistressModel.root.position.set(position.x,position.y,position.z);mistressModel.root.rotation.y=mistress.yaw;
-    mistressModel.animate(mistress.elapsed,{activity:mistress.state==='walking'?'idle':(mistress.definition?.animation??mistress.activity),moving:mistress.state==='walking',speed:mistress.speed,activityTime:mistress.activityTime,laughing:mistress.laughing,poseWeight:mistress.poseWeight,cleanupKind:mistress.cleanupKind,enraged:mistress.rageBonus>0});
+    const progress=mistress.playerLocked&&captureVisual.active?clamp(1-mistress.captureRemaining/CAPTURE_SECONDS,0,1):null;
+    mistressModel.root.position.set(position.x,position.y,position.z);
+    mistressModel.root.rotation.y=progress===null?mistress.yaw:captureVisual.sample(progress).mistressYaw;
+    mistressModel.animate(mistress.elapsed,{activity:mistress.state==='walking'?'idle':(mistress.definition?.animation??mistress.activity),moving:mistress.state==='walking',speed:mistress.speed,activityTime:mistress.activityTime,laughing:mistress.laughing,poseWeight:mistress.poseWeight,cleanupKind:mistress.cleanupKind,enraged:mistress.rageBonus>0,
+      captureProgress:progress,captureTarget:progress===null?null:controller,captureSupport:progress===null?null:captureVisual.support});
   }
   function syncRabbitModel() {
-    rabbit.root.position.set(controller.x,controller.y,controller.z);
-    rabbit.root.rotation.y=mode==='title'?.43:controller.facing;
+    const captured=mistress.playerLocked&&captureVisual.active;
+    const progress=captured?clamp(1-mistress.captureRemaining/CAPTURE_SECONDS,0,1):0;
+    let carryWeight=0,capturedHeadroom=Infinity;
+    if(captured) {
+      syncMistressModel();
+      const pose=captureVisual.sample(progress,mistressModel.getCradlePoint());
+      rabbit.root.position.copy(pose.position);rabbit.root.rotation.y=pose.facing;carryWeight=pose.carryWeight;capturedHeadroom=pose.headroom??Infinity;
+    } else {
+      rabbit.root.position.set(controller.x,controller.y,controller.z);
+      rabbit.root.rotation.y=mode==='title'?.43:controller.facing;
+    }
     const speed=mode==='play'?Math.hypot(controller.vx,controller.vz):0;
-    const action=water.system.peeing?'pee':water.system.drinking?'drink':consumables.system.target?'eat':'idle';
-    rabbit.animate(time,speed,controller.grounded,controller.charge/.8,
-      world.support(controller.x,controller.z,controller.y+.01,true).y,action,visualHeadroom(world,controller));
+    const action=captured?'carried':water.system.peeing?'pee':water.system.drinking?'drink':consumables.system.target?'eat':'idle';
+    const rendered=captured?rabbit.root.position:controller;
+    const clearance=Math.min(visualHeadroom(world,rendered),capturedHeadroom);
+    rabbit.animate(time,captured?0:speed,controller.grounded,controller.charge/.8,
+      world.support(rendered.x,rendered.z,rendered.y+.01,true).y,action,clearance,carryWeight);
+    setData('rabbitDucking',String(rabbit.ducking));
+    setData('rabbitHeadroom',Number.isFinite(clearance)?clearance.toFixed(3):'open');
+    setData('rabbitRenderPosition',rabbit.root.position.toArray().map(value=>value.toFixed(3)).join(','));
+    setData('mistressCaptureProgress',captured?progress.toFixed(4):'');
+    setData('captureCarryWeight',carryWeight.toFixed(4));
     return action;
   }
   function drawMap() {
@@ -742,7 +837,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
       if (controller.jumpEnergyBlocked) toast('A little hop for now. Eat a snack to restore energy.', 3);
       if (controller.lastLanding) sound.land();
       const speed = Math.hypot(controller.vx, controller.vz);
-      if (controller.grounded && speed > .6 && time - lastStep > .2) { sound.step(controller.surface === 'wood'); lastStep = time; }
+      if (controller.sprinting && controller.grounded && speed > .6 && time - lastStep > .2) { sound.step(controller.surface === 'wood',controller); lastStep = time; }
       poop.update(dt, controller);
     } else consumables.sync(0);
     poop.sync();
@@ -763,6 +858,8 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     noiseRipples.mesh.visible=(mode==='play'&&!overview&&!mapOpen)||(mode==='pause'&&previousMode==='play');
     mistressRipples.setUpperVisible(showUpper);
     mistressRipples.mesh.visible=noiseRipples.mesh.visible;
+    mistressStepRipples.setUpperVisible(showUpper);
+    mistressStepRipples.mesh.visible=noiseRipples.mesh.visible;
     mistressModel.root.visible=mistressPosition.y<FLOOR_HEIGHT-.1||showUpper;
     const asleep=mistress.phase==='routine'&&mistress.state==='acting'&&mistress.activity==='sleeping';
     mistressCone.update(frozen?0:dt,{position:mistressPosition,yaw:mistress.yaw,phase:mistress.phase,masked:mistress.maskingNoise,
