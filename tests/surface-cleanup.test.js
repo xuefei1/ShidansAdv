@@ -66,7 +66,7 @@ test('lowered hand origins support the general support field and the legacy tabl
 });
 
 test('broader cleanup reach does not create goals inside the den or genuine low passages',()=>{
-  for(const point of [p(DEN.x,0,DEN.z),p(-22.5,0,-12),p(-16,0,-33)]) {
+  for(const point of [p(DEN.x,0,DEN.z),p(-16,0,-33)]) {
     const {source,sensor}=fixture('poop',point),target=sensor.descriptor('poop',source,from);
     assert.equal(target.goal,null,JSON.stringify(point));
   }

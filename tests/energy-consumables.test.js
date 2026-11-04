@@ -38,7 +38,7 @@ test('the actual controller drains energy only while sprinting, then falls back 
     if(i===15*120-1) close(r.energy.value,50);
   }
   assert.equal(r.energy.value,0); assert.equal(r.sprintExhausted,true);
-  r.update(1/60,{x:direction,run:true}); close(Math.abs(r.vx),3); assert.equal(r.sprinting,false);
+  r.update(1/60,{x:direction,run:true}); close(Math.abs(r.vx),3.9); assert.equal(r.sprinting,false);
   tick(r,1,{}); r.update(1/120,{x:direction,run:true}); assert.equal(r.sprinting,true);
 });
 test('passive recovery is 0.01 per half second with precise fractional frames and a cap of 100', () => {
@@ -67,11 +67,11 @@ test('ordinary movement, tap hops, stationary Shift, blocked sprint and crouchin
 test('charged jumps cost 5–10 by charge, and cannot spend more energy than remains', () => {
   close(highJumpCost(.22),5); close(highJumpCost(.435),7.5); close(highJumpCost(.65),10); close(highJumpCost(10),10);
   for(const charge of [.25,.435,.8]) {
-    const r=new RabbitController(world); r.energy.value=20;
+    const r=new RabbitController(world); Object.assign(r,{x:0,z:-29});r.energy.value=20;
     Object.assign(r,{charge,charging:true,jumpHeld:true}); r.update(1/120,{});
     assert.equal(r.lastJump,'long'); close(r.energy.value,20-highJumpCost(charge)+PASSIVE_REGEN/120);
   }
-  const poor=new RabbitController(world); poor.energy.value=7;
+  const poor=new RabbitController(world); Object.assign(poor,{x:0,z:-29});poor.energy.value=7;
   Object.assign(poor,{charge:.8,charging:true,jumpHeld:true}); poor.update(1/120,{});
   assert.equal(poor.lastJump,'hop'); assert.equal(poor.jumpEnergyBlocked,true); assert.ok(poor.energy.value>=7);
   const wood=new RabbitController(world); Object.assign(wood,{x:-10,z:16,charge:.8,charging:true,jumpHeld:true}); wood.energy.value=20;
@@ -101,8 +101,14 @@ test('initial snack population has 47 authored items including twelve ordinary h
   assert.deepEqual(counts,{book:12,carrot:8,hay:12,apple:4,rabbitFood:3,banana:3,bread:2,noodles:2,cake:1});
   assert.ok(CONSUMABLE_SLOTS.some(s=>s.y>=4.2));
 });
-test('every authored snack is supported and reachable on the real furnished map', () => {
-  for(const item of [...CONSUMABLE_SLOTS, DEN_HAY]) {
+test('every eligible authored snack is supported and reachable, with the former passage book excluded from the stairway', () => {
+  const system=new ConsumableSystem(world), eligibleIds=new Set(system.slots.map(item=>item.id));
+  assert.deepEqual(CONSUMABLE_SLOTS.filter(item=>!eligibleIds.has(item.id)).map(item=>item.id),['book-5']);
+  assert.equal(system.items.has('book-5'),false);
+  // Check the authored scenery supports before loose, pushable food fixtures
+  // are present; their instantiated colliders have a separate reachability test.
+  for(const item of system.availableItems()) if(item.collider) world.removeBox(item.collider);
+  for(const item of [...system.slots, DEN_HAY]) {
     close(world.support(item.x,item.z,item.y+.01).y,item.y,.015);
     let reachable=false;
     for(let i=0;i<16;i++) {
@@ -121,7 +127,7 @@ test('finite snacks stay outside the den at startup and during random restocking
     snack('den','hay',DEN.x,0,DEN.z),
     snack('fence','cake',DEN.x+DEN.radius+.1,0,DEN.z)];
   const s=new ConsumableSystem(world,{slots}), p=player();
-  assert.equal(s.count,47); assert.ok([...s.items.values()].every(outside));
+  assert.equal(s.count,46); assert.ok([...s.items.values()].every(outside));
   for(let i=0;i<200;i++) {
     clearItems(s); s.random=()=>(i+.5)/200;
     const [event]=s.update(60,p);
@@ -199,9 +205,9 @@ test('respawn probabilities are inversely proportional to energy', () => {
 test('collectible renderer batches all kinds and removes consumed geometry after its effect', () => {
   const scene=new THREE.Scene(), view=createConsumables(scene,world,{wires:[],randomLimits:{}});
   let total=()=>scene.children.slice(0,2).flatMap(g=>g.children).reduce((n,m)=>n+m.count,0);
-  assert.equal(total(),48); assert.equal(scene.children[0].children.length,13);
-  const item=CONSUMABLE_SLOTS[0]; view.handle([{kind:'consume',item}]); view.sync(.3); assert.equal(total(),48);
-  view.sync(.4); assert.equal(total(),47); view.setUpperVisible(false); assert.equal(scene.children[1].visible,false);
+  assert.equal(total(),47); assert.equal(scene.children[0].children.length,13);
+  const item=CONSUMABLE_SLOTS[0]; view.handle([{kind:'consume',item}]); view.sync(.3); assert.equal(total(),47);
+  view.sync(.4); assert.equal(total(),46); view.setUpperVisible(false); assert.equal(scene.children[1].visible,false);
 });
 
 test('special hay refills an exhausted rabbit at home and permits an actual den escape', () => {
@@ -222,7 +228,7 @@ test('special hay remains available across repeated uses, full energy, and retur
     r.reset(); r.energy.value=startingEnergy; r.energy.consume(10);
     s.begin(r); const [event]=s.update(consumptionSeconds(s.denHay),r);
     assert.equal(event.item.id,DEN_HAY.id); assert.equal(r.energy.value,100);
-    assert.equal(r.energy.recovering,false); assert.equal(s.count,47);
+    assert.equal(r.energy.recovering,false); assert.equal(s.count,46);
     assert.equal(s.nearest(r).id,DEN_HAY.id);
     // Staying held never grants another refill without a fresh press.
     r.energy.spend(10); assert.deepEqual(s.update(2,r),[]); assert.equal(r.energy.value,90);
@@ -270,7 +276,7 @@ test('special hay stays rendered after eating and uses only one additional drawi
   for(let i=0;i<3;i++) {
     view.system.begin(r); view.handle(view.system.update(consumptionSeconds(view.system.denHay),r));
     view.sync(.3); assert.equal(hay.count,1); view.sync(1); assert.equal(hay.count,1);
-    assert.equal(view.system.count,47);
+    assert.equal(view.system.count,46);
   }
   const matrix=new THREE.Matrix4(); hay.getMatrixAt(0,matrix);
   close(matrix.elements[0],original.elements[0]); close(matrix.elements[12],DEN_HAY.x,1e-6);

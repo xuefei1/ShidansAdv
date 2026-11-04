@@ -1,20 +1,23 @@
 import * as THREE from '../vendor/three.module.js';
 import { World } from './physics.js';
-import { DEN, FLOOR_HEIGHT as H, RAMPS, WALLS, ROOMS } from './layout.js';
+import { DEN, FLOOR_HEIGHT as H, RAMPS, WALLS, ROOMS, BASEMENT, BASEMENT_STAIRS, BASEMENT_STAIR_OPENING } from './layout.js';
 import { cube, cylinder, beam, mat } from './model.js';
 import { furnishHouse } from './furnishings.js';
 import { createHouseLamps } from './house-lamps.js';
 import { createHouseRoof } from './house-roof.js';
 import { applySurfaceOverlay } from './surface-materials.js';
+import { createBasement } from './basement.js';
 
 // The house is a set of connected spaces, authored at rabbit scale. Ground and
 // upper art are batched separately for a readable floor-by-floor cutaway.
 export function createHouse(scene) {
   const group = new THREE.Group(); group.name = 'Clover House'; scene.add(group);
   const ground = new THREE.Group(), upper = new THREE.Group(), outside = new THREE.Group(), ceiling = new THREE.Group();
+  const basement = new THREE.Group(), basementCeiling = new THREE.Group();
   ground.name = 'Ground floor'; upper.name = 'Upper floor'; outside.name = 'Garden and stairs';
   ceiling.name = 'Permanent floor and ceiling'; group.add(ground, upper, outside, ceiling);
-  const world = new World(); world.fixtures = new Map();
+  basement.name = 'Utility basement'; basementCeiling.name = 'Ground floor and basement ceiling'; group.add(basement, basementCeiling);
+  const world = new World(); world.fixtures = new Map(); world.basement = BASEMENT;
   const solid = (parent, color, x, y, z, w, h, d, surface = 'wood', id) => {
     const b = world.addBox(x, y, z, w, h, d, surface);
     const mesh = cube(parent, color, x, y, z, w, h, d); mesh.userData.collider = b;
@@ -24,12 +27,27 @@ export function createHouse(scene) {
   // Art-only geometry is limited to floor decals, thin trim, leaves, and details
   // contained by a solid prop. Every walkable furnishing uses solid().
   const detail = (parent, color, ...dimensions) => { const mesh = cube(parent, color, ...dimensions); mesh.userData.decoration = true; mesh.castShadow = false; return mesh; };
-  detail(ground, 0xf0e5cc, 0, -.27, 0, 48.4, .5, 40.4);
+  const art = { group, ground, upper, outside, basement, basementCeiling, solid, detail, world, label };
+  const { groundSlabs, stairOpening } = createBasement(art);
+  const opening = BASEMENT_STAIR_OPENING;
   const planks = [0xd6b386, 0xe2bf92, 0xdec097, 0xdaba91, 0xe4c69e];
   for (let row = 0; row < 50; row++) for (let col = 0; col < 9; col++) {
     const start = -27 + col * 6 + (row % 2 ? 3 : 0), left = Math.max(-24, start), right = Math.min(24, start + 6);
     if (left >= 24) continue;
-    detail(ground, planks[(row * 3 + col) % 5], (left + right) / 2, -.025, -19.6 + row * .8, right - left - .012, .05, .787);
+    const z = -19.6 + row * .8, plank = { minX: left + .006, maxX: right - .006, minZ: z - .3935, maxZ: z + .3935 };
+    // Clip timber back from the real stairwell. A tiny reveal also keeps plank
+    // side caps off the concrete opening's differently coloured reveal faces.
+    const cut = { minX: opening.minX - .014, maxX: opening.maxX + .014, minZ: opening.minZ - .014, maxZ: opening.maxZ + .014 };
+    const pieces = plank.maxX <= cut.minX || plank.minX >= cut.maxX || plank.maxZ <= cut.minZ || plank.minZ >= cut.maxZ ? [plank] : [
+      { ...plank, maxX: Math.min(plank.maxX, cut.minX) }, { ...plank, minX: Math.max(plank.minX, cut.maxX) },
+      { minX: Math.max(plank.minX, cut.minX), maxX: Math.min(plank.maxX, cut.maxX), minZ: plank.minZ, maxZ: Math.min(plank.maxZ, cut.minZ) },
+      { minX: Math.max(plank.minX, cut.minX), maxX: Math.min(plank.maxX, cut.maxX), minZ: Math.max(plank.minZ, cut.maxZ), maxZ: plank.maxZ },
+    ];
+    for (const p of pieces) if (p.maxX > p.minX && p.maxZ > p.minZ) {
+      const mesh = applySurfaceOverlay(detail(ground, planks[(row * 3 + col) % 5],
+        (p.minX + p.maxX) / 2, -.019, (p.minZ + p.maxZ) / 2, p.maxX - p.minX, .05, p.maxZ - p.minZ));
+      mesh.name = `Ground plank ${row}:${col}`; mesh.userData.floorPlank = true;
+    }
   }
   // Upper floor and balcony have matching visible/collision tops at y=4.2.
   // Keep this 12-triangle slab independent of the upstairs decoration cutaway.
@@ -106,7 +124,7 @@ export function createHouse(scene) {
   rail(upper, 'x', 2, -23.86, .8, H, 'gallery-west-rail'); rail(upper, 'x', 2, 4.2, 23.86, H, 'gallery-east-rail');
   rail(outside, 'x', -25, -20, 18.8, H, 'balcony-rail'); rail(outside, 'x', -25, 22.2, 24, H);
   rail(outside, 'z', -20, -25, -20.14, H); rail(outside, 'z', 24, -25, -20.14, H);
-  for (const r of RAMPS) {
+  for (const r of RAMPS.filter(r => r !== BASEMENT_STAIRS)) {
     const count = 30, width = r.maxX - r.minX, dz = (r.endZ - r.startZ) / count;
     for (let i = 0; i < count; i++) {
       // Art tread is at the ramp's midpoint, limiting render/physics discrepancy to 7cm.
@@ -135,11 +153,10 @@ export function createHouse(scene) {
     cylinder(ground, 0xfffaed, DEN.x + Math.sin(a) * DEN.radius, DEN.fenceHeight / 2, DEN.z + Math.cos(a) * DEN.radius, .014, DEN.fenceHeight, .014, 5).name = `Den post ${i}`;
   }
   label(ground, 'SHIDAN', DEN.x, .65, DEN.z + DEN.radius + .023, 1.25, .35, '#f7edcb', '#71825e');
-  const art = { group, ground, upper, outside, solid, detail, world, label };
   furnishHouse(art);
   const lamps = createHouseLamps(art);
   const roof = createHouseRoof(art);
-  return { group, world, layers: [ground, upper, outside,...roof.layers], upper, ceiling, lamps, roof };
+  return { group, world, layers: [ground, upper, outside,...roof.layers,basement,basementCeiling], upper, ceiling, basement, basementCeiling, groundSlabs, stairOpening, lamps, roof };
 }
 
 export function label(parent, text, x, y, z, w, h, background = '#f8efda', foreground = '#6b7b5c') {

@@ -1,7 +1,7 @@
 import * as THREE from '../vendor/three.module.js';
 import { createHouse, batchStaticGeometry } from '../src/house.js';
 import { createRabbit } from '../src/model.js';
-import { upperRoomsVisible } from '../src/visibility.js';
+import { upperRoomsVisible, basementRoomsVisible } from '../src/visibility.js';
 
 // CPU-side count of exactly the bounds tested by Three's renderer. This is a
 // workload regression benchmark, not an FPS measurement. No WebGL is required.
@@ -11,6 +11,7 @@ const camera = new THREE.PerspectiveCamera(46, 16 / 9, .06, 260), frustum = new 
 const views = [
   ['den', -16, 0, 12], ['entrance', 0, 0, 17], ['stairs', 2.5, 2.1, 8.5],
   ['bedroom', -15, 4.2, -9], ['balcony', 0, 4.2, -23], ['garden', 0, 0, -32],
+  ['basement', 0, -4.2, 0],['basement stairs',-22.4,-2.1,-11],
 ];
 let geometryBytes = 0, rabbitMeshes = 0;
 const geometries = new Set();
@@ -23,6 +24,7 @@ rabbit.root.traverse(o => { if (o.isMesh) rabbitMeshes++; });
 const results = [];
 for (const [name, x, y, z] of views) {
   house.upper.visible = upperRoomsVisible({ x, y, z });
+  house.basement.visible=basementRoomsVisible({x,y,z});
   rabbit.root.position.set(x, y, z); scene.updateMatrixWorld(true);
   let calls = 0, triangles = 0;
   for (let i = 0; i < 72; i++) {

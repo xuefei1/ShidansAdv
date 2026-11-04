@@ -1,4 +1,4 @@
-import { HOUSE, FLOOR_HEIGHT } from './layout.js';
+import { HOUSE, FLOOR_HEIGHT, BASEMENT } from './layout.js';
 import { consumableDetails } from './consumable-data.js';
 
 export const LOCAL_NOISE_RADIUS = 5;
@@ -17,7 +17,7 @@ export function canHearNoise(event, listener) {
   if (event.scope === 'house') {
     if(event.source==='shidan'&&event.kind==='eat')return true;
     return listener.x >= HOUSE.minX && listener.x <= HOUSE.maxX &&
-      listener.z >= HOUSE.minZ && listener.z <= HOUSE.maxZ && listener.y >= 0 && listener.y <= FLOOR_HEIGHT * 2;
+      listener.z >= HOUSE.minZ && listener.z <= HOUSE.maxZ && listener.y >= BASEMENT.y && listener.y <= FLOOR_HEIGHT * 2;
   }
   if (event.scope !== 'local' || event.radius !== LOCAL_NOISE_RADIUS) return false;
   return Math.hypot(listener.x-event.position.x,listener.y-event.position.y,listener.z-event.position.z) <= event.radius;

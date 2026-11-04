@@ -51,7 +51,7 @@ test('restart during a partially completed pee resets the full world and resourc
   consumables.system.setExternalItems(poop);
   const clock=new DayClock(),board=new Leaderboard(null),happiness=new HappinessRun(board);
   happiness.start('Restart QA');happiness.consume({kind:'consume',happiness:200});
-  controller.energy.value=3;controller.freeDenJumpAvailable=false;controller.sprintExhausted=true;
+  controller.energy.value=3;controller.sprintExhausted=true;
   poop.drop(controller,0);poop.supply.grant(25);
   water.system.bladder.value=100;water.pee(controller);water.advance(.4,controller);
   assert.equal(water.system.bladder.value,60);assert.equal(water.system.peeing,true);assert.equal(water.puddles.length,1);
@@ -63,7 +63,7 @@ test('restart during a partially completed pee resets the full world and resourc
   assert.equal(controller.x,DEN.x);assert.equal(controller.z,DEN.z);assert.equal(controller.energy.value,100);
   assert.equal(controller.hasFreeDenJump,true);assert.equal(controller.sprintExhausted,false);
   assert.equal(poop.supply.value,10);assert.equal(poop.physics.count,0);assert.equal(poop.supply.nextPoopAt,0);
-  assert.equal(consumables.system.count,47);assert.equal(consumables.system.chewableCount,22);
+  assert.equal(consumables.system.count,46);assert.equal(consumables.system.chewableCount,22);
   assert.equal(consumables.system.target,null);assert.equal(water.system.peeing,false);
   assert.equal(water.system.bladder.value,0);assert.equal(water.system.cooldownRemaining,0);
   assert.equal(water.puddles.length,0);assert.deepEqual(scene.children,nodes);

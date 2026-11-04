@@ -1,6 +1,6 @@
 import * as THREE from '../vendor/three.module.js';
 import { WaterSystem, FOUNTAIN_PLACEMENTS } from './water.js';
-import { FLOOR_HEIGHT, HOUSE } from './layout.js';
+import { FLOOR_HEIGHT, HOUSE, floorAt } from './layout.js';
 import { cylinder, sceneryEllipsoid, beam, mat } from './model.js';
 import { batchStaticGeometry } from './render-batching.js';
 import { applySurfaceOverlay } from './surface-materials.js';
@@ -80,13 +80,15 @@ export function createWaterFountains(scene, world) {
   // Fourteen shells need three static draws. Water/streams add six bounded
   // shared draws, updated only when a reservoir changes rather than per frame.
   const source=createFountainModel(),waterSource=createFountainWaterModel(),streamSource=createFountainWaterModel(true);
-  const waterMeshes=[],streamMeshes=[],stationLayers=[];
+  const waterMeshes=[],streamMeshes=[],stationLayers=[],stationMeshes=[];
+  let floorView=null,upperVisible=true;
   groups.forEach((group,layer)=>{
     const stations=items.filter(item=>(outdoorItem(item)?2:item.floor)===layer);
     const mesh=new THREE.InstancedMesh(source.geometry,source.material,stations.length);
     mesh.name=`Water fountains layer ${layer}`;mesh.receiveShadow=true;mesh.frustumCulled=false;
     stations.forEach((item,index)=>{transform.position.set(item.x,item.y,item.z);transform.updateMatrix();mesh.setMatrixAt(index,transform.matrix);});
     group.add(mesh);
+    stationMeshes.push(mesh);
     stationLayers.push(stations);
     for(const [model,name,collection] of [[waterSource,'Fountain water',waterMeshes],[streamSource,'Fountain streams',streamMeshes]]) {
       const liquid=new THREE.InstancedMesh(model.geometry,model.material,stations.length);
@@ -126,6 +128,7 @@ export function createWaterFountains(scene, world) {
   function syncPuddles() {
     for(const mesh of puddleMeshes) mesh.count=0;
     for(const event of puddles) {
+      if(floorView!==null&&floorAt(event.y)!==floorView)continue;
       const mesh=puddleMeshes[poolFor(event)],radius=(.45+.6*Math.sqrt(event.amount/100))*(.18+.82*event.progress);
       transform.position.set(event.x,event.y+PUDDLE_CLEARANCE,event.z);
       transform.rotation.set(-Math.PI/2,0,0);transform.scale.set(radius*1.3,radius,1);transform.updateMatrix();
@@ -154,6 +157,12 @@ export function createWaterFountains(scene, world) {
       puddles.splice(index,1);syncPuddles();return true;
     },
     reset() {system.reset();puddles.length=0;syncPuddles();syncWater();},
-    setUpperVisible(visible) {groups[1].visible=visible;},
+    setUpperVisible(visible) {upperVisible=visible;groups[1].visible=visible&&floorView!==-1;},
+    setFloorView(floor=null) {
+      const next=floor===-1?-1:null;if(next===floorView)return;
+      floorView=next;groups[1].visible=upperVisible&&floorView!==-1;
+      for(const mesh of [...stationMeshes,...waterMeshes,...streamMeshes])mesh.visible=floorView===null;
+      syncPuddles();
+    },
   };
 }

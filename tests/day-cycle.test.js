@@ -49,17 +49,18 @@ test('daylight fades smoothly, with complete night and lamp light at two minutes
   }
 });
 
-test('both floors have physical ceiling/floor lamps that survive static batching',()=>{
+test('all three levels have physical lamps that survive static batching',()=>{
   const scene=new THREE.Scene(),house=createHouse(scene);
-  assert.equal(house.lamps.fixtures.length,18);
+  assert.equal(house.lamps.fixtures.length,24);
   for(const floor of [0,1]) for(const kind of ['ceiling','floor']) assert.ok(LAMP_PLACEMENTS.some(l=>l.floor===floor && l.kind===kind));
+  assert.equal(LAMP_PLACEMENTS.filter(l=>l.floor===-1&&l.kind==='ceiling').length,6);
   for(const fixture of LAMP_PLACEMENTS) {
     assert.ok(house.lamps.colliders.some(b=>fixture.x>=b.minX && fixture.x<=b.maxX && fixture.z>=b.minZ && fixture.z<=b.maxZ && fixture.y+.18>=b.minY && fixture.y+.18<=b.maxY));
   }
   house.layers.forEach(batchStaticGeometry);
-  for(const floor of [0,1]) {
+  for(const floor of [-1,0,1]) {
     const glow=scene.getObjectByName(`Lamp diffusers floor ${floor}`);
-    assert.ok(glow.isInstancedMesh); assert.equal(glow.material,house.lamps.glowMaterial);
+    assert.ok(glow.isInstancedMesh); assert.equal(glow.material,floor===-1?house.lamps.basementGlowMaterial:house.lamps.glowMaterial);
     assert.equal(glow.count,LAMP_PLACEMENTS.filter(l=>l.floor===floor).length);
   }
 });
@@ -93,7 +94,7 @@ test('timeout resets clock, energy, snacks, hay and ball physics without rebuild
   assert.equal(clock.remaining,600);assert.equal(clock.active,false);
   assert.equal(controller.energy.value,100);assert.equal(controller.energy.recovering,false);assert.equal(controller.sprintExhausted,false);
   assert.equal(controller.x,DEN.x);assert.equal(controller.z,DEN.z);
-  assert.equal(consumables.system.count,47);assert.equal(consumables.system.target,null);assert.equal(consumables.system.restockTime,0);
+  assert.equal(consumables.system.count,46);assert.equal(consumables.system.target,null);assert.equal(consumables.system.restockTime,0);
   assert.equal(consumables.system.nearest(controller).id,'den-hay');
   assert.equal(poop.physics.count,0);assert.equal(poop.physics.grid.cells.size,0);assert.equal(poop.physics.active.size,0);
   assert.equal(scene.getObjectByName('Persistent poop balls').count,0);assert.deepEqual(scene.children,objects);

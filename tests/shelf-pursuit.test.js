@@ -107,5 +107,5 @@ test('dense physically legal samples on and below both decks have clear floor ap
       {stance:goal,reachInteraction:nav.reachInteraction(point)}),true,label);
   }
   assert.ok(checked>500);
-  for(const point of [p(DEN.x,0,DEN.z),p(-22.5,0,-12),p(-16,0,-33)])assert.equal(nav.isRabbitSafe(point,from),true);
+  for(const point of [p(DEN.x,0,DEN.z),p(-16,0,-33)])assert.equal(nav.isRabbitSafe(point,from),true);
 });

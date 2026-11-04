@@ -34,9 +34,9 @@ test('real-world food, cable and random spawn pools exclude rabbit-only hiding p
   t.after(()=>release(system));
   assert.equal(system.slots.length,46);assert.equal(system.wires.length,WIRE_SLOTS.length);
   assert.deepEqual(system.randomPlaces,eligiblePlaces);assert.ok(eligiblePlaces.length<rawPlaces.length);
-  assert.deepEqual(CONSUMABLE_SLOTS.filter(place=>!canSpawn(place)).map(item=>item.id),['book-5']);
+  assert.deepEqual(CONSUMABLE_SLOTS.filter(place=>!system.canSpawn(place)).map(item=>item.id),['book-5']);
   for(const hiding of [{x:-22.5,y:0,z:-12},{x:-16,y:0,z:-33}]) {
-    assert.equal(canSpawn(hiding),false);
+    assert.equal(system.canSpawn(hiding),false);
     assert.ok(![...system.slots,...system.wires,...system.randomPlaces].some(place=>place.x===hiding.x&&place.y===hiding.y&&place.z===hiding.z));
   }
   for(const place of [...system.slots,...system.wires,...system.randomPlaces])assert.ok(canSpawn(place));

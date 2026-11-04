@@ -75,19 +75,43 @@ export class WaterSystem {
     this.stop();
     const fountain=this.nearest(player);
     if(!this.canDrink(player,fountain)) return false;
+    return this.begin(fountain,frameOffset);
+  }
+  // A held drink request may outlast the post-pee cooldown. Keep that intent
+  // separate from active drinking so it grants no water or animation early.
+  hold(player,frameOffset=0) {
+    this.stop();
+    const fountain=this.nearest(player);
+    if(!fountain||this.remaining(fountain)<=0||(!this.peeing&&this.bladder.value>=MAX_BLADDER))return false;
+    if(this.canDrink(player,fountain))return this.begin(fountain,frameOffset);
+    this.pending=fountain;
+    this.pendingAt=this.elapsed+(Number.isFinite(frameOffset)?Math.max(0,frameOffset):0);
+    return false;
+  }
+  begin(fountain,frameOffset=0) {
     this.target=fountain; this.drinkStart=this.bladder.value;this.drinkSourceStart=this.remaining(fountain);this.drinkElapsed=0;
     this.holdDelay=Number.isFinite(frameOffset) ? Math.max(0,frameOffset) : 0;
     return true;
   }
-  stop() { this.target=null;this.drinkStart=0;this.drinkSourceStart=0;this.drinkElapsed=0;this.holdDelay=0; }
+  stop() { this.target=null;this.pending=null;this.pendingAt=0;this.drinkStart=0;this.drinkSourceStart=0;this.drinkElapsed=0;this.holdDelay=0; }
   advance(dt, player) {
     if(!Number.isFinite(dt) || dt<0) return;
+    const intervalStart=this.elapsed;
     this.elapsed+=dt;
     if(this.peeing) {
       this.peeElapsed+=dt;
       this.peeEvent.progress=Math.min(1,precise(this.peeElapsed/PEE_SECONDS));
       this.bladder.value=precise(this.peeEvent.amount*(1-this.peeEvent.progress));
-      return;
+      if(this.peeing||!this.pending)return;
+    }
+    if(this.pending) {
+      const fountain=this.pending;
+      if(!canReachFountain(player,fountain,this.world)||this.remaining(fountain)<=0||this.bladder.value>=MAX_BLADDER){this.stop();return;}
+      if(this.cooldownRemaining>0||this.elapsed<this.pendingAt)return;
+      const availableAt=Math.max(intervalStart,this.readyAt,this.pendingAt);
+      this.pending=null;this.pendingAt=0;this.begin(fountain);
+      // A frame crossing the deadline earns only the fraction after it.
+      dt=Math.max(0,this.elapsed-availableAt);
     }
     if(!this.target) return;
     if(!this.canDrink(player,this.target)) { this.stop(); return; }

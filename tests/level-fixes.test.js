@@ -42,15 +42,18 @@ test('batching preserves the full level bounds and shadow participation', () => 
   group.updateWorldMatrix(true, true);
   for (const layer of layers) {
     const before = new THREE.Box3().setFromObject(layer);
+    const shadowFlags = new Set();
+    layer.traverse(mesh => { if (mesh.isMesh) shadowFlags.add(mesh.castShadow); });
     batchStaticGeometry(layer);
     const after = new THREE.Box3().setFromObject(layer);
     assert.ok(before.min.distanceTo(after.min) < .0001 && before.max.distanceTo(after.max) < .0001);
-    assert.ok(layer.children.some(mesh => mesh.castShadow));
-    assert.ok(layer.children.some(mesh => !mesh.castShadow));
+    const batchedShadowFlags = new Set();
+    layer.traverse(mesh => { if (mesh.isMesh) batchedShadowFlags.add(mesh.castShadow); });
+    assert.deepEqual([...batchedShadowFlags].sort(), [...shadowFlags].sort(), layer.name);
   }
 });
 
-test('Shift reaches full speed within a second, at least two and a half times walking speed', () => {
+test('Shift reaches full speed within a second, at least 1.9 times the faster walking speed', () => {
   for (const [name, surface] of Object.entries(SURFACES)) {
     const empty = new World(); empty.ramps = []; empty.addBox(0, -.1, 0, 40, .2, 38, name);
     // A tiny positive top chooses the fixture surface instead of the default ground.
@@ -60,7 +63,7 @@ test('Shift reaches full speed within a second, at least two and a half times wa
     assert.ok(Math.abs(sprint.vx - surface.run) < .001);
     const startWalk = walk.x, startSprint = sprint.x;
     advance(walk, .5, { x: 1 }); advance(sprint, .5, { x: 1, run: true });
-    assert.ok(sprint.x - startSprint > (walk.x - startWalk) * 2.5, name);
+    assert.ok(sprint.x - startSprint > (walk.x - startWalk) * 1.9, name);
   }
 });
 

@@ -109,7 +109,7 @@ export class MistressPursuit {
   }
   _inDen(player) {
     return valid(player)&&(this.navigation.isDen?.(player)??
-      (Math.hypot(player.x-DEN.x,player.z-DEN.z)<DEN.radius&&player.y<FLOOR_HEIGHT-.35));
+      (Math.hypot(player.x-DEN.x,player.z-DEN.z)<DEN.radius&&player.y>=-.25&&player.y<FLOOR_HEIGHT-.35));
   }
   _target(point) {
     if(!valid(point))return null;

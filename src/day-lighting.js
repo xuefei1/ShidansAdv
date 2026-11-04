@@ -1,6 +1,6 @@
 import * as THREE from '../vendor/three.module.js';
 import { dayState } from './day-cycle.js';
-import { FLOOR_HEIGHT } from './layout.js';
+import { FLOOR_HEIGHT, floorAt } from './layout.js';
 
 export const LOCAL_LIGHT_LIMIT = 4;
 const palette = {
@@ -9,6 +9,7 @@ const palette = {
   sun:[0xffe8b9,0xffa262,0x9db7f4], fill:[0xc9e5f0,0xc9b3d9,0x869acb],
 };
 const colors=Object.fromEntries(Object.entries(palette).map(([key,values])=>[key,values.map(c=>new THREE.Color(c))]));
+const basementGlowNoon=new THREE.Color(0xffd7a2),basementGlowNight=new THREE.Color(0xffba65),basementLightNight=new THREE.Color(0xffc58d);
 function tint(target,key,state) { const c=colors[key]; target.copy(c[0]).lerp(c[1],state.dusk).lerp(c[2],state.night); }
 const lerp=(a,b,t)=>a+(b-a)*t;
 
@@ -53,25 +54,36 @@ export function createDayLighting(scene, {sun,fill,hemisphere}, lamps) {
     tint(sun.color,'sun',state); sun.intensity=lerp(lerp(3.3,1.5,state.dusk),.22,state.night);
     tint(fill.color,'fill',state); fill.intensity=lerp(1.1,.4,state.night);
     lamps.glowMaterial.emissiveIntensity=state.lamps*2.8;
+    const basementPower=lerp(.22,1,state.lamps);
+    if(lamps.basementGlowMaterial){
+      lamps.basementGlowMaterial.emissiveIntensity=basementPower*2.8;
+      lamps.basementGlowMaterial.emissive.copy(basementGlowNoon).lerp(basementGlowNight,state.lamps);
+    }
     stars.material.opacity=state.stars*.9; moon.material.opacity=state.stars;
     sky.position.copy(camera.position);
     // Select by rabbit position, not viewing direction, so looking around never
     // swaps lights. Retain current slots and fade replacements to avoid popping.
-    const candidates=lamps.fixtures.map(f=>({f,d:(f.x-player.x)**2+(f.z-player.z)**2+((f.floor*FLOOR_HEIGHT)-player.y)**2*16}))
+    const floor=floorAt(player.y);
+    const activeLampPower=floor===-1?basementPower:state.lamps;
+    const candidates=lamps.fixtures.filter(f=>f.floor===floor).map(f=>({f,d:(f.x-player.x)**2+(f.z-player.z)**2+((f.floor*FLOOR_HEIGHT)-player.y)**2*16}))
       .sort((a,b)=>a.d-b.d).slice(0,LOCAL_LIGHT_LIMIT).map(c=>c.f);
     const claimed=new Set(slots.filter(s=>candidates.includes(s.fixture)).map(s=>s.fixture));
     const fade=dt>0?Math.min(1,dt*4):1;
     for(const slot of slots) {
+      if(slot.fixture&&slot.fixture.floor!==floor){slot.fixture=null;slot.weight=0;}
       const retained=candidates.includes(slot.fixture);
-      if(!retained && slot.weight>.01 && state.lamps>0) slot.weight=Math.max(0,slot.weight-fade);
+      if(!retained && slot.weight>.01 && activeLampPower>0) slot.weight=Math.max(0,slot.weight-fade);
       else {
         if(!retained) { slot.fixture=candidates.find(f=>!claimed.has(f)); slot.weight=0; if(slot.fixture) claimed.add(slot.fixture); }
         slot.weight=Math.min(1,slot.weight+fade);
       }
       if(slot.fixture) {
         const f=slot.fixture; slot.light.position.set(f.x,f.y-.12,f.z);
-        slot.light.intensity=state.lamps*slot.weight*(f.kind==='floor'?12:32)*(surveying ? .65 : 1);
-      }
+        const power=f.floor===-1?basementPower:state.lamps;
+        slot.light.color.set(f.floor===-1?0xffd7a2:0xffc58d);
+        if(f.floor===-1)slot.light.color.lerp(basementLightNight,state.lamps);
+        slot.light.intensity=power*slot.weight*(f.kind==='floor'?12:32)*(surveying ? .65 : 1);
+      } else slot.light.intensity=0;
     }
     return state;
   }

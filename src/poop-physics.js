@@ -132,7 +132,8 @@ export class PoopPhysics {
   }
   resolveEnvironment(ball, previous, dt) {
     const r = ball.radius;
-    if (ball.y < r) this.bounce(ball, 0, 1, 0, r - ball.y, dt);
+    const base=this.world.baseFloorHeight(ball.x,ball.z);
+    if (ball.y < base+r) this.bounce(ball, 0, 1, 0, base+r-ball.y, dt);
     if (ball.x < BOUNDS.minX + r) this.bounce(ball, 1, 0, 0, BOUNDS.minX + r - ball.x, dt);
     if (ball.x > BOUNDS.maxX - r) this.bounce(ball, -1, 0, 0, ball.x - BOUNDS.maxX + r, dt);
     if (ball.z < BOUNDS.minZ + r) this.bounce(ball, 0, 0, 1, BOUNDS.minZ + r - ball.z, dt);
@@ -148,14 +149,14 @@ export class PoopPhysics {
       if(ball.x+r>b.minX && ball.x-r<b.maxX && ball.z+r>b.minZ && ball.z-r<b.maxZ && ball.y+r>b.minY && ball.y-r<b.maxY) this.resolveBox(ball,b,dt,true);
     }
     const ramp = this.world.rampHeight(ball.x, ball.z);
-    if (ramp !== null) {
+    if (ramp !== null && ball.y+r >= (this.world.rampAt(ball.x,ball.z).baseY??0)-.01) {
       const stairs = this.world.rampAt(ball.x, ball.z);
       const slope = stairs.height / (stairs.startZ - stairs.endZ), normalLength = Math.hypot(1, slope);
       const depth = r - (ball.y - ramp) / normalLength;
       if (depth > 0) this.bounce(ball, 0, 1 / normalLength, slope / normalLength, depth, dt);
     }
     const dx = ball.x - DEN.x, dz = ball.z - DEN.z, distance = Math.hypot(dx, dz);
-    if (ball.y - r < DEN.fenceHeight && Math.abs(distance - DEN.radius) < r + .02) {
+    if (ball.y+r>0 && ball.y - r < DEN.fenceHeight && Math.abs(distance - DEN.radius) < r + .02) {
       if (previous.y - r >= DEN.fenceHeight && ball.vy < 0) this.bounce(ball, 0, 1, 0, DEN.fenceHeight + r - ball.y, dt);
       else if (distance > .000001) {
         const side = Math.hypot(previous.x - DEN.x, previous.z - DEN.z) < DEN.radius ? -1 : 1;

@@ -46,6 +46,8 @@ async function runPursuitChecks(pickupOnly=false) {
   for(const code of codes)key('keydown',code);key('keyup','Space');
   await until(()=>pos()[0]>-11,'Escape into the forward view');for(const code of codes)key('keyup',code);
   await until(()=>data().grounded==='true','Land outside the den');await until(()=>data().mistressPhase==='chase','Be spotted outside the den');
+  if(new URLSearchParams(location.search).has('repeat-drink')) {await runRepeatDrinkingChecks();return;}
+  if(new URLSearchParams(location.search).has('basement')) {await runBasementChecks();return;}
   if(new URLSearchParams(location.search).has('fountain-catch')) {await runDrinkingCaptureChecks();return;}
   if(new URLSearchParams(location.search).has('balance')) {await runPeeSafetyChecks();return;}
   if(new URLSearchParams(location.search).has('window-walk')) {await runWindowWallChecks();return;}
@@ -78,7 +80,7 @@ async function runPursuitChecks(pickupOnly=false) {
   const left=Number(data().mistressCaptureRemaining);await advance(left-.001);
   check('Shidan stays caught until the full three-second delay has elapsed',data().mistressPhase==='caught'&&Number(data().mistressCaptureRemaining)>.0001);
   await advance(.002);await until(()=>data().mistressPhase==='scolding','Return Shidan after capture');
-  check('Capture returns Shidan to the den and preserves her score and supplies',Math.hypot(pos()[0]+16,pos()[2]-12)<.03&&data().happiness===score&&data().poopSupply===supply&&data().freeDenJump==='false');
+  check('Capture returns Shidan to the den and preserves her score, supplies and unlimited free den jumps',Math.hypot(pos()[0]+16,pos()[2]-12)<.03&&data().happiness===score&&data().poopSupply===supply&&data().freeDenJump==='true');
   const scoldPosition=data().mistressPosition.split(',').map(Number),distanceToDen=Math.hypot(scoldPosition[0]+16,scoldPosition[2]-12);
   check('The mistress appears beside the den, angry, while Shidan can act again',distanceToDen>4&&distanceToDen<6.5&&data().mistressActivity==='angry'&&data().mistressState==='acting'&&!game().getElementById('home').disabled&&game().getElementById('chase-warning').dataset.phase==='scolding'&&game().getElementById('danger-vignette').hidden);
   await advance(1);
@@ -133,6 +135,60 @@ async function runWindowWallChecks() {
 }
 const audio=()=>JSON.parse(data().audio);
 const renderPos=()=>data().rabbitRenderPosition.split(',').map(Number);
+async function runRepeatDenChecks() {
+  for(let jump=0;jump<3;jump++) {
+    key('keydown','Space');await until(()=>!game().getElementById('charge').hidden&&game().getElementById('charge-percent').textContent==='100%','Charge another free den jump');
+    check('The charge prompt identifies a free den jump',game().getElementById('charge-label').textContent==='Den jump · no energy cost');
+    key('keyup','Space');await until(()=>data().grounded==='false','Launch inside the den');await until(()=>data().grounded==='true','Land inside the den again');
+    check(`Stationary den jump ${jump+1} spends no energy`,data().energy==='100.00'&&data().freeDenJump==='true');
+  }
+  await runPursuitChecks();
+}
+async function runRepeatDrinkingChecks() {
+  await walk(-10.5,17);await until(()=>data().consumeTarget==='fountain-living','Reach the first fountain');
+  mouse('mousedown');await advance(10);mouse('mouseup');
+  check('The first fountain fills the bladder and uses only its own reservoir',data().bladder==='100.00'&&JSON.parse(data().fountainWater)['fountain-living']===0);
+  key('keydown','KeyQ');key('keyup','KeyQ');await advance(1);
+  check('Pee finishes with an empty bladder and the expected cooldown',data().peeing==='false'&&data().bladder==='0.00'&&data().drinkCooldown==='59.000');
+  await walk(-7,17);await walk(-3.5,17);await walk(-3.5,14.8);await until(()=>data().consumeTarget==='fountain-foyer','Reach a different full fountain');
+  await advance(58.5);mouse('mousedown');
+  check('A held drink request waits without granting water early',data().drinkPending==='fountain-foyer'&&data().drinking==='false'&&data().bladder==='0.00'&&game().getElementById('consume-action').textContent.includes('Keep holding'));
+  await advance(.499);check('The cooldown remains enforced until its deadline',data().bladder==='0.00'&&data().drinkCooldown==='0.001');
+  await advance(.101);check('The same held click starts drinking when a frame crosses expiry',data().drinking==='true'&&data().drinkPending===''&&data().bladder==='1.00');
+  check('Only the eligible tenth of a second gives water from the second fountain',JSON.parse(data().fountainWater)['fountain-foyer']===99&&JSON.parse(data().fountainWater)['fountain-living']===0);
+  mouse('mouseup');await advance(.2);check('Releasing still stops drinking immediately',data().drinking==='false'&&data().bladder==='1.00');
+  mouse('mousedown');await advance(9.9);mouse('mouseup');check('Shidan can completely refill from the second fountain',data().bladder==='100.00'&&data().drinking==='false'&&JSON.parse(data().fountainWater)['fountain-foyer']===0);
+  await advance(Number(data().dayRemaining));await until(()=>data().mode==='gameover','Record the completed water cycle');
+  check('Round statistics include water transferred in the expiry-crossing frame',JSON.parse(data().roundStats).waterDrunk===200&&JSON.parse(data().roundStats).urineProduced===100);
+  check('All three stationary launches and the escape were fully charged long jumps',JSON.parse(data().roundStats).longJumps===4&&JSON.parse(data().roundStats).hops===0);
+  check('Repeated drinking and den jumps have no fatal error',game().getElementById('fatal').hidden);
+  status.textContent='All repeated drinking and den-jump checks passed.';
+  if(new URLSearchParams(location.search).has('capture')) {
+    document.querySelector('header').hidden=true;results.hidden=true;Object.assign(frame.style,{position:'fixed',inset:'0',height:'100vh',minHeight:'0'});
+  }
+}
+async function runBasementChecks() {
+  for(const [x,z] of [[-6,12],[-6,4],[-14,4],[-14,-5.8],[-19,-5.8],[-19,-4.1],[-22.4,-4.1]])await walk(x,z,{run:true});
+  check('The library entrance reveals the basement before descending',data().basementVisible==='true'&&data().basementCeilingVisible==='true');
+  await walk(-22.4,-18.1,{run:true});await until(()=>data().grounded==='true','Reach the concrete basement landing');
+  check('The real stairway reaches B1 without resetting Shidan',Math.abs(pos()[1]+H)<.02&&data().surface==='concrete'&&data().mapFloor==='-1'&&game().getElementById('map-floor').textContent==='B1');
+  check('The basement has its ceiling and no food or fountain target',data().basementCeilingVisible==='true'&&data().consumeTarget===''&&data().consumableCount==='46'&&Object.values(JSON.parse(data().fountainWater)).length===14);
+  await walk(-19,-18.1,{run:true});
+  click('map-button');await until(()=>!game().getElementById('atlas').hidden,'Open the basement map');
+  check('The atlas selects its basement floor',game().getElementById('atlas-floor-name').textContent==='Basement'&&game().querySelector('.floor-switch [data-floor="-1"]').getAttribute('aria-pressed')==='true');click('close-atlas');
+  await walk(-22.4,-18.1,{run:true});await walk(-22.4,-4,{run:true});
+  check('The single flight also returns Shidan to the first floor',Math.abs(pos()[1])<.02&&data().mapFloor==='0');
+  await walk(-22.4,-18.1,{run:true});await walk(-19,-18.1,{run:true});
+  await advance(480);
+  check('Night reaches the basement with only basement lamps selected',data().dayRemaining==='120.00'&&data().lamps==='1.000'&&JSON.parse(data().localLampFloors).every(floor=>floor===-1));
+  key('keydown','KeyV');key('keyup','KeyV');await until(()=>!game().getElementById('survey').hidden,'Inspect the basement cutaway');
+  check('Basement house view opens the ceiling without revealing upstairs',data().visibleFloor==='-1'&&data().basementCeilingVisible==='false'&&data().ceilingVisible==='false'&&data().roofVisible==='false');
+  check('The basement round has no fatal error',game().getElementById('fatal').hidden);
+  status.textContent='All basement checks passed.';
+  if(new URLSearchParams(location.search).has('capture')) {
+    document.querySelector('header').hidden=true;results.hidden=true;Object.assign(frame.style,{position:'fixed',inset:'0',height:'100vh',minHeight:'0'});
+  }
+}
 async function runDrinkingCaptureChecks() {
   await walk(-10.5,17);await until(()=>data().consumeTarget==='fountain-living','Reach the living-room fountain');
   mouse('mousedown');await until(()=>data().drinking==='true'&&data().rabbitAction==='drink','Start drinking during the chase');
@@ -562,7 +618,7 @@ async function runMistressChecks() {
   }
   check('The expanded random routine visits at least seven distinct household and outdoor tasks',seen.size>=7&&[...seen].every(id=>MISTRESS_ACTIVITIES.some(activity=>activity.id===id)));
   check('Routes walk between activities and use the stairs to reach upstairs',walking&&stairs&&upstairs&&states.has('entering')&&states.has('leaving'));
-  check('Walking stays faster than Shidan walking and slower than sprinting',speedOK&&finite);
+  check('The mistress keeps her regular walking pace below sprint speed',speedOK&&finite);
   check('Expanded household tasks provide additional noise-cover opportunities',noises.has('laugh')&&[...noises].some(kind=>!['laugh','cook'].includes(kind))&&[...noises].every(kind=>MISTRESS_ACTIVITIES.some(activity=>activity.noise===kind)));
   check('The mistress never moves Shidan or emits Shidan action noise',pos()[0]===-16&&pos()[2]===12&&data().noiseSequence==='0'&&data().happiness==='0');
   check('Activity changes reuse warmed shaders and cached sunlight',data().shaderPrograms===programs&&data().shadowRevision===shadow);
@@ -652,7 +708,7 @@ document.getElementById('run').onclick=async()=>{
     const html=await(await fetch('/')).text();
     // Test-only clock injection; player state is driven solely by real handlers.
     const livePreview=new URLSearchParams(location.search).has('live');
-    const normalMovement=livePreview||['cleanup','feedback','balance','fountain-catch'].some(key=>new URLSearchParams(location.search).has(key));
+    const normalMovement=livePreview||['cleanup','feedback','balance','fountain-catch','basement','repeat-drink'].some(key=>new URLSearchParams(location.search).has(key));
     const seededResults=new URLSearchParams(location.search).has('results');
     const seed=seededResults?`const rows=[{id:'qa-high',name:'Sunny',score:100,finishedAt:'2026-01-01T00:00:00Z'},{id:'qa-mid',name:'Clover',score:20,finishedAt:'2026-01-02T00:00:00Z'},{id:'qa-tie',name:'Bunny',score:10,finishedAt:'2026-01-03T00:00:00Z'}];const store=new Map([['shidans-adventure.leaderboard.v1',JSON.stringify(rows)]]);const scores={getItem:key=>store.get(key)??null,setItem:(key,value)=>store.set(key,value)};`:'';
     const entry=`<script type="module">import {boot} from '/src/main.js';let now=0;document.addEventListener('qa-advance',event=>now+=event.detail*1000);${seed}boot({clockNow:${livePreview?'()=>performance.now()':'()=>now'},scoreStorage:${seededResults?'scores':'null'},maxNpcMovementPerFrame:${normalMovement?'.1':'Infinity'}});<\/script>`;
@@ -670,6 +726,7 @@ document.getElementById('run').onclick=async()=>{
     game().getElementById('player-name').value='Body QA';
     if(!['feedback','pickup','balance','fountain-catch'].some(key=>new URLSearchParams(location.search).has(key)))click('play');
     await until(()=>data().mode==='play','Start adventure with the Play button');
+    if(new URLSearchParams(location.search).has('repeat-drink')) {await runRepeatDenChecks();return;}
     if(new URLSearchParams(location.search).has('balance')) {await runBalanceChecks();return;}
     if(new URLSearchParams(location.search).has('feedback')) {await runFeedbackChecks();return;}
     if(new URLSearchParams(location.search).has('pursuit')) {await runPursuitChecks();return;}

@@ -78,12 +78,12 @@ test('one moving ball uploads one matrix and queued uploads survive until render
   assert.ok(mesh.instanceMatrix.updateRanges.some(r => r.start === 16));
 });
 
-test('ordinary walking reaches 3m/s on wood with moderate release drift', () => {
+test('ordinary walking reaches 3.9m/s on wood with the same release drag', () => {
   const r = new RabbitController(new World()); Object.assign(r, { x: 0, y: 0, z: 12 });
   for (let i = 0; i < 120; i++) r.update(1 / 120, { z: 1 });
-  assert.ok(Math.abs(r.vz - 3) < .001);
+  assert.ok(Math.abs(r.vz - 3.9) < .001);
   const start = r.z;
   for (let i = 0; i < 180; i++) r.update(1 / 120, {});
-  assert.ok(r.z - start > .6 && r.z - start < .7);
+  assert.ok(r.z - start > .8 && r.z - start < .9);
   assert.equal(SURFACES.wood.run, 8.2); assert.equal(SURFACES.grass.grip, true);
 });

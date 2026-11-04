@@ -25,7 +25,7 @@ export function canReachConsumable(player, item, world) {
   const top=item.collider?.maxY ?? item.y;
   if (!player.grounded || player.y<item.y-.45 || player.y>Math.max(item.y+.45,top+.1) || Math.hypot(player.x - item.x, player.z - item.z) > CONSUME_REACH) return false;
   const a = { x: player.x, y: player.y + .32, z: player.z }, b = { x: item.x, y: item.y + .2, z: item.z };
-  const insideDen = p => Math.hypot(p.x - DEN.x, p.z - DEN.z) < DEN.radius;
+  const insideDen = p => p.y>=-.05&&Math.hypot(p.x - DEN.x, p.z - DEN.z) < DEN.radius;
   if (item.permanent && !insideDen(player)) return false;
   if (Math.min(a.y, b.y) < DEN.fenceHeight && insideDen(a) !== insideDen(b)) return false;
   return !world.query(Math.min(a.x,b.x), Math.min(a.z,b.z), Math.max(a.x,b.x), Math.max(a.z,b.z)).some(box => box.consumableId!==item.id && segmentHitsBox(a,b,box));
@@ -33,7 +33,15 @@ export function canReachConsumable(player, item, world) {
 
 export class ConsumableSystem {
   constructor(world, { slots = CONSUMABLE_SLOTS, random = Math.random, wires = WIRE_SLOTS, randomLimits = RANDOM_CHEWABLE_LIMITS, randomPlaces = null, canSpawn = () => true } = {}) {
-    this.world = world; this.random = random;this.canSpawn=canSpawn;
+    this.world = world; this.random = random;
+    this.canSpawn=place=>{
+      if(world.basement) {
+        if(place.y<0)return false;
+        const ramp=world.rampAt(place.x,place.z);
+        if(place.y<.5&&(ramp?.baseY??0)<0)return false;
+      }
+      return canSpawn(place);
+    };
     this.motion=new ConsumableMotion(world);
     // Both the initial population and restocking use this pool. Leave enough
     // clearance that an item's geometry cannot overlap the den fence either.

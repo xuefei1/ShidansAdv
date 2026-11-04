@@ -3,12 +3,13 @@ import { DEN, RAMPS, BOUNDS, HOUSE, FLOOR_HEIGHT } from './layout.js';
 import { Energy, highJumpCost, HIGH_JUMP_THRESHOLD } from './energy.js';
 export { DEN, STAIRS } from './layout.js';
 export const SURFACES = Object.freeze({
-  bedding: { acceleration: 26, drag: 18, walk: 2.8, run: 7.8, longJump: true },
-  carpet: { acceleration: 28, drag: 18, walk: 3, run: 8.5, longJump: true },
-  wood: { acceleration: 9, drag: 4.5, walk: 3, run: 8.2, longJump: false },
-  stairs: { acceleration: 24, drag: 18, walk: 2.8, run: 7, longJump: false },
-  grass: { acceleration: 40, drag: 30, walk: 3, run: 8.8, longJump: true, grip: true },
-  deck: { acceleration: 40, drag: 30, walk: 3, run: 8.8, longJump: true, grip: true },
+  bedding: { acceleration: 26, drag: 18, walk: 3.64, run: 7.8, longJump: true },
+  carpet: { acceleration: 28, drag: 18, walk: 3.9, run: 8.5, longJump: true },
+  wood: { acceleration: 9, drag: 4.5, walk: 3.9, run: 8.2, longJump: false },
+  stairs: { acceleration: 24, drag: 18, walk: 3.64, run: 7, longJump: false },
+  grass: { acceleration: 40, drag: 30, walk: 3.9, run: 8.8, longJump: true, grip: true },
+  deck: { acceleration: 40, drag: 30, walk: 3.9, run: 8.8, longJump: true, grip: true },
+  concrete: { acceleration: 40, drag: 30, walk: 3.9, run: 8.8, longJump: true, grip: true },
 });
 export const clamp = (v, low, high) => Math.max(low, Math.min(high, v));
 export const approach = (value, target, delta) => value + clamp(target - value, -delta, delta);
@@ -111,14 +112,18 @@ export class World {
   rampAt(x, z) { return this.ramps.find(r => x >= r.minX && x <= r.maxX && z >= Math.min(r.startZ, r.endZ) && z <= Math.max(r.startZ, r.endZ)); }
   rampHeight(x, z) {
     const r = this.rampAt(x, z);
-    return r ? (r.startZ - z) / (r.startZ - r.endZ) * r.height : null;
+    return r ? (r.baseY??0)+(r.startZ - z) / (r.startZ - r.endZ) * r.height : null;
+  }
+  baseFloorHeight(x,z) {
+    const b=this.basement;
+    return b&&x>=b.minX&&x<=b.maxX&&z>=b.minZ&&z<=b.maxZ?b.y:0;
   }
   support(x, z, maxHeight = Infinity, ignorePushables = false, radius = 0) {
     const outdoors = x < HOUSE.minX || x > HOUSE.maxX || z < HOUSE.minZ || z > HOUSE.maxZ;
-    let y = 0, surface = Math.hypot(x - DEN.x, z - DEN.z) < DEN.radius ? 'bedding' : outdoors ? 'grass' : 'wood';
+    let y=this.baseFloorHeight(x,z),surface=y<0?'concrete':Math.hypot(x-DEN.x,z-DEN.z)<DEN.radius?'bedding':outdoors?'grass':'wood';
     const footprint=Number.isFinite(radius)&&radius>0?radius:0;
     for (const b of this.query(x-footprint, z-footprint, x+footprint, z+footprint)) {
-      if((ignorePushables&&b.pushable)||b.maxY>maxHeight+.001||b.maxY<=y)continue;
+      if((ignorePushables&&b.pushable)||b.analyticRamp||b.maxY>maxHeight+.001||b.maxY<=y)continue;
       // A rabbit's feet can rest across a narrow seam even when her centre is
       // just outside a platform. Point-only support let opposing furniture
       // sides push her on/off an edge every substep. Require positive overlap,
@@ -132,6 +137,7 @@ export class World {
     }
     // Outdoor benches, stone paths and deck furniture have the same firm grip.
     if (outdoors) surface = y >= FLOOR_HEIGHT - .3 ? 'deck' : 'grass';
+    else if(y===0&&Math.hypot(x-DEN.x,z-DEN.z)<DEN.radius)surface='bedding';
     const ramp = this.rampHeight(x, z);
     if (ramp !== null && ramp <= maxHeight + .001 && ramp >= y) { y = ramp; surface = 'stairs'; }
     return { y, surface };
@@ -139,22 +145,19 @@ export class World {
 }
 
 export class RabbitController {
-  constructor(world) { this.world = world; this.radius = .22; this.height = .68; this.energy = new Energy(); this.sprintExhausted = false; this.freeDenJumpAvailable = true; this.reset(); }
+  constructor(world) { this.world = world; this.radius = .22; this.height = .68; this.energy = new Energy(); this.sprintExhausted = false; this.reset(); }
   reset() {
     this.x = DEN.x; this.y = 0; this.z = DEN.z; this.vx = 0; this.vy = 0; this.vz = 0;
     this.facing = Math.PI; this.grounded = true; this.surface = 'bedding'; this.charge = 0;
     this.charging = false; this.jumpHeld = false; this.lastJump = null; this.lastJumpPosition=null;this.lastJumpFree = false; this.lastLanding = false; this.longJumping = false;
     this.sprinting = false; this.jumpEnergyBlocked = false; this.pushing=false;this.lastPushedId='';
   }
-  // Home/title navigation resets position only. A new day restores the single
-  // free outward launch, so returning to the den cannot manufacture free jumps.
-  resetDay() { this.freeDenJumpAvailable = true; this.reset(); }
-  get hasFreeDenJump() { return this.freeDenJumpAvailable; }
-  isFreeDenJump(input = {}) {
-    if(!this.freeDenJumpAvailable || !this.grounded || this.y >= DEN.fenceHeight) return false;
-    const x=this.x-DEN.x,z=this.z-DEN.z,distance=Math.hypot(x,z);
-    const dx=input.x || 0,dz=input.z || 0;
-    return distance<DEN.radius && Math.hypot(dx,dz)>.05 && (distance<1e-6 || x*dx+z*dz>0);
+  // Every charged launch from the ground-floor den is free, including after
+  // returning home. The height guard excludes basement/upper-floor positions.
+  resetDay() { this.reset(); }
+  get hasFreeDenJump() { return true; }
+  isFreeDenJump() {
+    return this.grounded && this.y>=-.05 && this.y<DEN.fenceHeight && Math.hypot(this.x-DEN.x,this.z-DEN.z)<DEN.radius;
   }
   jumpCost(charge = this.charge,input = {}) { return this.isFreeDenJump(input) ? 0 : highJumpCost(charge); }
   releaseInput() { this.jumpHeld = false; this.charging = false; this.charge = 0; }
@@ -201,7 +204,7 @@ export class RabbitController {
         const wantsLong = this.charge + 1e-9 >= HIGH_JUMP_THRESHOLD && tuning.longJump;
         const free = wantsLong && this.isFreeDenJump(input);
         const long = wantsLong && (free || this.energy.spend(highJumpCost(this.charge)));
-        if(free && long) { this.freeDenJumpAvailable = false; this.lastJumpFree = true; }
+        if(free && long) this.lastJumpFree = true;
         this.jumpEnergyBlocked = wantsLong && !long;
         const power = clamp(this.charge / .65, 0, 1);
         this.vy = long ? 6 + power * 2.25 : 4.2;
@@ -281,7 +284,8 @@ export class RabbitController {
       if (dot < 0) { this.vx -= dot * ox / distance; this.vz -= dot * oz / distance; }
     }
     const ramp = this.world.rampHeight(this.x, this.z);
-    if (ramp !== null && ramp > this.y + .25) { this.x = oldX; this.z = oldZ; this.vx = this.vz = 0; }
+    const rampBase=this.world.rampAt(this.x,this.z)?.baseY??0;
+    if (ramp !== null && this.y+this.height>rampBase-.01 && ramp > this.y + .25) { this.x = oldX; this.z = oldZ; this.vx = this.vz = 0; }
     this.vy -= 16 * dt;
     this.y += this.vy * dt;
     // Head collisions under the upper floor and tabletops.
@@ -298,7 +302,8 @@ export class RabbitController {
       const edge=this.world.support(this.x,this.z,oldY+.001,true,this.radius);
       if(edge.y>below.y)below=edge;
     }
-    if (this.vy <= 0 && this.y <= below.y + .001) {
+    const followsRamp=this.grounded&&below.surface==='stairs'&&below.y<=oldY&&oldY-below.y<=.25;
+    if (this.vy <= 0 && (this.y <= below.y + .001||followsRamp)) {
       this.lastLanding ||= !this.grounded;
       this.y = below.y; this.vy = 0; this.grounded = true; this.surface = below.surface; this.longJumping = false;
     } else this.grounded = false;
@@ -306,6 +311,6 @@ export class RabbitController {
     this.sprinting = sprint && Math.hypot(this.x - oldX, this.z - oldZ) > dt * .05;
     this.energy.update(dt, this.sprinting);
     if (this.sprinting && this.energy.value === 0) this.sprintExhausted = true;
-    if (this.y < -4 || !Number.isFinite(this.x + this.y + this.z)) this.reset();
+    if (this.y < (this.world.basement?.y??0)-4 || !Number.isFinite(this.x + this.y + this.z)) this.reset();
   }
 }

@@ -101,7 +101,7 @@ test('fountain hand reach stays local and on the correct floor, while den and tr
   const f=pursuer(rabbit,goal);f.npc.update(0,{player:rabbit,seen:true,peeing:true,contactClear:true});
   assert.equal(f.npc.phase,'chase');assert.equal(f.npc.canAttemptCapture(rabbit,{peeing:true}),false);
   assert.equal(f.npc.canAttemptCapture(rabbit,{peeing:false}),true,'drinking grants no capture immunity');
-  for(const player of [{x:DEN.x,y:0,z:DEN.z},{x:-22.5,y:0,z:-12},{x:-16,y:0,z:-33}]) {
+  for(const player of [{x:DEN.x,y:0,z:DEN.z},{x:-16,y:0,z:-33}]) {
     assert.equal(navigation.isRabbitSafe(player,home),true);assert.equal(f.npc.canAttemptCapture(player),false);
   }
 });

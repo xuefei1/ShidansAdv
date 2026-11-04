@@ -298,7 +298,7 @@ test('the furnished level supports safe hiding and an outdoor pursuit without le
     assert.equal(npc.navigation.canStand(npc.position),true,`human must stay on its graph at ${JSON.stringify(npc.position)}`);
   }
   assert.ok(npc.position.z>20,'mistress follows Shidan through the main entrance');
-  const hidden=p(-22.5,0,-12);npc.update(0,{player:hidden,seen:false});assert.equal(npc.phase,'search');
+  const hidden=p(-16,0,-33);npc.update(0,{player:hidden,seen:false});assert.equal(npc.phase,'search');
 });
 
 test('a real different-room noise is investigated for longer than two seconds and searched only on arrival',()=>{

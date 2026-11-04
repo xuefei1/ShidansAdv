@@ -1,4 +1,4 @@
-import { DEN, FLOOR_HEIGHT, HOUSE, STAIRS, GARDEN_STAIRS, RAMPS, BOUNDS, roomAt } from './layout.js';
+import { DEN, FLOOR_HEIGHT, HOUSE, BASEMENT, BASEMENT_STAIRS, BASEMENT_STAIR_OPENING, STAIRS, GARDEN_STAIRS, RAMPS, BOUNDS, roomAt } from './layout.js';
 import { tableAt, tableInteraction, withinInteractionReach } from './table-refuges.js';
 import { WATER_REACH } from './water.js';
 
@@ -15,6 +15,9 @@ const EPSILON = 1e-6;
 const point = p => ({x:p.x,y:p.y,z:p.z});
 const distance = (a,b) => Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 const validPoint = p => p && ['x','y','z'].every(axis=>Number.isFinite(p[axis]));
+const floorIndex = y => y>=FLOOR_HEIGHT-.006?1:y<-.35?-1:0;
+const rampBase = ramp => ramp.baseY??0;
+const rampHeight = (ramp,z) => rampBase(ramp)+(ramp.startZ-z)/(ramp.startZ-ramp.endZ)*ramp.height;
 
 // Expanded boxes deliberately use the person's square envelope. This small
 // safety margin at corners keeps the animated shoulders clear of furniture.
@@ -76,7 +79,8 @@ class MinHeap {
 export class MistressNavigation {
   constructor(world) {
     this.radius=MISTRESS_RADIUS;this.height=MISTRESS_HEIGHT;
-    this.rampEnds=RAMPS.map(ramp=>[{x:(ramp.minX+ramp.maxX)/2,y:0,z:ramp.startZ},{x:(ramp.minX+ramp.maxX)/2,y:ramp.height,z:ramp.endZ}]);
+    this.rampEnds=RAMPS.map(ramp=>[{x:(ramp.minX+ramp.maxX)/2,y:rampBase(ramp),z:ramp.startZ},
+      {x:(ramp.minX+ramp.maxX)/2,y:rampBase(ramp)+ramp.height,z:ramp.endZ}]);
     this.rampLengths=this.rampEnds.map(([low,high])=>distance(low,high));
     this.obstacles=(world.solids ?? []).filter(box=>!box.pushable && !world.dynamicBoxes?.has(box)).map(box=>({...box}));
     this.tabletops=this.obstacles.filter(box=>box.tabletop);
@@ -103,24 +107,31 @@ export class MistressNavigation {
     this._cleanupCache=null;
   }
 
-  // Low front-wing roofs are not upstairs floors. Both actual stair ramps
-  // connect the upper rooms/balcony to the ground-floor lot.
+  // Low front-wing roofs are not upstairs floors. The authored ramps connect
+  // the basement, ground floor and upper rooms without invented floor planes.
   hasFloor(p) {
     if(!validPoint(p)) return false;
     const r=this.radius;
     if(p.x<BOUNDS.minX+r || p.x>BOUNDS.maxX-r || p.z<BOUNDS.minZ+r || p.z>BOUNDS.maxZ-r) return false;
     for(const ramp of RAMPS) {
       if(p.x<ramp.minX+r || p.x>ramp.maxX-r || p.z<Math.min(ramp.startZ,ramp.endZ) || p.z>Math.max(ramp.startZ,ramp.endZ))continue;
-      const y=(ramp.startZ-p.z)/(ramp.startZ-ramp.endZ)*ramp.height;
+      const y=rampHeight(ramp,p.z);
       if(Math.abs(p.y-y)<.006)return true;
     }
     // Grid nodes sit on actual pavers; interpolation may cross their small
     // ankle-height steps. The band keeps this support test constant-cost.
-    if(p.y>=-.005 && p.y<=MISTRESS_GROUND_STEP+.005) {
+    const basement=p.y>=BASEMENT.y-.005&&p.y<=BASEMENT.y+MISTRESS_GROUND_STEP+.005;
+    const ground=p.y>=-.005&&p.y<=MISTRESS_GROUND_STEP+.005;
+    if(basement||ground) {
+      if(basement&&(p.x<BASEMENT.minX+r||p.x>BASEMENT.maxX-r||p.z<BASEMENT.minZ+r||p.z>BASEMENT.maxZ-r))return false;
+      if(ground&&p.x>BASEMENT_STAIR_OPENING.minX&&p.x<BASEMENT_STAIR_OPENING.maxX&&
+        p.z>BASEMENT_STAIR_OPENING.minZ&&p.z<BASEMENT_STAIR_OPENING.maxZ)return false;
       // Prevent sideways entry through the solid staircase and its railings.
-      return !RAMPS.some(ramp=>p.x>ramp.minX-r && p.x<ramp.maxX+r &&
+      const base=basement?BASEMENT.y:0;
+      return !RAMPS.some(ramp=>Math.abs(rampBase(ramp)-base)<.005&&p.x>ramp.minX-r && p.x<ramp.maxX+r &&
         p.z>Math.min(ramp.startZ,ramp.endZ)-r && p.z<Math.max(ramp.startZ,ramp.endZ)+r &&
-        Math.abs(p.z-ramp.startZ)>.006 && (ramp.startZ-p.z)/(ramp.startZ-ramp.endZ)>0);
+        Math.abs(p.z-ramp.startZ)>.006 && (ramp.startZ-p.z)/(ramp.startZ-ramp.endZ)>0&&
+        (ramp.startZ-p.z)/(ramp.startZ-ramp.endZ)<1);
     }
     const stairLanding=p.x>=STAIRS.minX+r && p.x<=STAIRS.maxX-r && p.z<=STAIRS.endZ;
     const indoor=p.x>=HOUSE.minX+r && p.x<=HOUSE.maxX-r && p.z>=HOUSE.minZ && (p.z<=2-r || stairLanding) && p.z<=2;
@@ -138,6 +149,13 @@ export class MistressNavigation {
 
   stepAllowance(box,a,b=a) {
     if(box.rabbitRamp)return 0;
+    const flight=RAMPS.find(ramp=>ramp.id===box.rampId);
+    if(flight) {
+      const onFlight=p=>p.x>=flight.minX+this.radius-EPSILON&&p.x<=flight.maxX-this.radius+EPSILON&&
+        Math.abs(p.y-rampHeight(flight,Math.max(Math.min(flight.startZ,flight.endZ),Math.min(Math.max(flight.startZ,flight.endZ),p.z))))<.015;
+      if(onFlight(a)&&onFlight(b))return Math.max(MISTRESS_STAIR_STEP,
+        this.radius*flight.height/Math.abs(flight.endZ-flight.startZ)+(box.maxY-box.minY)+.006);
+    }
     if(this.isStairLip(box,a,b))return MISTRESS_STAIR_STEP;
     return box.maxY-Math.min(a.y,b.y)<=MISTRESS_GROUND_STEP+.001?MISTRESS_GROUND_STEP:0;
   }
@@ -153,13 +171,14 @@ export class MistressNavigation {
   isStairLip(box,a,b=a) {
     // The ramp meets the slab's vertical edge with an 8cm final step. The
     // collision model uses a smooth ramp; allow that lip below the ankles.
-    const ramp=box.id==='upper-floor'?STAIRS:box.id==='balcony-floor'?GARDEN_STAIRS:null;
+    const ramp=box.id==='upper-floor'?STAIRS:box.id==='balcony-floor'?GARDEN_STAIRS:
+      box.id==='ground-floor:front'?BASEMENT_STAIRS:null;
     return ramp && Math.min(a.x,b.x)>=ramp.minX+this.radius && Math.max(a.x,b.x)<=ramp.maxX-this.radius;
   }
 
   canStand(p) {
     if(!this.hasFloor(p)) return false;
-    if(p.y<DEN.fenceHeight && Math.hypot(p.x-DEN.x,p.z-DEN.z)<DEN.radius+this.radius+.02) return false;
+    if(p.y>=-.25&&p.y<DEN.fenceHeight && Math.hypot(p.x-DEN.x,p.z-DEN.z)<DEN.radius+this.radius+.02) return false;
     for(const box of this.candidates(p.x-this.radius,p.z-this.radius,p.x+this.radius,p.z+this.radius)) {
       if(box.rabbitRamp&&p.y>=(box.reachableShelf?.baseY??box.minY)-.13&&p.y<=box.maxY+.13&&
         p.x>box.minX-this.radius+EPSILON&&p.x<box.maxX+this.radius-EPSILON&&
@@ -174,7 +193,7 @@ export class MistressNavigation {
 
   segmentClear(a,b) {
     if(!this.canStand(a) || !this.canStand(b)) return false;
-    if(Math.min(a.y,b.y)<DEN.fenceHeight && distanceToSegmentXZ(DEN,a,b)<DEN.radius+this.radius+.02) return false;
+    if(Math.max(a.y,b.y)>=-.25&&Math.min(a.y,b.y)<DEN.fenceHeight && distanceToSegmentXZ(DEN,a,b)<DEN.radius+this.radius+.02) return false;
     for(const box of this.candidates(Math.min(a.x,b.x)-this.radius,Math.min(a.z,b.z)-this.radius,
       Math.max(a.x,b.x)+this.radius,Math.max(a.z,b.z)+this.radius)) {
       if(segmentHitsBox(a,b,box,this.radius,this.height,this.stepAllowance(box,a,b))) return false;
@@ -199,9 +218,9 @@ export class MistressNavigation {
       this.nodeCells.get(cell).push(id);
       return id;
     };
-    for(let floor=0;floor<2;floor++) {
-      const minX=floor?HOUSE.minX:BOUNDS.minX,maxX=floor?HOUSE.maxX:BOUNDS.maxX;
-      const minZ=floor?-25:BOUNDS.minZ,maxZ=floor?2:BOUNDS.maxZ;
+    for(const floor of [-1,0,1]) {
+      const minX=floor===0?BOUNDS.minX:HOUSE.minX,maxX=floor===0?BOUNDS.maxX:HOUSE.maxX;
+      const minZ=floor<0?BASEMENT.minZ:floor>0?-25:BOUNDS.minZ,maxZ=floor<0?BASEMENT.maxZ:floor>0?2:BOUNDS.maxZ;
       for(let ix=Math.ceil(minX/GRID);ix<=Math.floor(maxX/GRID);ix++) {
         for(let iz=Math.ceil(minZ/GRID);iz<=Math.floor(maxZ/GRID);iz++) add({x:ix*GRID,y:this.supportHeight(ix*GRID,iz*GRID,floor*FLOOR_HEIGHT),z:iz*GRID},`${floor},${ix},${iz}`);
       }
@@ -217,16 +236,22 @@ export class MistressNavigation {
       for(const [dx,dz] of [[0,1],[1,-1],[1,0],[1,1]]) connect(id,this.grid.get(`${floor},${x+dx},${z+dz}`));
     }
     for(const [rampIndex,ramp] of RAMPS.entries()) {
-      const x=(ramp.minX+ramp.maxX)/2,direction=Math.sign(ramp.endZ-ramp.startZ);
-      let previous=this.grid.get(`0,${x/GRID},${(ramp.startZ-direction*GRID)/GRID}`);
+      const x=(ramp.minX+ramp.maxX)/2;
+      let previous=null,first=null;
       const count=Math.round(Math.abs(ramp.endZ-ramp.startZ)/GRID);
       for(let index=0;index<=count;index++) {
         const progress=index/count,z=ramp.startZ+(ramp.endZ-ramp.startZ)*progress;
-        const id=add({x,y:progress*ramp.height,z,ramp:rampIndex});
+        const id=add({x,y:rampBase(ramp)+progress*ramp.height,z,ramp:rampIndex});
+        if(index===0)first=id;
         if(id!==null)this.stairNodes.push(id);
         connect(previous,id);previous=id;
       }
-      connect(previous,this.grid.get(`1,${x/GRID},${(ramp.endZ+direction*GRID)/GRID}`));
+      // A new flight need not have a centre on the half-metre grid. Attach
+      // each real endpoint to nearby clear floor nodes instead of rounding it.
+      for(const id of [first,previous])if(id!==null) {
+        const end=this.nodes[id];
+        for(const node of this.nearbyCandidates(end,1.25))if(node.ramp===undefined&&Math.abs(node.y-end.y)<.13)connect(id,node.id);
+      }
     }
   }
 
@@ -244,7 +269,7 @@ export class MistressNavigation {
 
   componentAt(p) {
     if(!this.canStand(p))return -1;
-    const floor=p.y>=FLOOR_HEIGHT-.006?1:0,ix=Math.round(p.x/GRID),iz=Math.round(p.z/GRID);
+    const floor=floorIndex(p.y),ix=Math.round(p.x/GRID),iz=Math.round(p.z/GRID);
     for(const [dx,dz] of [[0,0],[0,1],[1,0],[0,-1],[-1,0],[1,1],[-1,1],[1,-1],[-1,-1]]) {
       const id=this.grid.get(`${floor},${ix+dx},${iz+dz}`);
       if(id!==undefined && this.segmentClear(p,this.nodes[id]))return this.components[id];
@@ -257,11 +282,11 @@ export class MistressNavigation {
     if(!validPoint(p))return null;
     for(const ramp of RAMPS) {
       if(p.x<ramp.minX || p.x>ramp.maxX || p.z<Math.min(ramp.startZ,ramp.endZ) || p.z>Math.max(ramp.startZ,ramp.endZ))continue;
-      const y=(ramp.startZ-p.z)/(ramp.startZ-ramp.endZ)*ramp.height;
-      if(p.y>=y-.35)return {x:p.x,y,z:p.z};
+      const y=rampHeight(ramp,p.z);
+      if(p.y>=y-.35&&p.y<=rampBase(ramp)+ramp.height+.35)return {x:p.x,y,z:p.z};
     }
     const upper=p.y>=FLOOR_HEIGHT-.35 && p.x>=HOUSE.minX && p.x<=HOUSE.maxX && p.z>=-25 && p.z<=2;
-    return {x:p.x,y:this.supportHeight(p.x,p.z,upper?FLOOR_HEIGHT:0),z:p.z};
+    return {x:p.x,y:this.supportHeight(p.x,p.z,upper?FLOOR_HEIGHT:p.y<-.35?BASEMENT.y:0),z:p.z};
   }
 
   region(p) {
@@ -293,7 +318,7 @@ export class MistressNavigation {
   }
 
   isDen(p) {
-    return validPoint(p) && p.y<FLOOR_HEIGHT-.35 && Math.hypot(p.x-DEN.x,p.z-DEN.z)<DEN.radius;
+    return validPoint(p) && p.y>=-.25&&p.y<FLOOR_HEIGHT-.35 && Math.hypot(p.x-DEN.x,p.z-DEN.z)<DEN.radius;
   }
 
   pursuitTarget(player,from,{preferFrom=false}={}) {
@@ -355,10 +380,10 @@ export class MistressNavigation {
     // Join only low, connected physical furniture layers. This keeps a bed's
     // frame, quilt and pillows one surface while excluding walls/floor slabs.
     const boxes=this.obstacles.filter(box=>{
-      const base=box.minY>=FLOOR_HEIGHT-.1?FLOOR_HEIGHT:0;
+      const base=box.minY>=FLOOR_HEIGHT-.1?FLOOR_HEIGHT:box.minY>=-.1?0:BASEMENT.y;
       return box.minY>=base-.05&&box.maxY>base+.12&&box.maxY<=base+2.4+.001;
     });
-    const parents=boxes.map((_,index)=>index),baseOf=box=>box.minY>=FLOOR_HEIGHT-.1?FLOOR_HEIGHT:0;
+    const parents=boxes.map((_,index)=>index),baseOf=box=>box.minY>=FLOOR_HEIGHT-.1?FLOOR_HEIGHT:box.minY>=-.1?0:BASEMENT.y;
     const root=index=>{while(parents[index]!==index){parents[index]=parents[parents[index]];index=parents[index];}return index;};
     for(let a=0;a<boxes.length;a++)for(let b=0;b<a;b++) {
       const first=boxes[a],second=boxes[b];if(baseOf(first)!==baseOf(second))continue;
@@ -503,40 +528,39 @@ export class MistressNavigation {
   }
 
   makeHeuristic(target) {
-    const targetFloor=target.y>=FLOOR_HEIGHT-.005?1:0;
-    const targetRamp=target.y>.005&&target.y<FLOOR_HEIGHT-.005 ? RAMPS.findIndex(ramp=>{
-      const y=(ramp.startZ-target.z)/(ramp.startZ-ramp.endZ)*ramp.height;
-      return target.x>=ramp.minX+this.radius&&target.x<=ramp.maxX-this.radius&&Math.abs(y-target.y)<.006;
-    }):-1;
-    const crossFloor=(a,floor,b,other)=>{
-      if(floor===other)return distance(a,b);
+    const targetFloor=floorIndex(target.y);
+    const rampAtPoint=q=>RAMPS.findIndex(ramp=>q.y>rampBase(ramp)+.005&&q.y<rampBase(ramp)+ramp.height-.005&&
+      q.x>=ramp.minX+this.radius&&q.x<=ramp.maxX-this.radius&&
+      q.z>=Math.min(ramp.startZ,ramp.endZ)&&q.z<=Math.max(ramp.startZ,ramp.endZ)&&Math.abs(rampHeight(ramp,q.z)-q.y)<.006);
+    const targetRamp=rampAtPoint(target);
+    // Six stair endpoints form a tiny relaxed graph. Same-floor Euclidean
+    // edges and real flight lengths remain a lower bound across any number
+    // of levels, including a target partway along the basement flight.
+    const ends=this.rampEnds.flat(),floors=ends.map(end=>floorIndex(end.y));
+    const costs=ends.map((a,i)=>ends.map((b,j)=>i===j?0:floors[i]===floors[j]?distance(a,b):Infinity));
+    for(let ramp=0;ramp<RAMPS.length;ramp++)costs[ramp*2][ramp*2+1]=costs[ramp*2+1][ramp*2]=this.rampLengths[ramp];
+    for(let via=0;via<ends.length;via++)for(let a=0;a<ends.length;a++)for(let b=0;b<ends.length;b++)
+      costs[a][b]=Math.min(costs[a][b],costs[a][via]+costs[via][b]);
+    const targetCosts=ends.map((_,index)=>{
       let best=Infinity;
-      for(let index=0;index<RAMPS.length;index++)best=Math.min(best,distance(a,this.rampEnds[index][floor])+this.rampLengths[index]+distance(this.rampEnds[index][other],b));
+      for(let end=0;end<ends.length;end++)if(targetRamp>=0?Math.floor(end/2)===targetRamp:floors[end]===targetFloor)
+        best=Math.min(best,costs[index][end]+distance(ends[end],target));
       return best;
-    };
-    const floorHeuristic=(node,floor)=>{
-      if(targetRamp<0) {
-        if(floor===targetFloor)return distance(node,target);
-        let best=Infinity;
-        for(let index=0;index<RAMPS.length;index++)best=Math.min(best,distance(node,this.rampEnds[index][floor])+normalCosts[index]);
-        return best;
-      }
-      return Math.min(...this.rampEnds[targetRamp].map((end,index)=>crossFloor(node,floor,end,index)+distance(end,target)));
-    };
-    const normalCosts=this.rampEnds.map((ends,index)=>this.rampLengths[index]+distance(ends[targetFloor],target));
-    const portalCosts=this.rampEnds.map(ends=>ends.map((end,floor)=>floorHeuristic(end,floor)));
+    });
     return node=>{
-      if(node.ramp!==undefined && node.y>.005 && node.y<FLOOR_HEIGHT-.005) {
-        const costs=this.rampEnds[node.ramp].map((end,floor)=>distance(node,end)+portalCosts[node.ramp][floor]);
-        if(node.ramp===targetRamp)costs.push(distance(node,target));
-        return Math.min(...costs);
-      }
-      return floorHeuristic(node,node.y>=FLOOR_HEIGHT-.005?1:0);
+      const floor=floorIndex(node.y),nodeRamp=node.ramp??rampAtPoint(node);
+      let best=targetRamp<0&&floor===targetFloor?distance(node,target):Infinity;
+      if(nodeRamp>=0) {
+        for(const index of [nodeRamp*2,nodeRamp*2+1])best=Math.min(best,distance(node,ends[index])+targetCosts[index]);
+        if(nodeRamp===targetRamp)best=Math.min(best,distance(node,target));
+      } else for(let index=0;index<ends.length;index++)if(floors[index]===floor)
+        best=Math.min(best,distance(node,ends[index])+targetCosts[index]);
+      return Number.isFinite(best)?best:distance(node,target);
     };
   }
 
   nearbyNodes(p) {
-    const found=[],floor=p.y>FLOOR_HEIGHT-.01?1:0,ix=Math.round(p.x/GRID),iz=Math.round(p.z/GRID);
+    const found=[],floor=floorIndex(p.y),ix=Math.round(p.x/GRID),iz=Math.round(p.z/GRID);
     for(let dx=-3;dx<=3;dx++) for(let dz=-3;dz<=3;dz++) {
       const id=this.grid.get(`${floor},${ix+dx},${iz+dz}`);
       if(id!==undefined && this.segmentClear(p,this.nodes[id])) found.push(id);

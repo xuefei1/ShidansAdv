@@ -3,7 +3,7 @@ import { cube, cylinder, ellipsoid, beam } from './model.js';
 import { batchStaticGeometry } from './render-batching.js';
 import { ConsumableSystem } from './consumable-system.js';
 import { CONSUMABLE_TYPES, CONSUMABLE_SLOTS } from './consumable-data.js';
-import { FLOOR_HEIGHT } from './layout.js';
+import { FLOOR_HEIGHT, floorAt } from './layout.js';
 import { consumableRotation } from './consumable-collision.js';
 
 // One small original model per food, instanced by kind/floor. Shared vertex colours
@@ -146,7 +146,8 @@ export function createConsumables(scene, world, options) {
   const sparks = new THREE.InstancedMesh(sparkGeometry,new THREE.MeshBasicMaterial({color:0xffdc82}),128);
   sparks.instanceMatrix.setUsage(THREE.DynamicDrawUsage); sparks.frustumCulled = false; sparks.count = 0; scene.add(sparks);
   const particles = [], transform = new THREE.Object3D();
-  let time = 0, upperVisible = true;
+  let time = 0, upperVisible = true, floorView = null, currentTarget = null, currentInteracting = false;
+  const inFloorView=y=>floorView===null||floorAt(y)===floorView;
   for (const item of system.availableItems()) visuals.set(item.id,{item,age:1,state:'idle'});
   function handle(events) {
     for (const event of events) {
@@ -160,6 +161,7 @@ export function createConsumables(scene, world, options) {
     }
   }
   function sync(dt = 0, target = null, interacting = false) {
+    currentTarget=target;currentInteracting=interacting;
     time += dt;
     for (const mesh of batches.values()) mesh.count = 0;
     for (const [id, visual] of visuals) {
@@ -167,6 +169,7 @@ export function createConsumables(scene, world, options) {
       if (visual.state === 'consume' && visual.age >= .65) { visuals.delete(id); continue; }
       if (visual.state === 'spawn' && visual.age >= .6) visual.state = 'idle';
       const { item, age, state } = visual, floor = item.y >= FLOOR_HEIGHT-.1 ? 1 : 0;
+      if(!inFloorView(item.y))continue;
       const t = state === 'consume' ? age/.65 : state === 'spawn' ? Math.min(1,age/.6) : 1;
       const scale = state === 'consume' ? (1-t)*(1+.35*Math.sin(t*Math.PI)) : state === 'spawn' ? 1-(1-t)**3 : 1;
       transform.position.set(item.x,item.y+(state==='consume' ? t*.65 : 0),item.z);
@@ -175,12 +178,13 @@ export function createConsumables(scene, world, options) {
       const mesh = batches.get(item.permanent ? 'den-hay' : `${item.type}:${floor}`); mesh.setMatrixAt(mesh.count++,transform.matrix);
     }
     for (const mesh of batches.values()) mesh.instanceMatrix.needsUpdate = true;
-    ring.visible = !!target;
+    ring.visible = !!target&&inFloorView(target.y);
     if (target) { ring.position.set(target.x,target.y+.018,target.z); ring.scale.setScalar((target.permanent ? 1.55 : 1)*(1+Math.sin(time*4)*.06)); }
     sparks.count = 0;
     for (let i = particles.length-1; i >= 0; i--) {
       const p = particles[i]; p.age += dt;
       if (p.age >= .85) { particles.splice(i,1); continue; }
+      if(!inFloorView(p.y))continue;
       if (p.y >= FLOOR_HEIGHT && !upperVisible) continue;
       const t = p.age/.85;
       transform.position.set(p.x+Math.cos(p.angle)*p.speed*t,p.y+t*.85,p.z+Math.sin(p.angle)*p.speed*t);
@@ -196,6 +200,11 @@ export function createConsumables(scene, world, options) {
       for (const item of system.availableItems()) if(item.type!=='poop') visuals.set(item.id,{item,age:1,state:'idle'});
       sync();
     },
-    setUpperVisible(visible) { upperVisible = visible; floors[1].visible = visible; }
+    setUpperVisible(visible) { upperVisible = visible; floors[1].visible = visible&&floorView!==-1; },
+    setFloorView(floor=null) {
+      const next=floor===-1?-1:null;if(next===floorView)return;
+      floorView=next;floors[1].visible=upperVisible&&floorView!==-1;
+      sync(0,currentTarget,currentInteracting);
+    },
   };
 }

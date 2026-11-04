@@ -38,7 +38,7 @@ test('the linen tunnel is replaced by two open carpet tiers and bounded physical
   assert.ok(decks[0].minZ>decks[1].maxZ,'tiers do not trap the rabbit’s tall ears beneath another deck');
   const steps=world.solids.filter(box=>box.rabbitRamp);assert.equal(steps.length,48);
   for(const step of steps){assert.equal(step.reachableShelf.id,'linen-shelf');assert.equal(step.surface,'carpet');close(step.minY,H);}
-  assert.equal(world.ramps,RAMPS);assert.equal(RAMPS.length,2,'furniture does not alter the two human stairways');
+  assert.equal(world.ramps,RAMPS);assert.equal(RAMPS.length,3,'furniture does not alter the three authored human stairways');
 });
 
 test('ordinary walking climbs both shelf ramps continuously at low and high frame rates',()=>{

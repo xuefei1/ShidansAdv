@@ -184,9 +184,11 @@ document.getElementById('hay').addEventListener('click', async () => {
       await wait(50);
     }
   };
-  const jump=async () => {
-    key('keydown','Space'); await until(()=>!d.getElementById('charge').hidden && d.getElementById('charge-percent').textContent==='100%','charge jump');
-    key('keyup','Space'); await until(()=>energy()<99 && canvas.dataset.grounded==='true','land after spending energy');
+  const spendEnergy=async () => {
+    key('keydown','ShiftLeft');key('keydown','KeyD');
+    await until(()=>energy()<98,'spend energy by sprinting inside the den');
+    key('keyup','KeyD');key('keyup','ShiftLeft');d.getElementById('home').click();
+    await until(()=>canvas.dataset.consumeTarget==='den-hay','return to special hay');
   };
   const originalLock=canvas.requestPointerLock;
   try {
@@ -196,24 +198,24 @@ document.getElementById('hay').addEventListener('click', async () => {
     await until(()=>canvas.dataset.consumeTarget==='den-hay','hay prompt');
     check('Special hay is reachable from the starting position',d.getElementById('consume-name').textContent==='Special den hay');
     check('The prompt explains the full refill and once-per-visit ball reward',d.getElementById('consume-energy').textContent==='100% energy · +3 poop balls');
-    await jump(); check('A charged jump spends energy before the refill',energy()<91);
+    await spendEnergy(); check('Sprinting spends energy before the refill',energy()<99);
     mouse('mousedown'); await until(()=>progress()>=.3,'partial eating hold'); mouse('mouseup');
     await until(()=>progress()===0,'cancelled hold');
-    check('Releasing early grants no refill',energy()<91);
+    check('Releasing early grants no refill',energy()<99);
     mouse('mousedown'); await until(()=>progress()>=.3,'hold before pause');
     d.getElementById('menu-button').click(); d.getElementById('resume').click();
     await until(()=>progress()===0,'resume after cancellation');
-    check('Opening the menu cancels the hay hold',energy()<91);
+    check('Opening the menu cancels the hay hold',energy()<99);
     mouse('mousedown'); await until(()=>energy()===100,'full refill'); mouse('mouseup');
     check('Completed hold restores exactly 100%',canvas.dataset.lastConsumedId==='den-hay' && canvas.dataset.energyRecovering==='false');
     check('The special stack remains available without consuming house snacks',canvas.dataset.consumeTarget==='den-hay' && canvas.dataset.consumableCount==='46');
     d.getElementById('home').click();
     d.getElementById('menu-button').click(); d.getElementById('back-title').click(); d.getElementById('player-name').value='Gameplay QA'; d.getElementById('play').click();
-    await jump(); mouse('mousedown'); await until(()=>energy()===100,'repeat refill'); mouse('mouseup');
+    await spendEnergy(); mouse('mousedown'); await until(()=>energy()===100,'repeat refill'); mouse('mouseup');
     check('The same stack refills again after home and title navigation',canvas.dataset.consumeTarget==='den-hay' && canvas.dataset.consumableCount==='46');
     check('No fatal browser error',d.getElementById('fatal').hidden);
   } catch(error) { checkFailure(error); }
-  finally { mouse('mouseup'); key('keyup','Space'); canvas.requestPointerLock=originalLock; disableRunners(false); }
+  finally { mouse('mouseup'); key('keyup','Space');key('keyup','KeyD');key('keyup','ShiftLeft'); canvas.requestPointerLock=originalLock; disableRunners(false); }
   function checkFailure(error) {
     const li=document.createElement('li'); li.className='fail'; li.textContent=`FAIL: ${error.message}`; results.append(li); console.error(error);
   }
@@ -242,7 +244,7 @@ document.getElementById('energy').addEventListener('click', async () => {
     check('Return home preserves spent energy',energy()<100);
     const beforeJumps=energy();
     for(let i=0;i<3;i++) { key('keydown','Space'); await wait(750); key('keyup','Space'); await wait(1200); }
-    check('Three fully charged stationary jumps cost about 30 energy',Math.abs(beforeJumps-energy()-30)<.2,energy().toFixed(2));
+    check('Repeated stationary long jumps inside the den cost no energy',Math.abs(energy()-beforeJumps-3*1.95*.02)<.05,energy().toFixed(2));
     const resting=energy(); await wait(2000);
     check('Passive recovery adds 0.01% every half second',Math.abs(energy()-resting-.04)<.008,`${resting.toFixed(3)} → ${energy().toFixed(3)}`);
     key('keydown','Space'); await wait(750); key('keydown','KeyD'); key('keyup','Space');
@@ -260,7 +262,7 @@ document.getElementById('energy').addEventListener('click', async () => {
     check('Resume requires a fresh press to consume',Number(canvas.dataset.consumeProgress)===0 && count()===46);
     const before=energy(); mouse('mousedown'); await wait(1900);
     check('A 1.6 second hold consumes one hay stack',count()===45 && canvas.dataset.lastConsumed==='hay');
-    check('Energy is restored gradually after consumption',energy()>before+1 && energy()<before+39 && canvas.dataset.energyRecovering==='true');
+    check('Hay energy recovery starts after consumption and respects the cap',energy()>before && energy()<=Math.min(100,before+40) && canvas.dataset.energyRecovering==='true');
     await wait(900); mouse('mouseup');
     check('Hay restores forty energy after a further second, capped at 100',Math.abs(energy()-Math.min(100,before+40))<.15 && canvas.dataset.energyRecovering==='false');
     check('The held button does not chain into another snack',count()===45);

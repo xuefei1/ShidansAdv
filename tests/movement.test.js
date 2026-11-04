@@ -50,7 +50,7 @@ test('wood has a controlled slide between the original and grippy revisions', ()
 for (const ramp of RAMPS) {
   test(`${ramp.id} is walkable in both directions without jumping`, () => {
     const x = (ramp.minX + ramp.maxX) / 2, sign = Math.sign(ramp.endZ - ramp.startZ);
-    const r = place(x, 0, ramp.startZ - sign * .7); walk(r, x, ramp.endZ + sign * .7, H); walk(r, x, ramp.startZ - sign * .7, 0);
+    const base=ramp.baseY??0; const r = place(x, base, ramp.startZ - sign * .7); walk(r, x, ramp.endZ + sign * .7, base+ramp.height); walk(r, x, ramp.startZ - sign * .7, base);
   });
 }
 test('the ground-floor chase loop connects lounge, entrance, dining and hall', () => {
@@ -62,8 +62,8 @@ test('the rear-room loop links library, garden room and craft room twice', () =>
 test('the complete upstairs/outside loop returns through a garden door', () => {
   route([2.5, 0, 16], [[2.5, 1, H], [1, 0], [1, -6], [0, -6], [0, -22.5], [20.5, -22.5], [20.5, -24], [20.5, -36, 0], [20.5, -37], [2, -37], [2, -36], [2, -29], [0, -22], [0, -17], [0, -6], [1, -6], [1, 0]]);
 });
-test('the remaining library passage has two usable entrances', () => {
-  route([-19, 0, -6], [[-22.5, -6], [-22.5, -17], [-19, -17]]);
+test('the former library passage is one staircase into the basement and back', () => {
+  route([-19,0,-4], [[-22.4,-4],[-22.4,-18,-H],[-19,-18,-H],[-22.4,-18,-H],[-22.4,-4,0],[-19,-4,0]]);
 });
 test('the hedge tunnel has a clear route through both ends', () => { route([-22, 0, -33], [[-16, -33], [-10, -33]]); });
 test('the front entrance and side path reconnect to the backyard', () => { route([0, 0, 18], [[0, 21.5], [0, 22.6], [25, 22.6], [25, 21.5], [25, -22]]); });

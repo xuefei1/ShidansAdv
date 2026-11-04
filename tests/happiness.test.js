@@ -60,13 +60,13 @@ test('cake returns after 120 active seconds at its fixed spot, even while all ot
   const cake=[...s.items.values()].find(item=>item.type==='cake'),p=beside(cake,world,s);
   p.energy.value=0;s.begin(p);assert.equal(s.update(consumptionSeconds(cake)-.01,p).length,0);assert.equal(s.pending.size,0);
   const [consumed]=s.update(.01,p);assert.equal(consumed.happiness,150);assert.equal(consumed.energy,50);
-  assert.equal(s.count,46);assert.equal(s.restockCount,46);assert.equal(s.chewableCount,22);
+  assert.equal(s.count,45);assert.equal(s.restockCount,45);assert.equal(s.chewableCount,22);
   assert.deepEqual(s.update(0,p,0),[]); // Paused time cannot advance the cooldown.
   assert.equal(s.update(0,p,119.99).length,0);
   const [spawned]=s.update(0,p,.01);assert.equal(spawned.kind,'spawn');
   for(const key of ['id','type','x','y','z']) assert.equal(spawned.item[key],cake[key]);
   assert.ok(world.dynamicBoxes.has(spawned.item.collider));
-  assert.equal(s.count,47);assert.equal(s.chewableCount,22);assert.equal(s.pending.size,0);
+  assert.equal(s.count,46);assert.equal(s.chewableCount,22);assert.equal(s.pending.size,0);
   assert.equal(s.update(0,p,600).length,0);assert.equal([...s.items.values()].filter(i=>i.type==='cake').length,1);
 });
 
@@ -107,12 +107,14 @@ test('fixed wires are supported and accessible beside every appliance category a
   }
 });
 
-test('random placement spans upstairs, balcony, yards and hidden passages without clipping furniture',()=>{
+test('random placement spans upstairs, balcony, yards and the retained hedge shelter, keeping the basement stairs clear',()=>{
   const {world}=createHouse(new THREE.Scene()),places=createChewablePlaces(world);
-  for(const region of [p=>p.y===4.2&&p.z> -20,p=>p.y===4.2&&p.z< -20,p=>p.y===0&&p.z>20,p=>p.y===0&&p.z< -25,p=>p.y===0&&p.x< -21&&p.z< -6]) assert.ok(places.some(region));
+  for(const region of [p=>p.y===4.2&&p.z> -20,p=>p.y===4.2&&p.z< -20,p=>p.y===0&&p.z>20,p=>p.y===0&&p.z< -25,
+    p=>p.y===0&&p.x> -19.5&&p.x< -12.5&&p.z> -34.4&&p.z< -31.6]) assert.ok(places.some(region));
+  assert.equal(places.some(p=>p.y===0&&world.rampAt(p.x,p.z)?.id==='basement-stairs'),false);
   const s=new ConsumableSystem(world,{random:seeded(52)});
   for(let i=0;i<12;i++) {
-    s.reset();assert.equal(s.chewableCount,22);assert.equal(world.dynamicBoxes.size,70);
+    s.reset();assert.equal(s.chewableCount,22);assert.equal(world.dynamicBoxes.size,69);
     for(const item of s.chewables.values()) beside(item,world);
     for(const type of ['cardboard','slippers']) assert.equal([...s.chewables.values()].filter(v=>v.type===type).length,type==='cardboard'?8:4);
   }
@@ -174,12 +176,12 @@ test('new item visuals stay in fixed instance batches and reset removes old anim
   const scene=new THREE.Scene(),{world}=createHouse(scene),view=createConsumables(scene,world,{random:seeded(4)});
   const groups=[scene.getObjectByName('Consumables floor 0'),scene.getObjectByName('Consumables floor 1')];
   const total=()=>groups.flatMap(g=>g.children).reduce((n,m)=>n+m.count,0);
-  assert.equal(total(),70);assert.equal(groups.flatMap(g=>g.children).length,25);
+  assert.equal(total(),69);assert.equal(groups.flatMap(g=>g.children).length,25);
   for(const type of ['wire','cardboard','slippers']) {
     const item=[...view.system.chewables.values()].find(i=>i.type===type),p=beside(item,world,view.system);
     view.system.begin(p);view.handle(view.system.update(consumptionSeconds(item),p));view.sync(.7);
   }
-  assert.equal(total(),67);view.reset();assert.equal(total(),70);assert.equal(world.dynamicBoxes.size,70);
+  assert.equal(total(),66);view.reset();assert.equal(total(),69);assert.equal(world.dynamicBoxes.size,69);
 });
 
 test('a name is required; completed rounds persist once, rank by score, and a new round starts at zero',()=>{

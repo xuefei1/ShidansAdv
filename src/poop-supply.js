@@ -5,7 +5,7 @@ export const INITIAL_POOP = 10;
 export const MAX_CARRIED_POOP = 20;
 export const POOP_COOLDOWN = 1;
 
-const withinDen = player => player && Math.hypot(player.x - DEN.x, player.z - DEN.z) < DEN.radius;
+const withinDen = player => player && player.y>=-.05 && Math.hypot(player.x - DEN.x, player.z - DEN.z) < DEN.radius;
 const insideDen = player => withinDen(player) && player.y < DEN.fenceHeight;
 
 // Carried ammunition and den rewards are independent from balls on the map.

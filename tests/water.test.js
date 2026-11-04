@@ -181,10 +181,10 @@ const scene=new THREE.Scene(),house=createHouse(scene),previousSolids=[...house.
 const water=createWaterFountains(scene,house.world);
 const overlaps=(a,b)=>a.maxX>b.minX&&a.minX<b.maxX&&a.maxZ>b.minZ&&a.minZ<b.maxZ&&a.maxY>b.minY&&a.minY<b.maxY;
 test('all 14 spaces including the balcony and front/back yards have one supported fountain',()=>{
-  assert.equal(water.items.length,ROOMS.length);assert.equal(water.items.length,14);
+  assert.equal(water.items.length,ROOMS.filter(room=>room.floor>=0).length);assert.equal(water.items.length,14);
   assert.equal(new Set(water.items.map(item=>item.id)).size,14);
   assert.equal(FOUNTAIN_PLACEMENTS.length,14);
-  for(const room of ROOMS) {
+  for(const room of ROOMS.filter(room=>room.floor>=0)) {
     const matches=water.items.filter(item=>item.room===room.id);assert.equal(matches.length,1,room.id);
     const f=matches[0];assert.ok(f.x>room.minX+.42&&f.x<room.maxX-.42&&f.z>room.minZ+.42&&f.z<room.maxZ-.42,room.id);
     close(house.world.support(f.x,f.z,f.y+.001,true).y,room.floor*FLOOR_HEIGHT);

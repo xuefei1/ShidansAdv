@@ -47,7 +47,7 @@ test('closed windows batch into two cheap draws and the ceiling costs 12 triangl
   assert.equal(world.support(0, 0, H + .1).y, H);
 });
 
-for (const r of RAMPS) test(`${r.id} reveals the upstairs on approach and throughout ascent/descent`, () => {
+for (const r of RAMPS.filter(r=>(r.baseY??0)+r.height>=H-.1)) test(`${r.id} reveals the upstairs on approach and throughout ascent/descent`, () => {
   const x = (r.minX + r.maxX) / 2, direction = Math.sign(r.endZ - r.startZ);
   let visible = false;
   assert.equal(upperRoomsVisible({ x, y: 0, z: r.startZ - direction * .9 }), true);

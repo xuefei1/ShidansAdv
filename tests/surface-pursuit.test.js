@@ -141,7 +141,7 @@ for(const [name,point] of [
 }
 
 test('surface reach never turns the den or genuine low tunnels into catchable areas',()=>{
-  for(const point of [{x:-16,y:0,z:12},{x:-22.5,y:0,z:-12},{x:-16,y:0,z:-33}]) {
+  for(const point of [{x:-16,y:0,z:12},{x:-16,y:0,z:-33}]) {
     const rabbit=rabbitAt(point);for(let step=0;step<20;step++)rabbit.update(1/120,{x:.3});
     assert.equal(navigation.isRabbitSafe(rabbit,from),true,JSON.stringify(position(rabbit)));
     assert.equal(navigation.pursuitTarget(rabbit,from),null);

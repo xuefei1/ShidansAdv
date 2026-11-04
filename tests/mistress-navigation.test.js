@@ -5,7 +5,7 @@ import {createHouse} from '../src/house.js';
 import {createWaterFountains} from '../src/fountains.js';
 import {createConsumables} from '../src/consumables.js';
 import {World} from '../src/physics.js';
-import {DEN,FLOOR_HEIGHT as H,STAIRS,GARDEN_STAIRS,BOUNDS} from '../src/layout.js';
+import {DEN,FLOOR_HEIGHT as H,STAIRS,GARDEN_STAIRS,RAMPS,BOUNDS} from '../src/layout.js';
 import {MistressNavigation,MISTRESS_RADIUS,MISTRESS_HEIGHT,MISTRESS_STAIR_STEP,MISTRESS_GROUND_STEP} from '../src/mistress-navigation.js';
 import {MISTRESS_ACTIVITIES} from '../src/mistress-ai.js';
 
@@ -18,7 +18,7 @@ const anchors=MISTRESS_ACTIVITIES.map(activity=>[activity.id,activity.approach])
 function interpolate(a,b,t) { return p(a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t,a.z+(b.z-a.z)*t); }
 function checkHumanClearance(position) {
   const radius=MISTRESS_RADIUS;
-  assert.ok(Math.hypot(position.x-DEN.x,position.z-DEN.z)>=DEN.radius+radius-.0001 || position.y>DEN.fenceHeight,'den fence');
+  assert.ok(Math.hypot(position.x-DEN.x,position.z-DEN.z)>=DEN.radius+radius-.0001 || position.y>DEN.fenceHeight||position.y<-.25,'den fence');
   // Independent full-scan cylinder test, rather than trusting the graph's
   // spatial lookup or its more conservative square shoulder envelope.
   for(const box of world.solids) {
@@ -81,7 +81,7 @@ test('routes walk up and down the actual staircase with continuous support and f
 test('human clearance blocks furniture, fountains, low rabbit tunnels, walls and window sills',()=>{
   for(const [name,position] of [
     ['couch',p(-17,0,5.2)],['coffee table',p(-9,0,7.5)],['bed',p(-15,H,-14)],
-    ['water fountain',p(-10.5,0,17.8)],['library tunnel',p(-22.5,0,-17)],
+    ['water fountain',p(-10.5,0,17.8)],['basement stairwell has no ground-floor slab',p(-22.5,0,-17)],
     ['lower linen shelf',p(21.1,H,-9.5)],['interior window',p(-5,0,11)],
     ['closed exterior glass',p(23.7,0,12)],['solid wall',p(-5,0,13)],
   ]) assert.equal(nav.canStand(position),false,name);
@@ -90,7 +90,7 @@ test('human clearance blocks furniture, fountains, low rabbit tunnels, walls and
   assert.ok(nav.canStand(left));assert.ok(nav.canStand(right));
   assert.equal(nav.segmentClear(left,right),false,'cannot walk through a rabbit jump window');
   assert.ok(nav.segmentClear(p(-6,0,6),p(-4,0,6)),'ordinary open doorway remains usable');
-  assert.deepEqual(nav.findPath(left,p(-22.5,0,-17)),[],'unreachable low tunnel has no snapped destination');
+  assert.deepEqual(nav.findPath(left,p(-16,0,-33)),[],'the genuine low hedge tunnel has no snapped destination');
 });
 
 test('the analytical den ring blocks the whole human body and routes go around it',()=>{
@@ -182,9 +182,9 @@ test('the outdoor stairs connect garden and balcony with their actual support an
   assert.equal(nav.segmentClear(p(18,0,-30),p(20.5,H,-24.5)),false,'no diagonal ascent through side rails');
 });
 
-test('den, authored low passages and hedge shelter cannot alert a pursuer',()=>{
+test('den, genuinely narrow gaps and hedge shelter cannot alert a pursuer',()=>{
   const from=anchors[0][1];
-  for(const position of [p(DEN.x,0,DEN.z),p(DEN.x+3,2,DEN.z),p(-22.5,0,-12),p(-16,0,-33),p(20.5,0,-29)]) {
+  for(const position of [p(DEN.x,0,DEN.z),p(DEN.x+3,2,DEN.z),p(-16,0,-33),p(20.5,0,-29)]) {
     assert.equal(nav.isRabbitSafe(position,from),true,JSON.stringify(position));
     assert.equal(nav.pursuitTarget(position,from),null);
   }
@@ -229,8 +229,8 @@ test('nearby search choices and nearest reachable positions use the fixed graph 
 });
 
 test('the stair-aware path estimate remains a lower bound beside either landing',()=>{
-  for(const ramp of [STAIRS,GARDEN_STAIRS]) {
-    const x=(ramp.minX+ramp.maxX)/2,low=p(x,0,ramp.startZ),high=p(x,H,ramp.endZ);
+  for(const ramp of RAMPS) {
+    const base=ramp.baseY??0,x=(ramp.minX+ramp.maxX)/2,low=p(x,base,ramp.startZ),high=p(x,base+ramp.height,ramp.endZ);
     for(const progress of [.02,.5,.98]) {
       const target=interpolate(low,high,progress),estimate=nav.makeHeuristic(target);
       for(const end of [low,high])assert.ok(estimate(end)<=distanceForTest(end,target)+1e-8,'partial stair travel cannot require climbing past the quarry');

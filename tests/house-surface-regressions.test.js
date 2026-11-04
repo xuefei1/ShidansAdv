@@ -5,11 +5,10 @@ import {createHouse,batchStaticGeometry} from '../src/house.js';
 import {cube} from '../src/model.js';
 import {collectOpaqueBoxOccluders,findCoplanarColorOverlaps} from './surface-audit.js';
 
-// The normal play camera stays above the ground and house tour cameras also
-// stay in this enclosing volume. Ground undersides cannot face a legal viewer;
-// upstairs undersides remain checked because downstairs viewers can see them.
-const viewerBounds={minX:-60,maxX:60,minY:.05,maxY:100,minZ:-70,maxZ:60};
-const inspect=root=>findCoplanarColorOverlaps(root,{includeInvisible:true,exposedOnly:true,viewerBounds});
+// Include cellar cameras now that the ground-floor undersides can be seen from
+// below. The cellar slab itself remains beneath every legal camera position.
+const viewerBounds={minX:-60,maxX:60,minY:-4.15,maxY:100,minZ:-70,maxZ:60};
+const inspect=root=>findCoplanarColorOverlaps(root,{includeInvisible:true,exposedOnly:true,viewerBounds:{...viewerBounds,minY:.05}});
 
 test('all house, furnishing, garden, lamp and roof surfaces avoid exposed coplanar colour conflicts before and after batching',()=>{
   // Include browser-only textured room signs in this CPU geometry audit. No
@@ -21,7 +20,7 @@ test('all house, furnishing, garden, lamp and roof surfaces avoid exposed coplan
   }
   let labels=0;scene.traverse(mesh=>{if(mesh.isMesh&&mesh.material.map)labels++;});
   assert.ok(labels>=8,'All textured room and den signs participate');
-  assert.equal(house.layers.length,5,'Ground, upper, outdoor, interior roof lining and exterior roof are all included');
+  assert.equal(house.layers.length,7,'Ground, upper, outdoor, both roof layers, basement and ground slabs are all included');
   const occluders=collectOpaqueBoxOccluders(scene,{includeInvisible:true});
   assert.ok(occluders.length>500,'Audit captures the actual authored opaque box volumes');
   const options={includeInvisible:true,exposedOnly:true,occluders,viewerBounds};

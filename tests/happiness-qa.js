@@ -60,7 +60,7 @@ document.getElementById('run').onclick=async()=>{
     frame.contentWindow.dispatchEvent(new frame.contentWindow.MouseEvent('mousemove',{clientX:300+yaw/.003,clientY:400}));mouse('mouseup');
     key('keydown','Space');await until(()=>game().getElementById('charge-percent').textContent==='100%','Charge escape');key('keyup','Space');key('keydown','KeyD');
     await until(()=>pos()[0]>-11,'Escape den');key('keyup','KeyD');await until(()=>canvas().dataset.grounded==='true','Land');
-    check('First outward den escape spends no energy and uses its daily allowance',Number(canvas().dataset.energy)===100&&canvas().dataset.freeDenJump==='false');
+    check('Outward den escape spends no jump energy',Number(canvas().dataset.energy)===100&&canvas().dataset.freeDenJump==='true');
     await walk(-11.7,17.6);await until(()=>canvas().dataset.consumeTarget==='carrot-0','Reach carrot');
     const carrot=CONSUMABLE_TYPES.carrot;
     check('Carrot prompt includes energy, happiness and poop rewards',game().getElementById('consume-energy').textContent===`+${carrot.energy} energy · +${carrot.happiness} happiness · +${carrot.poop} poop balls`);
@@ -78,7 +78,7 @@ document.getElementById('run').onclick=async()=>{
     click('menu-button');click('back-title');check('Manual title does not save an unfinished run',saved.get('shidans-adventure.leaderboard.v1')===undefined);
     check('Active run keeps the original name',game().getElementById('player-name').disabled&&game().getElementById('player-name').value==='Happiness QA');
     click('play');await until(()=>canvas().dataset.mode==='play','Continue named run');check('Continuing preserves happiness',score()===10);
-    check('Home and title do not renew the used free jump',canvas().dataset.freeDenJump==='false');
+    check('Home and title preserve unlimited free den jumps',canvas().dataset.freeDenJump==='true');
     advance(480);await until(()=>canvas().dataset.dayPhase==='Night','Night');check('Happiness survives the day-night transition',score()===10);
     advance(120);await until(()=>canvas().dataset.mode==='gameover','Bedtime saves score and shows results');
     check('Bedtime records the completed name and score exactly once',canvas().dataset.lastScore==='10'&&canvas().dataset.lastPlayer==='Happiness QA'&&score()===0&&JSON.parse(saved.get('shidans-adventure.leaderboard.v1')).length===1);
@@ -94,7 +94,7 @@ document.getElementById('run').onclick=async()=>{
     click('show-leaderboard');check('Leaderboard shows the completed run',game().getElementById('leaderboard-rows').textContent.includes('Happiness QA10'));
     await load();click('show-leaderboard');check('Saved score survives a full game reload',game().getElementById('leaderboard-rows').textContent.includes('Happiness QA10'));click('close-leaderboard');
     game().getElementById('player-name').value='Second player';click('play');await until(()=>canvas().dataset.mode==='play','Start second round');check('New player starts at zero with ten minutes',score()===0&&canvas().dataset.dayRemaining==='600.00');
-    check('A fresh day restores the free den escape',canvas().dataset.freeDenJump==='true');
+    check('A fresh day allows free den jumps',canvas().dataset.freeDenJump==='true');
     advance(600);await until(()=>canvas().dataset.mode==='gameover','Save zero-score round');
     check('A lower completed score shows its full-board rank',canvas().dataset.lastScore==='0'&&canvas().dataset.finalRank==='2'&&canvas().dataset.finalRankTotal==='2'&&game().getElementById('game-over-rank').textContent==='#2 of 2');
     click('game-over-menu');await until(()=>canvas().dataset.mode==='title','Open the menu after the second result');click('show-leaderboard');

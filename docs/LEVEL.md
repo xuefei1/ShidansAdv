@@ -1,6 +1,6 @@
 # Clover House — playable level design
 
-Revision 0.2.3 improves rendering and increases ordinary walking speed while retaining the 0.2.2 layout: 32 solid glazed exterior windows, moderate wood slide, and a ceiling that stays visible while upstairs rooms appear before a stair climb. The layout prioritizes escape choices for pursuit: broad circulation loops, corners that break sightlines, short rabbit-only alternatives, and elevated routes. Food, happiness, the mistress's routine and noise/visibility pursuit are implemented; the current balance is described below.
+Clover House has two above-ground floors and a full-size utility basement, with 32 solid glazed exterior windows, moderate indoor wood slide, and ceilings that stay visible during play. The layout prioritizes escape choices for pursuit: broad circulation loops, corners that break sightlines, short rabbit-only alternatives, and elevated routes. Food, happiness, the mistress's routine and noise/visibility pursuit are implemented; the current balance is described below.
 
 ## Scale and spaces
 
@@ -8,13 +8,14 @@ Coordinates are metres, X east/west, Z north/south, Y up. The garden is north (n
 
 | Space | Extents | Design role |
 | --- | --- | --- |
+| Basement | y −4.2; x −24…24, z −20…20 | 48 × 40 m concrete utility room, pillars and open pursuit space |
 | Ground house | x −24…24, z −20…20 | 48 × 40 m footprint, roughly 3.8× the previous ground area |
 | Den | (−16, 12), radius 4, fence 1.1 high | 50.3 m² of bedding, over 3× the previous den area; clear charge runway |
 | Lounge | x −24…−5, z 2…20 | Spawn, mistress couch, sofa and table climbing |
 | Entrance | x −5…5, z 2…20 | Wide stair approach; two lounge and kitchen door choices |
 | Kitchen / dining | x 5…24, z 2…20 | Island circling, table-underpass, chair/trunk climbing |
 | Cross-hall | x −24…24, z −3…2 | East–west connection between all six adjacent areas |
-| Library | x −24…−5, z −20…−3 | Table cover and concealed western passage |
+| Library | x −24…−5, z −20…−3 | Table cover and single west-side basement staircase |
 | Garden room | x −5…8, z −20…−3 | Central backyard access with window alternatives |
 | Craft / laundry | x 8…24, z −20…−3 | Crate staircase, appliance cover, second garden door |
 | Upper floor | y 4.2; x −24…24, z −20…2 | Carpeted bedroom, reading room, studio and gallery |
@@ -24,9 +25,9 @@ Coordinates are metres, X east/west, Z north/south, Y up. The garden is north (n
 
 The lot is 52 × 70 m, bounded by an invisible full-height fence at x ±26 and z −38/32. Both Shidan and poop balls collide with this boundary, including while airborne. The old visible perimeter walls have been removed.
 
-The M map is generated from the same room and opening data as the level. V offers floor cutaways and a rear garden angle. The minimap follows the current floor. These are presentation features; hidden upper geometry retains its collision.
+The M map is generated from the same room and opening data as the level. V offers floor cutaways and a rear garden angle. Both maps and the house tour support Basement (B1), ground floor and upstairs; the minimap follows the current floor. These are presentation features; hidden upper geometry retains its collision.
 
-During normal play the upper-floor slab stays visible as the downstairs ceiling. Upstairs rooms appear one metre before either stair flight and stay visible through ascent and descent. A wider exit band avoids rapid toggling near the approach. The ground-floor house tour still removes the slab for inspection. The permanent slab is one draw / 12 triangles, and sunlight shadows refresh only when visibility actually changes.
+During normal play the upper-floor slab stays visible as the downstairs ceiling, and the ground-floor slab remains the basement ceiling around its single stair opening. Upstairs rooms appear one metre before either ground-to-upper stair flight and stay visible through ascent and descent. A wider exit band avoids rapid toggling near the approach. The ground-floor house tour still removes the slab for inspection. The permanent slab is one draw / 12 triangles, and sunlight shadows refresh only when visibility actually changes.
 
 All exterior elevations now have glazed windows: four broad front windows, six per downstairs side wall, three per upstairs side wall, and five extra rear windows per floor. These 32 panes are lightly tinted, transparent and solid to Shidan and poop balls. White crossbars identify closed windows; the eight existing blue-framed jump windows remain open. Closed panes are excluded from navigation portals and appear pale blue on the map. Glass uses one simple rendering batch per floor, with no refraction pass or shadow casting.
 
@@ -37,16 +38,25 @@ All exterior elevations now have glazed windows: four broad front windows, six p
 3. **Vertical loop:** entrance stairs → upstairs gallery → reading room → balcony → outdoor stairs → backyard → garden door → cross-hall. Both flights are walkable in either direction.
 4. **Upper room loop:** gallery → bedroom → reading room → studio → gallery. The studio has an exposed two-level shelf and ramp for climbing and charged-jump escapes.
 5. **Outdoor loop:** garden doors / library window → raised beds and hedge → second garden door. The front porch and narrow paths on both sides connect around the exterior.
+6. **Basement detour:** library → west stair flight → utility basement → the same flight back to the library. This has one entrance; pillars and utility equipment offer corners for breaking sight but no protected hiding passage.
 
 The mistress uses the wide doors and stairs, while Shidan can break sight through small passages and alternate exits. The paths are not intended as permanent invulnerability zones.
 
 ## Rabbit shortcuts
 
 - **Eight jump windows:** 0.42 m sills, 2.4–3 m widths. They are open apertures with blue trim, not glass decals. Normal hops can clear them; rear ground windows reach the garden, and the bedroom window reaches the balcony.
-- **Library passage:** x −22.5, between z −17 and −6, behind shelves. Both entrances are 1.8 m wide and 1.6 m high. A low overhead panel preserves the enclosed feel.
+- **Library basement stairs:** the former low passage and its roof are removed. A single 2.6 m wide flight occupies x −23.7…−21.1, rising from (y −4.2, z −17) to (y 0, z −5). Its upper entrance faces south; guards enclose the other three sides of the opening. Both Shidan and the mistress can use this route.
 - **Studio shelf:** the former upstairs linen passage wall and low roof are removed. A ramp reaches both exposed shelf levels; Shidan can launch charged jumps toward the desk or other parts of the room. The carpeted decks stand 0.9 m and 1.9 m above the upstairs floor, with two walkable access ramps. A clear west-edge takeoff reaches the studio desk. Both levels allow items and mistress catches; the surrounding floor remains accessible to the mistress.
 - **Hedge hideaway:** x −20…−12, centred at z −33. Low entrances at both ends and a solid leafy roof form a garden shortcut.
 - **Under tables:** individual legs and a raised top leave floor-level routes through the coffee, dining, library, craft and picnic furniture. These routes break sightlines but provide no capture or cleanup immunity; the mistress can approach an edge and reach underneath. Picnic benches leave human standing clearance along the long sides.
+
+## Utility basement
+
+The basement floor is at y=−4.2; its ceiling underside is y=−0.22, just under four metres above the floor. Six 0.52 m square pillars stand at x −12, 0 and 12, each at z −6 and 8. The furnace is near (16, −16), with the water heater beside it at (19.5, −16). The concrete floor stops promptly and supports charged jumps.
+
+Six ceiling lamps are arranged at x −16, 0 and 16, each at z −10 and 10. They start at 22% power in daylight and warm to full power through dusk, sharing the existing fixed four-point-light budget. The B1 house-tour view hides the floors above it for inspection; during play the slab ceiling stays in place.
+
+The mistress has no basement routine, but can pursue, search and catch Shidan underground. The room contains no newly spawned food, chewables or water fountains.
 
 ## Climbing vocabulary
 
@@ -62,7 +72,7 @@ Climbable routes use books, stools, poufs, trunks, and stacked crates. Each succ
 | Studio desk | books 0.29 → stool 0.65 → trunk 1.06 → desk 1.46 |
 | Studio shelf | walking ramp → lower tier 0.90 → connecting ramp → upper tier 1.90; charged jump west onto desk |
 
-Normal hops recover forward motion after an initial contact with a ledge. Indoor wood has moderate slip and still permits only short hops. The garden, front yard, side paths and balcony have firm grip, stop immediately on input release, and support long jumps. Sprint speed is 8.2 m/s on indoor wood and 8.8 m/s outdoors, versus 3 m/s walking; stairs use 7 m/s sprinting.
+Normal hops recover forward motion after an initial contact with a ledge. Indoor wood has moderate slip and still permits only short hops. The garden, front yard, side paths, balcony and basement concrete have firm grip, stop immediately on input release, and support long jumps. Shidan walks at 3.9 m/s on these surfaces and carpet, or 3.64 m/s in the den and on stairs. Sprint speed is 8.2 m/s on indoor wood and 8.8 m/s outdoors and on concrete; stairs use 7 m/s sprinting. Every long jump launched inside the den is free, including repeated, stationary and inward jumps at empty energy.
 
 The bedroom trunk now extends beneath the bed edge, closing its former 15 cm slit. The lounge book/footstool/sofa and reading-room pouf/sofa handoffs also overlap, with matching visible and physical bounds. Grounded support can retain a ledge while Shidan's circular foot area overlaps it; leaving that area still causes a normal fall. This prevents narrow seams from alternating between falling and landing, which previously repeated the landing sound.
 
@@ -79,7 +89,7 @@ Ordinary hay starts with twelve stacks, up from six. The six added recovery poin
 | Front yard | −11 | 0 | 23 |
 | Backyard | 14 | 0 | −30 |
 
-There are 47 authored snack placements and 46 available at the start of play: 45 regular snacks plus one cake. The book in the downstairs rabbit-only library passage is excluded by the spawn safety check. Permanent den hay remains separate. Passive energy recovery is continuous at 0.01 per half second (0.02 per second), with no recovery during pauses; the simultaneous sprint drain still gives a full bar 30 seconds of uninterrupted sprinting.
+There are 47 authored snack placements and 46 available at the start of play: 45 regular snacks plus one cake. The old library book slot is now inside the basement stair opening and is excluded, including by the default furnished-world consumable system. No food, chewable or fountain spawns in the basement; the fourteen existing fountains remain above ground. Permanent den hay remains separate. Passive energy recovery is continuous at 0.01 per half second (0.02 per second), with no recovery during pauses; the simultaneous sprint drain still gives a full bar 30 seconds of uninterrupted sprinting.
 
 Shidan walks silently for both audio and AI hearing. Only moving sprints generate footstep effects and local movement noise; actual long jumps and happiness-granting chewing retain their existing noise rules. The mistress starts chasing at 60% of the current terrain sprint speed, increasing to 65%, 70%, 75% and 80% after 2, 4, 6 and 8 minutes. Puddle rage still adds its existing movement bonus.
 
@@ -93,8 +103,8 @@ Fountains provide water without becoming safe spots. Beside a fountain, the mist
 
 Perpendicular wall sections butt against one another and split at T-junctions, avoiding coplanar overlapping coloured tops. Den rings and posts use the same centre and radius as the fence collision. A cached 4 m spatial grid limits character and camera checks to nearby static solids while keeping their original collision order. Static sunlight shadows refresh when a floor cutaway changes; Shidan retains her animated contact shadow. Small poop balls receive sunlight shadows without casting into the static map.
 
-The existing sphere solver uses both ramp directions, and all furnishings remain obstacles for poop balls. The persistent 10,000-ball limit is unchanged. Foliage and cylindrical props use conservative box colliders; thin seams, printed labels and floor decals are decorative. Step meshes approximate continuous ramps within 7 cm to avoid stair snagging.
+The existing sphere solver uses both ramp directions, and all furnishings remain obstacles for poop balls. The persistent pool remains capped at 1,000 balls. Foliage and cylindrical props use conservative box colliders; thin seams, printed labels and floor decals are decorative. Step meshes approximate continuous ramps within 7 cm to avoid stair snagging.
 
-Automated route tests drive the actual rabbit controller through the loops, both stairways, the library passage, studio shelf and hedge. Separate tests check all window clearances, normal-hop window crossing, sofa/bed climbing, blanket landing, and exact mesh/box agreement. The mistress uses a cached human navigation graph with a 0.5 m radius and 2.72 m clearance height; its routes cover the house, both stairs, balcony and yards.
+Automated route tests drive the actual rabbit controller through the loops, all three stairways, the basement, studio shelf and hedge. Separate tests check all window clearances, normal-hop window crossing, sofa/bed climbing, blanket landing, and exact mesh/box agreement. The mistress uses a cached human navigation graph with a 0.5 m radius and 2.72 m clearance height; its routes cover the house, all three stairs, basement, balcony and yards.
 
 Continue playtesting chase speed, recovery placement and shortcut advantage against the implemented mistress before declaring the level balanced.

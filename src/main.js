@@ -4,11 +4,12 @@ import { createRabbit } from './model.js';
 import { visualHeadroom } from './rabbit-clearance.js';
 import { RabbitController, DEN, clamp, SURFACES } from './physics.js';
 import { Sound } from './audio.js';
-import { FLOOR_HEIGHT, BOUNDS, HOUSE, LANDMARKS, roomAt } from './layout.js';
+import { FLOOR_HEIGHT, BOUNDS, HOUSE, LANDMARKS, roomAt, floorAt } from './layout.js';
+import { createTerrainBackdrop } from './terrain-backdrop.js';
 import { drawLevelMap } from './level-map.js';
 import { bindMouseControls } from './mouse.js';
 import { createPoopBalls } from './poop.js';
-import { upperRoomsVisible } from './visibility.js';
+import { upperRoomsVisible, basementRoomsVisible } from './visibility.js';
 import { createRenderProfile } from './render-profile.js';
 import { renderPixelRatio, cameraNearPlane } from './render-quality.js';
 import { createConsumables } from './consumables.js';
@@ -69,9 +70,9 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -44, right: 44, top: 44, bottom: -44, near: 1, far: 130 });
   sun.shadow.normalBias = .025; sun.shadow.bias = -.00008; sun.shadow.radius = 3; scene.add(sun);
   const fill = new THREE.DirectionalLight(0xc9e5f0, 1.1); fill.position.set(7, 8, -4); scene.add(fill);
-  const stage = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0xe1e4d2, roughness: 1 }));
-  stage.rotation.x = -Math.PI / 2; stage.position.y = -.56; stage.receiveShadow = true; scene.add(stage);
-  const { world, layers, upper, ceiling, lamps, roof } = createHouse(scene);
+  scene.add(createTerrainBackdrop());
+  const { world, layers, upper, ceiling, basement, basementCeiling, lamps, roof } = createHouse(scene);
+  const ground=layers[0],outsideLayer=layers[2];
   layers.forEach(batchStaticGeometry);
   const daylight = createDayLighting(scene,{sun,fill,hemisphere},lamps);
   const dayClock = new DayClock(clockNow());
@@ -211,11 +212,11 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     mistress.update(0,context);
   }
   function advanceWaterResources(delta) {
-    const before=water.system.bladder.value,wasDrinking=water.system.drinking,wasPeeing=water.system.peeing;
+    const before=water.system.bladder.value,wasPeeing=water.system.peeing;
     water.advance(delta,controller);
     if(happiness.active) {
       if(wasPeeing)roundStats.urinate(Math.max(0,before-water.system.bladder.value));
-      else if(wasDrinking)roundStats.drink(Math.max(0,water.system.bladder.value-before));
+      else roundStats.drink(Math.max(0,water.system.bladder.value-before));
     }
     return wasPeeing&&!water.system.peeing;
   }
@@ -259,6 +260,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   }
   function nearestInteraction() {
     if(water.system.target) return water.system.target;
+    if(water.system.pending) return water.system.pending;
     if(consumables.system.target) return consumables.system.target;
     const food=consumables.system.nearest(controller), fountain=water.system.nearest(controller);
     return !food ? fountain : !fountain ? food : Math.hypot(food.x-controller.x,food.z-controller.z)<=Math.hypot(fountain.x-controller.x,fountain.z-controller.z) ? food : fountain;
@@ -278,11 +280,11 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     // A 0.1-second drink earns exactly 1%, regardless of rendering speed.
     advanceResources();
     if(!held) { water.system.stop(); consumables.system.cancel(); updateHUD(); return; }
-    if(dayClock.finished || water.system.peeing || mistress.playerLocked) return;
+    if(dayClock.finished || mistress.playerLocked) return;
     const nearby=nearestInteraction();
     water.system.stop(); consumables.system.cancel();
-    if(nearby?.id.startsWith('fountain-')) water.system.start(controller);
-    else consumables.system.begin(controller, Math.min(.05,(performance.now()-previousTime)/1000));
+    if(nearby?.id.startsWith('fountain-')) water.system.hold(controller);
+    else if(!water.system.peeing)consumables.system.begin(controller, Math.min(.05,(performance.now()-previousTime)/1000));
     updateHUD();
   }
   const mouse = bindMouseControls({
@@ -324,7 +326,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   }
   function setOverview() {
     if (mode !== 'play' || water.system.peeing || mistress.playerLocked) return;
-    overview = !overview; roofView=false;setText('roof-view','Show roof');mapOpen = false; $('atlas').hidden = true; surveyFloor = controller.y >= FLOOR_HEIGHT - .25 ? 1 : 0; clearInput(); renderAtlas();
+    overview = !overview; roofView=false;setText('roof-view','Show roof');mapOpen = false; $('atlas').hidden = true; surveyFloor = floorAt(controller.y); clearInput(); renderAtlas();
     if (overview) { unlock(); toast('House view · press V to return to Shidan', 3); }
     else { cameraInitialized = false; canvas.focus(); }
     $('view').innerHTML = overview ? '<kbd>V</kbd> Follow Shidan' : '<kbd>V</kbd> House view';
@@ -359,7 +361,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     enemySeen=false;visionTick=-Infinity;visionState='';visionYaw=NaN;captureCount=0;npcMovementSpent=0;mistressCone.clear();
     cleanupSight.clear();cleanupTick=-Infinity;cleanupCandidate=null;cleanupRevision='';
     resourceElapsed=0;
-    escaped=upstairs=false; discovered.clear(); upperApproach=false;
+    escaped=upstairs=false; discovered.clear(); upperApproach=basementApproach=false;
     yaw=-.45; pitch=.43; distance=5.2; cameraInitialized=false;
     daylight.update(0,controller,camera,0);
     roofView=gardenView=false;surveyFloor=0;previousMode='play';
@@ -429,12 +431,12 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   function toggleMap() {
     if (mode !== 'play' || water.system.peeing || mistress.playerLocked) return;
     mapOpen = !mapOpen; clearInput(); $('atlas').hidden = !mapOpen;
-    if (mapOpen) { surveyFloor = controller.y >= FLOOR_HEIGHT - .25 ? 1 : 0; unlock(); renderAtlas(); }
+    if (mapOpen) { surveyFloor = floorAt(controller.y); unlock(); renderAtlas(); }
     else canvas.focus();
   }
   function renderAtlas() {
     drawLevelMap($('atlas-canvas').getContext('2d'), 680, 740, controller, surveyFloor, discovered, true);
-    setText('atlas-floor-name', surveyFloor ? 'Upstairs & balcony' : 'Ground floor & garden');
+    setText('atlas-floor-name', surveyFloor===-1?'Basement':surveyFloor===1?'Upstairs & balcony':'Ground floor & garden');
     $('discovery-list').replaceChildren(...LANDMARKS.map((l, i) => {
       const li = document.createElement('li'); li.className = discovered.has(l.id) ? 'found' : '';
       li.textContent = `${discovered.has(l.id) ? '✓' : i + 1} ${l.name}`; li.title = l.hint; return li;
@@ -543,7 +545,8 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
       lookAt.set(DEN.x - 1.5, .65, DEN.z);
     } else if (overview || mode === 'tour' || (mode === 'pause' && previousMode === 'tour')) {
       const orbit = mode === 'tour' ? Math.sin(time * .08) * 1.5 : 0;
-      if (gardenView) { desiredCamera.set(-35, 38, -62); lookAt.set(0, 1.5, -12); }
+      if(surveyFloor===-1) {desiredCamera.set(38+orbit,34,43);lookAt.set(0,-3,-2);}
+      else if (gardenView) { desiredCamera.set(-35, 38, -62); lookAt.set(0, 1.5, -12); }
       else { desiredCamera.set(46 + orbit, 60, 60); lookAt.set(0, 1, -3); }
     } else {
       const follow=mistress.playerLocked&&captureVisual.active?rabbit.root.position:controller;
@@ -600,7 +603,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     setText('bladder-value',`${bladder}%`); $('bladder-fill').style.width=`${bladder}%`;
     $('bladder-meter').setAttribute('aria-valuenow',bladder);
     $('bladder-panel').dataset.full=String(water.system.bladder.value===100);
-    setText('bladder-status',water.system.peeing ? 'Emptying bladder · actions locked' : drinkWait>0 ? `Drink again in ${cooldownText(drinkWait)}s` : water.system.bladder.value===100 ? 'Full · press Q to pee' : water.system.drinking ? 'Drinking · +10% per second' : nearbyWater===0 ? 'Fountain empty · try another room' : 'Hold left-click near a fountain');
+    setText('bladder-status',water.system.peeing ? 'Emptying bladder · actions locked' : drinkWait>0 ? `${water.system.pending?'Keep holding · ready':'Drink again'} in ${cooldownText(drinkWait)}s` : water.system.bladder.value===100 ? 'Full · press Q to pee' : water.system.drinking ? 'Drinking · +10% per second' : nearbyWater===0 ? 'Fountain empty · try another room' : 'Hold left-click near a fountain');
     setText('pee-cooldown',water.system.peeing ? `Peeing · ${cooldownText(water.system.peeRemaining)}s` : drinkWait>0 ? `Pee ready in ${cooldownText(drinkWait)}s` : water.system.bladder.value===100 ? 'Q · pee ready · 0.0s' : 'Q · fill to 100%');
     setHidden('pee-progress',!water.system.peeing);
     $('pee-fill').style.width=`${water.system.peeProgress*100}%`;
@@ -613,18 +616,19 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     setData('poopSupply',String(poop.supply.value)); setData('poopCapacity',String(MAX_CARRIED_POOP));
     setData('poopCooldown',poopWait.toFixed(3)); setData('denHayPoopReady',String(poop.supply.denHayRewardAvailable));
     setData('bladder',bladder); setData('drinking',String(water.system.drinking)); setData('drinkCooldown',drinkWait.toFixed(3));
+    setData('drinkPending',water.system.pending?.id??'');
     setData('peeing',String(water.system.peeing));setData('peeProgress',water.system.peeProgress.toFixed(3));setData('peeRemaining',water.system.peeRemaining.toFixed(3));
     setData('puddleCount',String(water.puddles.length));
     setData('fountainRemaining',nearbyWater===null ? '' : nearbyWater.toFixed(2));
     setData('fountainWater',JSON.stringify(Object.fromEntries(water.items.map(item=>[item.id,water.system.remaining(item)]))));
     setText('food-count', `${consumables.system.count} snacks · ${consumables.system.chewableCount} chewables`);
-    setHidden('consume-prompt', !nearby || mode !== 'play' || overview || mapOpen || water.system.peeing);
+    setHidden('consume-prompt', !nearby || mode !== 'play' || overview || mapOpen || water.system.peeing||mistress.playerLocked);
     if (nearby) {
       const fountain=nearby.id.startsWith('fountain-');
       setHidden('consume-meter',fountain);
       if(fountain) {
         setText('consume-name','Water fountain'); setText('consume-energy',`${nearbyWater.toFixed(1)}% water left · +10% bladder per second`);
-        setText('consume-action',nearbyWater===0 ? 'Empty · refills next round' : drinkWait>0 ? `Wait ${Math.ceil(drinkWait)}s after peeing` : water.system.bladder.value===100 ? 'Bladder full · press Q to pee' : 'Drink · hold left mouse');
+        setText('consume-action',nearbyWater===0 ? 'Empty · refills next round' : drinkWait>0 ? (water.system.pending?`Keep holding · drink in ${cooldownText(drinkWait)}s`:`Wait ${Math.ceil(drinkWait)}s after peeing`) : water.system.bladder.value===100 ? 'Bladder full · press Q to pee' : 'Drink · hold left mouse');
       } else {
         const type = consumableDetails(nearby), progress = consumables.system.fraction, seconds=consumptionSeconds(nearby);
         const poopReward=nearby.permanent&&!poop.supply.denHayRewardAvailable ? 0 : type.poop||0;
@@ -645,13 +649,13 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     setData('energyRecovering', String(controller.energy.recovering));
     setData('hayCount',String([...consumables.system.items.values()].filter(item=>item.type==='hay').length));
     const distFromDen = Math.hypot(controller.x - DEN.x, controller.z - DEN.z);
-    const high = controller.y > FLOOR_HEIGHT - .3;
+    const floor=floorAt(controller.y),high=floor===1;
     const onStairs = controller.surface === 'stairs';
     const room = roomAt(controller.x, controller.y, controller.z);
-    setText('floor-label', onStairs ? 'ON THE STAIRS' : ['yard', 'front-yard', 'balcony'].includes(room?.id) ? 'OUTSIDE' : high ? 'UPSTAIRS' : 'GROUND FLOOR');
-    setText('map-floor', high ? '2F' : '1F');
-    setText('location', onStairs ? 'A little climb' : distFromDen < DEN.radius && !high ? 'Shidan’s den' : room?.name || 'The garden path');
-    const surfaces = { bedding: 'Soft bedding · good grip', carpet: 'Cozy carpet · good grip', wood: 'Wooden floor · a little slide', stairs: 'Stair runner · steady paws', grass: 'Soft grass · sure-footed paws', deck: 'Outdoor deck · sure-footed paws' };
+    setText('floor-label', onStairs ? 'ON THE STAIRS' :floor===-1?'BASEMENT': ['yard', 'front-yard', 'balcony'].includes(room?.id) ? 'OUTSIDE' : high ? 'UPSTAIRS' : 'GROUND FLOOR');
+    setText('map-floor',floor===-1?'B1':high?'2F':'1F');
+    setText('location', onStairs ? (controller.y<0?'The basement stairs':'A little climb') : distFromDen < DEN.radius && floor===0 ? 'Shidan’s den' : room?.name || 'The garden path');
+    const surfaces = { bedding: 'Soft bedding · good grip', carpet: 'Cozy carpet · good grip', wood: 'Wooden floor · a little slide', stairs: 'Stair runner · steady paws', grass: 'Soft grass · sure-footed paws', deck: 'Outdoor deck · sure-footed paws',concrete:'Cement floor · sure-footed paws' };
     setText('surface', surfaces[controller.surface]);
     if (canvas.dataset.surface !== controller.surface) $('surface-dot').style.background = controller.surface === 'wood' ? '#bd995d' : '#91a773';
     setHidden('charge', !controller.charging);
@@ -661,7 +665,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
       const forward=Number(keys.has('KeyW') || keys.has('ArrowUp'))-Number(keys.has('KeyS') || keys.has('ArrowDown'));
       const right=Number(keys.has('KeyD') || keys.has('ArrowRight'))-Number(keys.has('KeyA') || keys.has('ArrowLeft'));
       const cost = controller.jumpCost(controller.charge,{x:-Math.sin(yaw)*forward+Math.cos(yaw)*right,z:-Math.cos(yaw)*forward-Math.sin(yaw)*right});
-      setText('charge-label', controller.surface === 'wood' || controller.surface === 'stairs' ? 'Slippery floor · free small hop' : cost===0 ? 'First den escape · no energy cost' : controller.energy.value < cost ? 'Low energy · free small hop' : `${power >= 100 ? 'Release!' : 'Crouch & spring'} · −${cost.toFixed(2)} energy`);
+      setText('charge-label', controller.surface === 'wood' || controller.surface === 'stairs' ? 'Slippery floor · free small hop' : cost===0 ? 'Den jump · no energy cost' : controller.energy.value < cost ? 'Low energy · free small hop' : `${power >= 100 ? 'Release!' : 'Crouch & spring'} · −${cost.toFixed(2)} energy`);
     }
     if (!escaped && distFromDen > DEN.radius + .36 && controller.grounded) {
       escaped = true;
@@ -776,7 +780,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     joints.head.localToWorld(sightSamples[7].set(0,.15,0));
     mistressInView=mistressSight.inView(camera,sightSamples,{visible:mistressModel.root.visible});
     const ripples=mistressFootsteps.ripples;
-    drawLevelMap(map,170,192,controller,controller.y>=FLOOR_HEIGHT-.25?1:0,discovered,false,{mistress:mistressInView?mistress.renderPosition:null,ripples});
+    drawLevelMap(map,170,192,controller,floorAt(controller.y),discovered,false,{mistress:mistressInView?mistress.renderPosition:null,ripples});
     setData('mapMistressVisible',String(mistressInView));setData('mapFootstepCount',String(ripples.length));
     setData('mapFootsteps',JSON.stringify(ripples));
   }
@@ -784,7 +788,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   // Read-only diagnostics, sampled in batches so profiling does not alter play.
   const frameTimes = [], cpuTimes = [];
   let profileTime = performance.now();
-  let upperApproach = false, shadowRevision = 0;
+  let upperApproach = false,basementApproach=false,shadowRevision = 0;
 
   function frame(now) {
     const cpuStart = performance.now();
@@ -845,13 +849,19 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     const mistressPosition=mistress.renderPosition;syncMistressModel();
     setData('rabbitAction',action);
     updateCamera(dt);
-    daylight.update(dayClock.elapsed,controller,camera,frozen?0:dt,overview||mode==='tour');
-    if (time - hudTick >= .05 || frozen) { updateHUD(); hudTick = time; }
     const surveying = overview || mode === 'tour' || (mode === 'pause' && previousMode === 'tour');
+    const lightingAnchor=surveying?{x:controller.x,y:surveyFloor*FLOOR_HEIGHT,z:controller.z}:controller;
+    daylight.update(dayClock.elapsed,lightingAnchor,camera,frozen?0:dt,surveying);
+    if (time - hudTick >= .05 || frozen) { updateHUD(); hudTick = time; }
     upperApproach = upperRoomsVisible(controller, upperApproach);
+    basementApproach=basementRoomsVisible(controller,basementApproach);
     const outside=controller.x<HOUSE.minX||controller.x>HOUSE.maxX||controller.z<HOUSE.minZ||controller.z>HOUSE.maxZ;
-    const showUpper = surveying ? surveyFloor === 1||roofView : upperApproach||outside;
-    const showCeiling = !surveying || surveyFloor === 1||roofView;
+    const basementSurvey=surveying&&surveyFloor===-1;
+    const showUpper = surveying ? !basementSurvey&&(surveyFloor===1||roofView) : upperApproach||outside;
+    const showCeiling = !surveying || !basementSurvey&&(surveyFloor===1||roofView);
+    const showBasement=surveying?basementSurvey:basementApproach;
+    const showBasementCeiling=!basementSurvey||roofView;
+    consumables.setFloorView(basementSurvey?-1:null);water.setFloorView(basementSurvey?-1:null);
     consumables.setUpperVisible(showUpper);
     water.setUpperVisible(showUpper);
     noiseRipples.setUpperVisible(showUpper);
@@ -860,20 +870,25 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     mistressRipples.mesh.visible=noiseRipples.mesh.visible;
     mistressStepRipples.setUpperVisible(showUpper);
     mistressStepRipples.mesh.visible=noiseRipples.mesh.visible;
-    mistressModel.root.visible=mistressPosition.y<FLOOR_HEIGHT-.1||showUpper;
+    mistressModel.root.visible=(mistressPosition.y<FLOOR_HEIGHT-.1||showUpper)&&(!basementSurvey||floorAt(mistressPosition.y)===-1);
+    rabbit.root.visible=!basementSurvey||floorAt(controller.y)===-1;
     const asleep=mistress.phase==='routine'&&mistress.state==='acting'&&mistress.activity==='sleeping';
-    mistressCone.update(frozen?0:dt,{position:mistressPosition,yaw:mistress.yaw,phase:mistress.phase,masked:mistress.maskingNoise,
+    mistressCone.update(frozen?0:dt,{position:mistressPosition,yaw:mistress.yaw,phase:mistress.phase,masked:mistress.maskingNoise,basementVisible:showBasement,
       eye:mistressModel.getSightPoints()[0],upperVisible:showUpper,visible:!asleep&&((mode==='play'&&!overview&&!mapOpen)||(mode==='pause'&&previousMode==='play'))});
     setData('mistressConeVisible',String(mistressCone.mesh.visible));
-    const showRoof=!surveying||roofView;
-    if (upper.visible !== showUpper || ceiling.visible !== showCeiling || roof.shell.visible!==showRoof || roof.ceilings.visible!==showRoof) {
+    const showRoof=(!surveying||roofView)&&!basementSurvey;
+    if (upper.visible !== showUpper || ceiling.visible !== showCeiling || roof.shell.visible!==showRoof || roof.ceilings.visible!==showRoof||basement.visible!==showBasement||basementCeiling.visible!==showBasementCeiling||ground.visible===basementSurvey) {
       upper.visible = showUpper; ceiling.visible = showCeiling;
+      basement.visible=showBasement;basementCeiling.visible=showBasementCeiling;
+      ground.visible=outsideLayer.visible=!basementSurvey;
       roof.shell.visible=roof.ceilings.visible=showRoof; renderer.shadowMap.needsUpdate = true;
     }
     if(mode==='play'&&!overview&&!mapOpen&&time-mapTick>.12) {drawMap();mapTick=time;}
     setHidden('survey', !surveying || mode === 'pause');
     setData('mode', mode);
-    setData('visibleFloor', upper.visible ? '1' : '0');
+    setData('visibleFloor',surveying?String(surveyFloor):floorAt(controller.y)===-1?'-1':upper.visible?'1':'0');
+    setData('basementVisible',String(basement.visible));setData('basementCeilingVisible',String(basementCeiling.visible));
+    setData('mapFloor',String(floorAt(controller.y)));setData('localLampFloors',JSON.stringify(daylight.slots.map(slot=>slot.fixture?.floor??null)));
     setData('ceilingVisible', String(ceiling.visible));
     setData('roofVisible',String(roof.shell.visible));setData('interiorCeilingsVisible',String(roof.ceilings.visible));
     setData('discoveries', String(discovered.size));

@@ -1,5 +1,35 @@
 # Verification
 
+## Repeated drinking, faster walking and free den jumps
+
+Verified locally on **2026-11-03** with **676 passing Node tests** and **18 passing actual-game browser checks**. The water defect was an input-intent problem: clicking during the post-pee cooldown latched the mouse as held after one rejected attempt, so expiry never started drinking. A separate pending fountain hold now waits until eligible, while keeping the existing sixty-second cooldown. It grants only the part of a frame after the deadline; release, menus, capture and leaving reach cancel it. It cannot start food consumption or refill an empty reservoir. The HUD identifies a waiting hold. Water statistics now include transfers that occur in the pending-to-active transition.
+
+Five new tests use real mouse handlers with two independent reservoirs to cover full fill/pee/refill, exact and crossing deadlines, tiny/coarse intervals, cancellation, holding during the pee animation, full/depleted sources and strict immediate-only start calls. Existing water, mouse and protected-pee tests pass. Regression coverage verifies no early water and exact conservation between the bladder and source.
+
+Regular walking rises by 30% on all seven surfaces: 3.9 m/s on wood, carpet, grass, deck and concrete, and 3.64 m/s on bedding and stairs. Two real-controller tests verify travel distances, original sprint caps, energy-free walking and silent movement on every surface. Mistress routine speed stays 3.5 m/s. Faster wood-floor coasting exposed a tabletop edge case: feet could remain supported just beyond the table while catch classification used only the centre. Table classification and physical reach now share the controller's bounded circular-footprint rule for grounded top-side targets. Three tests cover all seven tables, real coasting/capture with solid-wall blocking, and rejection of unsupported corners, airborne, under-table and cross-floor extensions.
+
+Every charged launch from inside the ground-floor den is now free, including repeated stationary, inward and outward jumps at empty energy. There is no remaining one-time allowance. Outside, upstairs and basement launches retain ordinary energy costs; sprinting still drains energy. Repeated launches, returns, capture/reset, location/height boundaries and paid-jump fallback pass. Current help text and existing browser runners use the new rules.
+
+The actual-game runner performs three fully charged stationary den jumps and a charged escape, all without energy spend. It fills the living-room fountain, pees, approaches the foyer fountain, holds before cooldown expiry and checks the final millisecond plus a crossing frame. The same held click transfers exactly 1%, release stops it, and a new hold fills the remaining 99%. Final round statistics show 200% water drunk, 100% urine, four long jumps and zero small hops. Browser logs contain no warnings/errors. Source parsing, static build and local-server smoke checks pass.
+
+Evidence: `artifacts/drinking-walking-den-node-tests.txt`, `artifacts/repeat-drinking-tests.txt`, `artifacts/repeat-drinking-browser.txt`, `artifacts/repeat-drinking-preview.png` and the runner `/tests/body-resources.html?repeat-drink&capture`. Earlier sections retain historical balance rules and counts.
+
+## Basement floor and library staircase
+
+Verified locally on **2026-11-03** with **664 passing Node tests** and **nine passing actual-game browser checks**. Source parsing, static build and HTTP/private-file smoke checks pass. The final early-reveal adjustment also passes ten focused lighting and stair-visibility checks.
+
+The old first-floor library hiding passage is replaced by a single 2.6 m stair flight into a 48 × 40 m basement at y = −4.2 m. Four collidable ground slabs and clipped timber leave a real stair opening; the terrain backdrop also has an open house footprint. The basement has six solid pillars, a furnace, a hot-water tank, perimeter walls and concrete grip. Geometry tests verify matching visible/physical bounds, adult headroom, one guarded upper entrance, a clear lower landing and zero exposed competing-color coplanar patches before and after batching.
+
+Actual-controller checks cover walking and sprinting down/up at 10/30/60/120 FPS, smooth descending support without repeated landing cues, paid charged jumps beneath the den, ordinary falls, basement routes beneath the existing hall stairs, and sleeping poop balls below ground. Explicit floor support replaces the old implicit y = 0 plane only in the furnished house. Den protection, its free launch and its per-visit reward no longer project into the basement.
+
+The cached human graph covers all three floors. Real physical path/capture tests exercise both directions to the house, balcony and yards, stairs, chasing a rewarding item pushed downstairs, interrupted sight, fresh search noise, return to routine, the pee exception and a full fifteen-second puddle cleanup. Cross-floor sight/contact respects the slabs. The expanded route heuristic remains a lower bound at partial stair positions. The den and outdoor hedge remain protected; the former library passage does not.
+
+Six ceiling lamps maintain a 22% underground noon baseline and warm/brighten with the existing day cycle. Four fixed unshadowed point lights select the viewed floor; no extra light pool was added. Basement approach visibility is separate from the upper-floor reveal. The minimap, atlas and cutaway support B1, and basement cutaways filter above-ground food, fountain and actor visuals. Spawn pools reject basement and stairwell sources, retaining 46 snacks and all fourteen fountains above ground. Pushed items and manually dropped waste can still enter through the stairwell.
+
+The actual-game runner escapes the den, approaches through the library doorway, descends, opens the B1 atlas, returns upstairs, descends again and advances to full night with two minutes left. It verifies concrete support, persistent ceiling, no basement interaction target, floor-matched light slots and a basement cutaway that hides the rooms above. Browser logs contain no warnings/errors. A clean night tour preview also verifies the actual visible utility layout. The runner uses wider room waypoints to leave room for ordinary wood-floor slide.
+
+Evidence: `artifacts/basement-node-tests.txt`, `artifacts/basement-browser.txt`, `artifacts/basement-night-game.png`, `artifacts/basement-preview.png`, `artifacts/basement-render-workload.json` and the reproducible runner at `/tests/body-resources.html?pursuit&basement&capture`. The render workload reports CPU-side visible geometry, not measured FPS. Earlier sections below retain historical behavior and counts.
+
 ## Fountain capture and furniture crevices
 
 Verified locally on **2026-11-03** with **633 passing Node tests** and **seven passing actual-game drinking/capture checks**. Parsing and the static build pass. The final support-query fast-path adjustment also passes 53 focused support, furniture, movement and shelf checks.

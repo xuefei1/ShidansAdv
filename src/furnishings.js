@@ -173,14 +173,11 @@ export function furnishHouse({ ground: g, upper: u, outside: o, solid: s, detail
   label(g, 'KITCHEN & DINING', 12, 2.3, 2.14, 3.2, .5);
   for (const x of [-20, -8, 10, 22]) plant(g, x, 0, -.5, .9);
 
-  // Library: shelving hides a real two-ended passage along the western wall.
+  // Library: bookcases screen the single basement staircase along the west wall.
   for (const z of [-13.8, -10]) {
     s(g, 0xb29b7d, -20.4, 1.35, z, 1, 2.7, 3, 'wood', 'library-shelf-' + z);
     for (let row = 0; row < 4; row++) for (let i = 0; i < 9; i++) d(g, [P.peach, P.blue, P.sage, P.gold][i % 4], -19.89, .3 + row * .6, z - 1.22 + i * .3, .014, .42, .23);
   }
-  // A ceiling makes this route a genuine low passage, with open arches at each end.
-  s(g, 0xc6b798, -22.5, 1.72, -11.5, 2.8, .22, 16.04, 'wood', 'library-tunnel-ceiling');
-  for (let z = -16; z < -6; z += 1.5) paw(g, -22.5, 0, z);
   table(g, -12, 0, -11, 4.4, 2.8, 1.6, 0xc7a983, 'library-table');
   shelves(g, -12, 0, -18.8, 6, .8, 2.6, 0xbda27f, 'rear-bookcase');
   for (let i = 0; i < 4; i++) book(g, -12.6 + i * .72, 1.6, -11, .65, .08 + i % 2 * .07, .8, [P.sage, P.peach, P.blue][i % 3]);

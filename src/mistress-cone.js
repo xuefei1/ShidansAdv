@@ -1,5 +1,5 @@
 import * as THREE from '../vendor/three.module.js';
-import { BOUNDS, DEN, FLOOR_HEIGHT, HOUSE } from './layout.js';
+import { BOUNDS, DEN, FLOOR_HEIGHT, HOUSE, BASEMENT } from './layout.js';
 import { MISTRESS_VIEW_ANGLE, MISTRESS_VIEW_RANGE } from './mistress-vision.js';
 
 export { MISTRESS_VIEW_ANGLE, MISTRESS_VIEW_RANGE } from './mistress-vision.js';
@@ -11,6 +11,7 @@ const RADII = [.45,1,2,4,7,11,16,23,31,40,MISTRESS_VIEW_RANGE];
 const EPSILON = 1e-6;
 const validPoint = p => p && ['x','y','z'].every(axis=>Number.isFinite(p[axis]));
 const upperInterior = p => p.y>=FLOOR_HEIGHT-.1 && p.x>=HOUSE.minX && p.x<=HOUSE.maxX && p.z>=HOUSE.minZ && p.z<=HOUSE.maxZ;
+const basementInterior = p => p.y<-.3;
 const routineColor = new THREE.Color(0xd5ae58), chaseColor = new THREE.Color(0xdd6259), maskedColor = new THREE.Color(0x84bac7);
 
 // Entry distance of a horizontal ray into a static opaque box. Height is
@@ -73,7 +74,7 @@ export function createMistressCone(scene,world) {
       varying vec2 floorPoint; varying vec3 worldPoint;
       #include <fog_pars_fragment>
       void main(){
-        if(worldPoint.y<denHeight && distance(worldPoint.xz,den.xy)<den.z)discard;
+        if(worldPoint.y>=-0.25 && worldPoint.y<denHeight && distance(worldPoint.xz,den.xy)<den.z)discard;
         float radius=length(floorPoint);
         if(radius>coneRange)discard;
         float angle=abs(atan(floorPoint.x,floorPoint.y));
@@ -102,17 +103,17 @@ export function createMistressCone(scene,world) {
   const activeBlockers=[];
   let sinceRefresh=MISTRESS_CONE_REFRESH,revision=0,lastX=NaN,lastY=NaN,lastZ=NaN,lastYaw=NaN,lastEye=NaN;
 
-  function project(x,z,canProjectUpper,index) {
+  function project(x,z,canProjectUpper,basement,index) {
     const ramp=world.rampAt?.(x,z),rampY=world.rampHeight?.(x,z);
     let y;
-    if(ramp && rampY!==null && Number.isFinite(rampY)) {
+    if(ramp && rampY!==null && Number.isFinite(rampY)&&(!basement||(ramp.baseY??0)<0)) {
       y=rampY+STAIR_CLEARANCE;rampTypes[index]=(world.ramps?.indexOf(ramp)??0)+1;layers[index]=2;
     } else {
       const upperFootprint=(x>=HOUSE.minX&&x<=HOUSE.maxX&&z>=HOUSE.minZ&&z<=2)||
         (x>=-20&&x<=24&&z>=-25&&z<=-20);
       const upper=canProjectUpper&&upperFootprint;
-      y=world.support(x,z,upper?FLOOR_HEIGHT+.12:.16,true).y+MISTRESS_CONE_CLEARANCE;
-      layers[index]=upper&&y>=FLOOR_HEIGHT-.1?1:0;rampTypes[index]=0;
+      y=world.support(x,z,basement?BASEMENT.y+.12:upper?FLOOR_HEIGHT+.12:.16,true).y+MISTRESS_CONE_CLEARANCE;
+      layers[index]=basement?-1:upper&&y>=FLOOR_HEIGHT-.1?1:0;rampTypes[index]=0;
     }
     return y;
   }
@@ -122,7 +123,9 @@ export function createMistressCone(scene,world) {
     for(const box of blockers)if(eyeHeight>box.minY+.005&&eyeHeight<box.maxY-.005)activeBlockers.push(box);
     const sourceRamp=world.rampHeight?.(source.x,source.z);
     const onRamp=sourceRamp!==null&&Number.isFinite(sourceRamp)&&Math.abs(source.y-sourceRamp)<.3;
-    const canProjectUpper=source.y>=FLOOR_HEIGHT-.3||onRamp;
+    const sourceFlight=onRamp?world.rampAt?.(source.x,source.z):null;
+    const canProjectUpper=source.y>=FLOOR_HEIGHT-.3||(onRamp&&(sourceFlight?.baseY??0)+(sourceFlight?.height??0)>=FLOOR_HEIGHT-.3);
+    const basement=basementInterior(source);
     for(let ray=0;ray<RAYS;ray++) {
       const angle=-MISTRESS_VIEW_ANGLE/2+MISTRESS_VIEW_ANGLE*ray/(RAYS-1);
       const dx=Math.sin(yaw+angle),dz=Math.cos(yaw+angle);
@@ -132,7 +135,7 @@ export function createMistressCone(scene,world) {
       for(let band=0;band<RADII.length;band++) {
         const radius=Math.min(RADII[band],limit),index=ray*RADII.length+band;
         const x=source.x+dx*radius,z=source.z+dz*radius;
-        positions[index*3]=x;positions[index*3+1]=project(x,z,canProjectUpper,index);positions[index*3+2]=z;
+        positions[index*3]=x;positions[index*3+1]=project(x,z,canProjectUpper,basement,index);positions[index*3+2]=z;
         coordinates[index*2]=(x-source.x)*cosine-(z-source.z)*sine;
         coordinates[index*2+1]=(x-source.x)*sine+(z-source.z)*cosine;
       }
@@ -160,11 +163,11 @@ export function createMistressCone(scene,world) {
     mesh,
     get revision(){return revision;},
     get ranges(){return ranges.slice();},
-    update(dt,{position,yaw=0,phase='routine',masked=false,upperVisible=true,visible=true,eyeHeight,eye}={}) {
+    update(dt,{position,yaw=0,phase='routine',masked=false,upperVisible=true,basementVisible=true,visible=true,eyeHeight,eye}={}) {
       if(!Number.isFinite(dt)||dt<0)return;
       sinceRefresh=Math.min(MISTRESS_CONE_REFRESH,sinceRefresh+dt);
-      const inLot=validPoint(position)&&position.x>=BOUNDS.minX&&position.x<=BOUNDS.maxX&&position.z>=BOUNDS.minZ&&position.z<=BOUNDS.maxZ&&position.y>=-.1&&position.y<=FLOOR_HEIGHT*2;
-      const shown=!!visible&&inLot&&Number.isFinite(yaw)&&(upperVisible||!upperInterior(position));
+      const inLot=validPoint(position)&&position.x>=BOUNDS.minX&&position.x<=BOUNDS.maxX&&position.z>=BOUNDS.minZ&&position.z<=BOUNDS.maxZ&&position.y>=BASEMENT.y-.1&&position.y<=FLOOR_HEIGHT*2;
+      const shown=!!visible&&inLot&&Number.isFinite(yaw)&&(upperVisible||!upperInterior(position))&&(basementVisible||!basementInterior(position));
       mesh.visible=shown;if(!shown)return;
       const alert=phase==='chase'||phase==='chasing'||phase==='caught'||phase==='capture';
       material.uniforms.coneColor.value.copy(masked?maskedColor:alert?chaseColor:routineColor);

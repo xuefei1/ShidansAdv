@@ -9,6 +9,7 @@ import {MistressPursuit,POOP_CLEAN_SECONDS,PEE_CLEAN_SECONDS} from '../src/mistr
 import {MistressSight} from '../src/mistress-awareness.js';
 import {MistressVision} from '../src/mistress-vision.js';
 import {MistressCleanupSight} from '../src/mistress-cleanup.js';
+import {RabbitController} from '../src/physics.js';
 import {withinInteractionReach,TABLE_EDGE_REACH,TABLE_REACH_HEIGHT} from '../src/table-refuges.js';
 import {DEN,FLOOR_HEIGHT as H} from '../src/layout.js';
 
@@ -133,7 +134,7 @@ test('table reach never bypasses blocked contact or cleanup rays, and real tunne
   assert.equal(target.canClean(goal),false);assert.equal(physicalContact(npc,rabbit),false);
   npc.update(0,{player:rabbit,seen:true,contactClear:physicalContact(npc,rabbit)});assert.equal(npc.phase,'chase');
   world.removeBox(barrier);
-  for(const point of [p(DEN.x,0,DEN.z),p(-22.5,0,-12),p(-16,0,-33)]) {
+  for(const point of [p(DEN.x,0,DEN.z),p(-16,0,-33)]) {
     assert.equal(nav.isRabbitSafe(point,from),true);assert.equal(nav.cleanupTarget(point,from),null);
   }
 });
@@ -215,4 +216,59 @@ test('full-table reach includes opposite diagonal corners and does not clean fro
   cleaner.update(1,{player:p(DEN.x,0,DEN.z),cleanupTarget:target,movementScale:0});
   assert.equal(cleaner.phase,'cleanup');assert.equal(cleaner.state,'walking');assert.equal(fixture.removals,0);
   assert.equal(cleaner.cleanupRemaining,POOP_CLEAN_SECONDS);
+});
+
+test('grounded rabbit feet retain table interaction across supported edges on every tabletop',()=>{
+  for(const table of tables) {
+    const middle=centre(table),stance=p(table.maxX+.8,table.tabletop.baseY,middle.z);
+    for(const point of [{...middle,x:table.minX-.12},{...middle,x:table.maxX+.12},
+      {...middle,z:table.minZ-.12},{...middle,z:table.maxZ+.12},
+      {...middle,x:table.maxX+.14,z:table.minZ-.14}]) {
+      Object.assign(point,{radius:.22,grounded:true});
+      assert.equal(world.support(point.x,point.z,point.y+.01,true,point.radius).y,table.maxY,'the actual foot circle is supported');
+      assert.equal(nav.tableAt(point)?.id,table.id);
+      assert.equal(withinInteractionReach(point,stance,nav.tableInteraction(point)),true,'capture agrees with table classification');
+      assert.equal(withinInteractionReach(point,{...stance,y:stance.y+H},nav.tableInteraction(point)),false,'table reach does not cross floors');
+    }
+  }
+});
+
+test('the faster walking controller can coast past a table centre boundary and still be caught through a clear hand path',()=>{
+  const table=world.fixtures.get('dining-top'),rabbit=new RabbitController(world);
+  Object.assign(rabbit,{x:14,y:table.maxY,z:15.9,surface:'wood'});
+  for(let frame=0;frame<120&&rabbit.z>=14.3;frame++)rabbit.update(1/60,{z:(14.1-rabbit.z)*3});
+  for(let frame=0;frame<120;frame++)rabbit.update(1/60,{});
+  assert.ok(rabbit.z<table.minZ-.1,'the original coasting defect must move the centre beyond the table');
+  assert.equal(rabbit.grounded,true);assert.ok(Math.abs(rabbit.y-table.maxY)<1e-8);
+  assert.equal(nav.tableAt(rabbit)?.id,table.id);
+  const npc=standingMistress(p(table.maxX+TABLE_EDGE_REACH,0,15));
+  npc.update(0,{player:rabbit,seen:true,contactClear:false});assert.equal(npc.canAttemptCapture(rabbit),true);
+  assert.equal(physicalContact(npc,rabbit),true);
+  const wall=world.addDynamicBox(16.8,1.5,15,.08,3,8);
+  try {
+    assert.equal(physicalContact(npc,rabbit),false);
+    npc.update(0,{player:rabbit,seen:true,contactClear:physicalContact(npc,rabbit)});assert.equal(npc.phase,'chase');
+  } finally {world.removeBox(wall);}
+  npc.update(0,{player:rabbit,seen:true,contactClear:physicalContact(npc,rabbit)});assert.equal(npc.phase,'caught');
+});
+
+test('unsupported corners, separated feet, airborne rabbits and under-table points do not expand table reach',()=>{
+  const table=world.fixtures.get('dining-top'),middle=centre(table),stance=p(table.maxX+.8,0,middle.z);
+  const interaction=nav.tableInteraction(middle),supported={...middle,x:table.maxX+.12,grounded:true,radius:.22};
+  assert.equal(nav.tableAt(supported)?.id,table.id);
+  const rejected=[
+    {...supported,x:table.maxX+.17,z:table.minZ-.17},
+    {...supported,x:table.maxX+.22},
+    {...supported,x:table.maxX+.23,radius:10},
+    {...supported,grounded:false},
+    {...supported,radius:undefined},
+    {...supported,y:table.maxY-.01},
+    {...supported,y:table.tabletop.baseY},
+    {...supported,y:table.tabletop.baseY-H},
+  ];
+  for(const point of rejected) {
+    assert.equal(nav.tableAt(point),null,JSON.stringify(point));
+    assert.equal(withinInteractionReach(point,stance,interaction),false,'a stale interaction must also reject unsupported feet');
+  }
+  assert.equal(nav.tableAt(p(supported.x,supported.y,supported.z)),null,'ordinary point snapshots retain strict footprint bounds');
 });

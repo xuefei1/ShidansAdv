@@ -24,7 +24,7 @@ const slots=[
 const food=new ConsumableSystem(world,{slots,wires:[],randomLimits:{},randomPlaces:[]});
 
 function walkingStairs(ramp,descending=false,progress=.5) {
-  const low=p((ramp.minX+ramp.maxX)/2,0,ramp.startZ),high=p(low.x,H,ramp.endZ);
+  const base=ramp.baseY??0,low=p((ramp.minX+ramp.maxX)/2,base,ramp.startZ),high=p(low.x,base+ramp.height,ramp.endZ);
   const start=descending?high:low,end=descending?low:high;
   const routine=new MistressAI(world,{navigation,random:()=>.5}),npc=new MistressPursuit(routine,{random:()=>.5});
   assert.equal(routine.resumeFrom(start),true);
@@ -33,7 +33,7 @@ function walkingStairs(ramp,descending=false,progress=.5) {
   let length=0;for(let index=1;index<route.length;index++)length+=distance(route[index-1],route[index]);
   npc.update(length*progress/MISTRESS_WALK_SPEED,{player:p(-17,0,-15.5),seen:false});
   assert.equal(npc.phase,'routine');assert.equal(npc.state,'walking');assert.equal(navigation.canStand(npc.position),true);
-  assert.ok(npc.position.y>0&&npc.position.y<H);assert.equal(npc.maskingNoise,false);
+  assert.ok(npc.position.y>base&&npc.position.y<base+ramp.height);assert.equal(npc.maskingNoise,false);
   return npc;
 }
 
@@ -46,7 +46,7 @@ function heldChew(id,noise=new NoiseSystem()) {
   return {rabbit,noise,source:p(rabbit.x,rabbit.y,rabbit.z)};
 }
 
-test('real rewarding holds alert a quiet mistress midway up and down both stairs from every floor and yard',()=>{
+test('real rewarding holds alert a quiet mistress midway up and down every flight, including basement stairs',()=>{
   let cases=0;
   for(const ramp of RAMPS)for(const descending of [false,true])for(const progress of [.2,.5,.8])for(const slot of slots) {
     const npc=walkingStairs(ramp,descending,progress),{rabbit,noise,source}=heldChew(slot.id);
@@ -58,7 +58,7 @@ test('real rewarding holds alert a quiet mistress midway up and down both stairs
     npc.update(.05,{player:rabbit,seen:false});assert.equal(npc.phase,'chase');assert.ok(npc.investigationGoal);
     assert.equal(navigation.canStand(npc.position),true);cases++;
   }
-  assert.equal(cases,60);
+  assert.equal(cases,RAMPS.length*2*3*slots.length);
 });
 
 test('stairs do not suppress fresh chewing during search or its sprint-only hearing grace',()=>{

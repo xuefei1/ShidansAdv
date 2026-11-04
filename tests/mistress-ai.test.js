@@ -22,15 +22,15 @@ function advanceUntil(actor,predicate,max=600,step=.1) {
   assert.fail(`Timed out in ${actor.activity}/${actor.state}`);
 }
 
-test('mistress starts seated at her phone and walks between normal and sprint speeds',()=>{
+test('mistress starts seated at her phone and keeps her 3.5 m/s routine pace below sprint speeds',()=>{
   const actor=ai();
   assert.equal(actor.activity,'phone');assert.equal(actor.state,'acting');assert.equal(actor.poseWeight,1);
   assert.deepEqual(actor.position,MISTRESS_ACTIVITIES[0].approach);
   assert.deepEqual(actor.renderPosition,MISTRESS_ACTIVITIES[0].seat);
   assert.equal(actor.remaining,32);assert.equal(actor.speed,0);assert.equal(actor.noise.sequence,0);
-  for(const surface of Object.values(SURFACES)) {
-    assert.ok(MISTRESS_WALK_SPEED>surface.walk);assert.ok(MISTRESS_WALK_SPEED<surface.run);
-  }
+  assert.equal(MISTRESS_WALK_SPEED,3.5);
+  assert.ok(Number.isFinite(MISTRESS_WALK_SPEED)&&MISTRESS_WALK_SPEED>0);
+  for(const surface of Object.values(SURFACES)) assert.ok(MISTRESS_WALK_SPEED<surface.run);
 });
 
 test('a shuffled cycle visits every activity and does not repeat adjacent actions',()=>{
@@ -254,14 +254,14 @@ test('all real furnished-house activities are reachable and the full routine use
   assert.equal(visited.size,MISTRESS_ACTIVITIES.length);assert.ok(stairSamples>0);
 });
 
-test('authored routine stops cover every named room, balcony and both yards',()=>{
+test('authored routine stops cover every existing aboveground room, balcony and both yards',()=>{
   const covered=new Set();
   for(const activity of MISTRESS_ACTIVITIES) {
     const at=activity.approach;
     assert.equal(roomAt(at.x,at.y,at.z)?.id,activity.room,activity.id);
     assert.equal(typeof activity.animation,'string');covered.add(activity.room);
   }
-  assert.deepEqual([...covered].sort(),ROOMS.map(room=>room.id).sort());
+  assert.deepEqual([...covered].sort(),ROOMS.filter(room=>room.floor>=0).map(room=>room.id).sort());
 });
 
 test('resuming after a scold starts a random journey at the den stance without resetting time or noise IDs',()=>{
