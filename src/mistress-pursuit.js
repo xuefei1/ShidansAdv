@@ -149,11 +149,11 @@ export class MistressPursuit {
       // Rejected pulses are consumed too: neither laughter nor a grace period
       // queues up an old noise to replay once hearing becomes available.
       if(safe||this.maskingNoise||!valid(event.position)||this._safe(event.position))continue;
-      if(this.phase==='scolding'&&event.kind!=='eat')continue;
+      if(this.phase==='scolding'&&!['eat','affection'].includes(event.kind))continue;
       if(Number.isFinite(event.expiresAt)&&event.expiresAt<=clock+EPSILON)continue;
       if(event.kind==='sprint'&&this.elapsed<this._sprintMutedUntil-EPSILON)continue;
       if(!canHearNoise(event,this.renderPosition))continue;
-      if(event.kind==='eat')this._rememberedChew=Object.freeze(copy(event.position));
+      if(['eat','affection'].includes(event.kind))this._rememberedChew=Object.freeze(copy(event.position));
       heard=event;
     }
     return heard;

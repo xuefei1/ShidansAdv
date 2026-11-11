@@ -15,7 +15,7 @@ const server = createServer(async (req, res) => {
     const path = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
     const requestPath = path === '/' ? '/index.html' : path;
     const file = resolve(root, '.' + requestPath);
-    const bodyQA = requestPath === '/tests/body-resources.html' || requestPath === '/tests/body-resources-qa.js' || requestPath === '/tests/audio-output.html' || requestPath === '/tests/audio-output-qa.js';
+    const bodyQA = requestPath === '/tests/body-resources.html' || requestPath === '/tests/body-resources-qa.js' || requestPath === '/tests/audio-output.html' || requestPath === '/tests/audio-output-qa.js' || requestPath === '/tests/mirror-maze.html' || requestPath === '/tests/mirror-maze-qa.js' || requestPath === '/tests/maze-mirror-fixture.js';
     if ((!allowed(requestPath) && !bodyQA) || !file.startsWith(root + sep)) { res.writeHead(404); res.end('Not found'); return; }
     if (!(await stat(file)).isFile()) throw new Error('Not a file');
     res.writeHead(200, { 'Content-Type': types[extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' });

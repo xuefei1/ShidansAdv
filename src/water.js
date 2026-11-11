@@ -37,7 +37,7 @@ export function canReachFountain(player, fountain, world) {
   if (!player || !fountain || !player.grounded || Math.abs(player.y-fountain.y)>.45 ||
       Math.hypot(player.x-fountain.x,player.z-fountain.z)>WATER_REACH) return false;
   const a={x:player.x,y:player.y+.32,z:player.z}, b={x:fountain.x,y:fountain.y+.26,z:fountain.z};
-  const insideDen=p=>Math.hypot(p.x-DEN.x,p.z-DEN.z)<DEN.radius;
+  const insideDen=p=>p.y>=-.05&&p.y<DEN.fenceHeight&&Math.hypot(p.x-DEN.x,p.z-DEN.z)<DEN.radius;
   if(Math.min(a.y,b.y)<DEN.fenceHeight && insideDen(a)!==insideDen(b)) return false;
   return !world.query(Math.min(a.x,b.x),Math.min(a.z,b.z),Math.max(a.x,b.x),Math.max(a.z,b.z))
     .some(box=>box.fountainId!==fountain.id && segmentHitsBox(a,b,box));

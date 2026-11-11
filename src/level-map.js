@@ -20,6 +20,15 @@ export function drawLevelMap(ctx, width, height, player, floor, discovered, larg
   ctx.lineCap = 'butt'; ctx.lineWidth = large ? 3 : 1.8;
   if(floor===-1){
     ctx.strokeStyle='#727b7e';ctx.strokeRect(tx(BASEMENT.minX),tz(BASEMENT.minZ),(BASEMENT.maxX-BASEMENT.minX)*scale,(BASEMENT.maxZ-BASEMENT.minZ)*scale);
+    if(cues.maze) {
+      // Local wall hints help orient the player without giving away the route.
+      for(const wall of cues.maze.walls)if(Math.hypot(wall.x-player.x,wall.z-player.z)<7) {
+        ctx.strokeStyle='#84a5b7';ctx.beginPath();
+        ctx.moveTo(tx(wall.axis==='x'?wall.start:wall.coordinate),tz(wall.axis==='z'?wall.start:wall.coordinate));
+        ctx.lineTo(tx(wall.axis==='x'?wall.end:wall.coordinate),tz(wall.axis==='z'?wall.end:wall.coordinate));ctx.stroke();
+      }
+      for(const gate of cues.maze.entrances){ctx.fillStyle='#e1c87e';ctx.fillRect(tx(gate.x)-2,tz(gate.z)-2,4,4);}
+    }
   }
   for (const w of WALLS.filter(w => w.floor === floor)) {
     let cursor = w.start;

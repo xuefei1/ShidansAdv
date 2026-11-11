@@ -9,6 +9,8 @@
 | Nine consumable models, permanent den hay with dish and bow, and golden particles | Original procedural geometry in `src/consumables.js` | Project Apache-2.0 license |
 | Ceiling/floor lamps, gradient sky, stars and moon | Original geometry/shader in `src/house-lamps.js` and `src/day-lighting.js` | Project Apache-2.0 license |
 | House, furniture, den, props, plants and wall art | Original project geometry in `src/house.js` | Project Apache-2.0 license |
+| Random frosted-glass maze layout, privacy-glass wall frames, yellow carpet with a flat carrot drawing, and floating hearts | Original project code and procedural geometry in `src/mirror-maze-layout.js`, `src/mirror-maze.js` and `src/maze-heart.js` | Project Apache-2.0 license |
+| Blue rabbit plush | Original procedural geometry in `src/maze-heart.js`, inspired by the requested soft Jellycat-style blue rabbit | Project Apache-2.0 license; no brand logo, downloaded model or product texture is included |
 | Interface, rabbit icon and canvas-generated labels | Original project code | Project Apache-2.0 license |
 | Hop, landing, footstep and discovery sounds | Original Web Audio synthesis in `src/audio.js` | Project Apache-2.0 license |
 | Reference photos in `pic/` | User's three photographs | Local reference only; ignored by Git, server and builds |
@@ -49,3 +51,5 @@ Waste cleanup reuses the original cloth/mop geometry with procedural pickup/wipi
 The Game Over layout, score cards and statistics table are original HTML/CSS and reuse the existing rabbit favicon. No external assets or dependencies were added.
 
 The movement-feedback revision adds original synthesized routine/search/run heel-toe profiles, red instanced footstep rings, a distance readout and procedural pickup/carry animation in `src/mistress-capture.js`. The carry pose follows the existing animated hand geometry; no motion-capture clip, sound recording, music, texture or other external asset is used. These additions use the project Apache-2.0 license and add no runtime dependency.
+
+The magical basement revision adds original seeded maze generation, frosted privacy-glass panes and frame geometry, a yellow round rug with a flat orange-and-green carrot print, a small blue bunny plush and instanced floating hearts. The carrot design uses batched planar ink geometry rather than a consumable model or downloaded image. The plush is approximately 0.78 m tall, with its collision fitted to the smaller visible model. The nonreflective glass uses 8% transparency (92% opacity), a rough cloudy finish and original procedural frost grain generated locally. No reflection images, scene-capture textures or mirrored camera passes are used. No additional engine package, branded model, font, external image, music or sound asset is downloaded at runtime.

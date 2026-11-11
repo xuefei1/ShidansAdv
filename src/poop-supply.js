@@ -14,6 +14,7 @@ export class PoopSupply {
   reset() {
     this.value = INITIAL_POOP; this.nextPoopAt = 0;
     this.insideDen = true; this.denHayRewardAvailable = true;
+    this.insideMazeHeart=false;this.mazeHayRewardAvailable=true;
   }
   grant(amount) {
     if (!Number.isFinite(amount) || amount <= 0) return 0;
@@ -42,6 +43,15 @@ export class PoopSupply {
       // A visit's reward is used even at capacity; eating again cannot bank it.
       this.denHayRewardAvailable = false;
     }
+    if(event.item.mazeHay) {
+      if(!this.insideMazeHeart||!this.mazeHayRewardAvailable)return 0;
+      this.mazeHayRewardAvailable=false;
+    }
     return this.grant(event.poop ?? consumableDetails(event.item)?.poop ?? 0);
+  }
+  observeMazePosition(player,heart) {
+    const within=heart&&player.y>=heart.y-.05&&player.y<-.25&&Math.hypot(player.x-heart.x,player.z-heart.z)<heart.radius;
+    if(!within)this.insideMazeHeart=false;
+    else if(!this.insideMazeHeart&&player.grounded) {this.insideMazeHeart=true;this.mazeHayRewardAvailable=true;}
   }
 }

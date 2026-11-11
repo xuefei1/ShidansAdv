@@ -32,6 +32,13 @@ import { MistressVision } from './mistress-vision.js';
 import { createMistressCone } from './mistress-cone.js';
 import { MistressCleanupSight } from './mistress-cleanup.js';
 import { RoundStats } from './round-stats.js';
+import { createBasementGate } from './basement-gate.js';
+import { BasementAccess } from './basement-access.js';
+import {createMirrorMaze} from './mirror-maze.js';
+import {createMazeHeart} from './maze-heart.js';
+import {AFFECTION_SECONDS} from './maze-affection.js';
+import {BasementSceneDirector} from './basement-scenes.js';
+import {MistressNavigation} from './mistress-navigation.js';
 
 const elements = new Map();
 const TOP_SPRINT_SPEED=Math.max(...Object.values(SURFACES).map(surface=>surface.run));
@@ -50,7 +57,7 @@ window.addEventListener('error', event => {
 
 // The QA entry point supplies a controllable monotonic clock. Normal play always
 // uses real time through start.js; there are no time cheats in the game controls.
-export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMovementPerFrame=.1}={}) {
+export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMovementPerFrame=.1,mazeRandom=Math.random}={}) {
   renderConsumableLegend($('consumable-legend-rows'));
   $('play').disabled = $('tour').disabled = true;
   $('load-status').hidden = false;
@@ -71,9 +78,14 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   sun.shadow.normalBias = .025; sun.shadow.bias = -.00008; sun.shadow.radius = 3; scene.add(sun);
   const fill = new THREE.DirectionalLight(0xc9e5f0, 1.1); fill.position.set(7, 8, -4); scene.add(fill);
   scene.add(createTerrainBackdrop());
-  const { world, layers, upper, ceiling, basement, basementCeiling, lamps, roof } = createHouse(scene);
+  const basementScenes=new BasementSceneDirector({random:mazeRandom});
+  const basementContent=basementScenes.next();
+  const { world, layers, upper, ceiling, basement, basementCeiling, lamps, roof } = createHouse(scene,{basementType:basementContent.type,basementLayout:basementContent.layout});
   const ground=layers[0],outsideLayer=layers[2];
   layers.forEach(batchStaticGeometry);
+  const basementAccess=new BasementAccess(createBasementGate({parent:ground,world}));
+  const maze=createMirrorMaze({parent:basement,world,layoutProvider:()=>basementScenes.current.layout});
+  const mazeHeart=createMazeHeart({parent:basement,world,layout:maze.layout});
   const daylight = createDayLighting(scene,{sun,fill,hemisphere},lamps);
   const dayClock = new DayClock(clockNow());
   let storage=scoreStorage; if(storage===undefined) try { storage=window.localStorage; } catch { /* Private browser settings can deny storage. */ }
@@ -85,11 +97,13 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   // out of the cached sun map, so they never leave a frozen shadow behind.
   rabbit.root.traverse(object => { object.castShadow = false; });
   const controller = new RabbitController(world);
-  const water = createWaterFountains(scene, world);
+  const water = createWaterFountains(scene, world,{mazeLayout:()=>maze.layout});
   // Share the human navigation graph with loot placement so rabbit-only
   // passages cannot become protected food/chewing farms.
   const mistressRoutine=new MistressAI(world);
-  const consumables = createConsumables(scene, world,{canSpawn:place=>!mistressRoutine.navigation.isRabbitSafe(place)});
+  const consumables = createConsumables(scene, world,{canSpawn:place=>!mistressRoutine.navigation.isRabbitSafe(place),mazeLayout:()=>maze.layout});
+  // The fixed heart hay joins navigation after the household placement filter.
+  mistressRoutine.navigation=new MistressNavigation(world);
   const poop = createPoopBalls(scene, world);
   consumables.system.setExternalItems(poop);
   const noise = new NoiseSystem(), noiseRipples = createNoiseRipples(scene,world);
@@ -100,7 +114,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   const mistressRipples=createNoiseRipples(scene,world);mistressRipples.mesh.name='Mistress noise ripples';
   const mistressStepRipples=createNoiseRipples(scene,world);mistressStepRipples.mesh.name='Mistress footstep ripples';
   const captureVisual=new MistressCapture();
-  const mistressSight=new MistressSight([...layers,ceiling,...water.groups]),mistressFootsteps=new MistressFootsteps();
+  const mistressSight=new MistressSight([...layers,ceiling,...water.groups],{world}),mistressFootsteps=new MistressFootsteps();
   const enemyVision=new MistressVision(mistressSight,world),mistressCone=createMistressCone(scene,world);
   const cleanupSight=new MistressCleanupSight({vision:enemyVision,navigation:mistress.navigation,poop,water});
   let cleanupTick=-Infinity,cleanupCandidate=null,cleanupRevision='';
@@ -122,7 +136,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   let roofView=false;
   const discovered = new Set();
   let yaw = -.45, pitch = .43, distance = 5.2, time = 0, previousTime = performance.now();
-  let toastUntil = 0, lastStep = 0, mapTick = 0, hudTick = 0;
+  let toastUntil = 0, basementNoticeUntil = 0, lastStep = 0, mapTick = 0, hudTick = 0;
   let escaped = false, upstairs = false, cameraInitialized = false, jumpSeen = false, queuedHop = false;
   let renderDirty = true, wasFrozen = false;
   let resourceElapsed=0;
@@ -259,11 +273,13 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     if(step)sound.mistressFootstep(step,controller,mistressFootsteps.elapsed);
   }
   function nearestInteraction() {
+    if(mazeHeart.action.active)return mazeHeart.item;
     if(water.system.target) return water.system.target;
     if(water.system.pending) return water.system.pending;
     if(consumables.system.target) return consumables.system.target;
     const food=consumables.system.nearest(controller), fountain=water.system.nearest(controller);
-    return !food ? fountain : !fountain ? food : Math.hypot(food.x-controller.x,food.z-controller.z)<=Math.hypot(fountain.x-controller.x,fountain.z-controller.z) ? food : fountain;
+    const options=[food,fountain,mazeHeart.action.canReach(controller)?mazeHeart.item:null].filter(Boolean);
+    return options.sort((a,b)=>Math.hypot(a.x-controller.x,a.z-controller.z)-Math.hypot(b.x-controller.x,b.z-controller.z))[0]??null;
   }
   function dropPoop() {
     advanceResources();
@@ -279,12 +295,16 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     // Settle the preceding active interval before changing the held action.
     // A 0.1-second drink earns exactly 1%, regardless of rendering speed.
     advanceResources();
-    if(!held) { water.system.stop(); consumables.system.cancel(); updateHUD(); return; }
+    if(!held) { water.system.stop(); consumables.system.cancel();mazeHeart.action.cancel(); updateHUD(); return; }
     if(dayClock.finished || mistress.playerLocked) return;
     const nearby=nearestInteraction();
-    water.system.stop(); consumables.system.cancel();
+    water.system.stop(); consumables.system.cancel();mazeHeart.action.cancel();
     if(nearby?.id.startsWith('fountain-')) water.system.hold(controller);
-    else if(!water.system.peeing)consumables.system.begin(controller, Math.min(.05,(performance.now()-previousTime)/1000));
+    else if(!water.system.peeing) {
+      const delay=Math.min(.05,(performance.now()-previousTime)/1000);
+      if(nearby===mazeHeart.item)mazeHeart.action.begin(controller,delay);
+      else consumables.system.begin(controller,delay);
+    }
     updateHUD();
   }
   const mouse = bindMouseControls({
@@ -296,6 +316,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     onLockChange: (locked, lostLock) => { $('camera-hint').hidden = locked; if (lostLock && mode === 'play' && !overview && !mapOpen) pause(); },
   });
   function clearInput() {
+    mazeHeart.action.cancel();
     advanceResources();
     noise.update(0,controller,{locked:true});
     keys.clear(); mouse.clear(); water.system.stop(); consumables.system.cancel(); setHidden('consume-prompt', true); queuedHop = false; jumpSeen = false; controller.releaseInput();
@@ -354,7 +375,10 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   $('resume').addEventListener('click', resume);
   $('reset').addEventListener('click', restartGame);
   function resetRunState() {
-    resetAdventure({clock:dayClock,controller,consumables,poop,water,noise,noiseRipples,mistress,mistressRipples,mistressFootsteps,mistressStepRipples},clockNow());
+    basementScenes.next();maze.regenerate();mazeHeart.reset(maze.layout);
+    resetAdventure({clock:dayClock,controller,consumables,poop,water,noise,noiseRipples,mistress,mistressRipples,mistressFootsteps,mistressStepRipples,basementAccess},clockNow());
+    const navigation=new MistressNavigation(world);
+    mistressRoutine.navigation=mistress.navigation=cleanupSight.navigation=navigation;
     captureVisual.reset();
     roundStats.reset();
     mistressInView=false;
@@ -366,7 +390,9 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     daylight.update(0,controller,camera,0);
     roofView=gardenView=false;surveyFloor=0;previousMode='play';
     setText('roof-view','Show roof');setText('garden-view','Garden view');
-    time=toastUntil=lastStep=mapTick=hudTick=0;
+    time=toastUntil=basementNoticeUntil=lastStep=mapTick=hudTick=0;
+    setHidden('basement-notice',true);
+    renderer.shadowMap.needsUpdate=true;
     for(const key of ['lastConsumed','lastConsumedId','lastPoopPosition','lastScore','lastPlayer']) setData(key,'');
     for(const key of ['finalRank','finalRankTotal','roundStats'])setData(key,'');
     setHidden('day-ended',true);setHidden('toast',true);renderDirty=true;
@@ -435,7 +461,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     else canvas.focus();
   }
   function renderAtlas() {
-    drawLevelMap($('atlas-canvas').getContext('2d'), 680, 740, controller, surveyFloor, discovered, true);
+    drawLevelMap($('atlas-canvas').getContext('2d'), 680, 740, controller, surveyFloor, discovered, true,{maze:maze.layout});
     setText('atlas-floor-name', surveyFloor===-1?'Basement':surveyFloor===1?'Upstairs & balcony':'Ground floor & garden');
     $('discovery-list').replaceChildren(...LANDMARKS.map((l, i) => {
       const li = document.createElement('li'); li.className = discovered.has(l.id) ? 'found' : '';
@@ -581,6 +607,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     setData('audio',JSON.stringify(sound.diagnostics));
     setText('happiness-value',happiness.score.toLocaleString()); setText('score-player',happiness.name || 'Your little adventure');
     setData('happiness',String(happiness.score));
+    setData('basementUnlocked',String(basementAccess.unlocked));
     setText('day-countdown',formatCountdown(dayClock.remaining));
     setText('day-phase',daylight.state.phase);
     setText('day-caption',daylight.state.night===1 ? 'The house is lit' : 'Night falls at 2:00');
@@ -621,7 +648,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     setData('puddleCount',String(water.puddles.length));
     setData('fountainRemaining',nearbyWater===null ? '' : nearbyWater.toFixed(2));
     setData('fountainWater',JSON.stringify(Object.fromEntries(water.items.map(item=>[item.id,water.system.remaining(item)]))));
-    setText('food-count', `${consumables.system.count} snacks · ${consumables.system.chewableCount} chewables`);
+    setText('food-count', `${consumables.system.count} snacks · ${consumables.system.chewableCount} chewables${controller.y<-1?` · ${consumables.system.mazeCount} maze treats`:''}`);
     setHidden('consume-prompt', !nearby || mode !== 'play' || overview || mapOpen || water.system.peeing||mistress.playerLocked);
     if (nearby) {
       const fountain=nearby.id.startsWith('fountain-');
@@ -629,9 +656,14 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
       if(fountain) {
         setText('consume-name','Water fountain'); setText('consume-energy',`${nearbyWater.toFixed(1)}% water left · +10% bladder per second`);
         setText('consume-action',nearbyWater===0 ? 'Empty · refills next round' : drinkWait>0 ? (water.system.pending?`Keep holding · drink in ${cooldownText(drinkWait)}s`:`Wait ${Math.ceil(drinkWait)}s after peeing`) : water.system.bladder.value===100 ? 'Bladder full · press Q to pee' : 'Drink · hold left mouse');
+      } else if(nearby===mazeHeart.item) {
+        setText('consume-name','Blue bunny plush');setText('consume-energy',mazeHeart.action.completed?'Already shared a special moment':'+500 happiness · once per adventure');
+        setText('consume-action',mazeHeart.action.completed?'Come back next adventure for another kiss':`Give a kiss · hold left mouse for ${AFFECTION_SECONDS} seconds`);
+        $('consume-fill').style.width=`${mazeHeart.action.fraction*100}%`;
+        $('consume-meter').setAttribute('aria-valuenow',(mazeHeart.action.fraction*100).toFixed(0));
       } else {
         const type = consumableDetails(nearby), progress = consumables.system.fraction, seconds=consumptionSeconds(nearby);
-        const poopReward=nearby.permanent&&!poop.supply.denHayRewardAvailable ? 0 : type.poop||0;
+        const poopReward=nearby.permanent&&!(nearby.mazeHay?poop.supply.mazeHayRewardAvailable:poop.supply.denHayRewardAvailable) ? 0 : type.poop||0;
         const rewards=[nearby.permanent ? '100% energy' : type.energy ? `+${type.energy} energy` : '',type.happiness ? `+${type.happiness} happiness` : '',poopReward ? `+${poopReward} poop balls` : ''].filter(Boolean).join(' · ');
         setText('consume-name', type.name); setText('consume-energy', rewards);
         setText('consume-action',`${type.verb} · hold left mouse for ${seconds} ${seconds>1 ? 'seconds' : 'second'}${nearby.permanent&&!poopReward ? ' · leave and re-enter for more poop' : ''}`);
@@ -643,6 +675,13 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     setData('freeDenJump',String(controller.hasFreeDenJump));setData('pushing',String(controller.pushing));
     setData('lastPushedId',controller.lastPushedId||'');
     setData('consumableCount', String(consumables.system.count));
+    setData('mazeConsumableCount',String(consumables.system.mazeCount));
+    if(canvas.dataset.mazeRevision!==String(maze.revision)) {
+      setData('mazeLayout',JSON.stringify(maze.layout));setData('mazeRevision',String(maze.revision));
+      setData('basementScene',JSON.stringify({type:basementScenes.current.type,layoutId:maze.layout.layoutId,layoutName:maze.layout.layoutName}));
+      setData('mazeSupplies',JSON.stringify([...consumables.system.mazeSupplies.items.values()].map(({id,type,x,y,z})=>({id,type,x,y,z}))));
+    }
+    setData('plushCompleted',String(mazeHeart.action.completed));setData('plushProgress',mazeHeart.action.progress.toFixed(3));
     setData('chewableCount',String(consumables.system.chewableCount));
     setData('consumeTarget', nearby?.id || ''); setData('consumeProgress', consumables.system.progress.toFixed(2));
     setData('consumePosition',nearby?[nearby.x,nearby.y,nearby.z].map(v=>v.toFixed(3)).join(','):'');
@@ -654,7 +693,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     const room = roomAt(controller.x, controller.y, controller.z);
     setText('floor-label', onStairs ? 'ON THE STAIRS' :floor===-1?'BASEMENT': ['yard', 'front-yard', 'balcony'].includes(room?.id) ? 'OUTSIDE' : high ? 'UPSTAIRS' : 'GROUND FLOOR');
     setText('map-floor',floor===-1?'B1':high?'2F':'1F');
-    setText('location', onStairs ? (controller.y<0?'The basement stairs':'A little climb') : distFromDen < DEN.radius && floor===0 ? 'Shidan’s den' : room?.name || 'The garden path');
+    setText('location', onStairs ? (controller.y<0?'The basement stairs':'A little climb') : floor===-1 ? 'The frosted-glass maze' : distFromDen < DEN.radius && floor===0 ? 'Shidan’s den' : room?.name || 'The garden path');
     const surfaces = { bedding: 'Soft bedding · good grip', carpet: 'Cozy carpet · good grip', wood: 'Wooden floor · a little slide', stairs: 'Stair runner · steady paws', grass: 'Soft grass · sure-footed paws', deck: 'Outdoor deck · sure-footed paws',concrete:'Cement floor · sure-footed paws' };
     setText('surface', surfaces[controller.surface]);
     if (canvas.dataset.surface !== controller.surface) $('surface-dot').style.background = controller.surface === 'wood' ? '#bd995d' : '#91a773';
@@ -683,6 +722,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     setText('discoveries', `${discovered.size} / ${LANDMARKS.length} little discoveries`);
     setData('escaped',String(escaped));
     if (time > toastUntil) setHidden('toast', true);
+    if (time > basementNoticeUntil) setHidden('basement-notice', true);
     // Useful DOM-level telemetry for browser QA, without exposing a mutable debug API.
     setData('position', `${controller.x.toFixed(2)},${controller.y.toFixed(2)},${controller.z.toFixed(2)}`);
     setData('surface', controller.surface); setData('mode', mode); setData('grounded', String(controller.grounded));
@@ -759,7 +799,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
       rabbit.root.rotation.y=mode==='title'?.43:controller.facing;
     }
     const speed=mode==='play'?Math.hypot(controller.vx,controller.vz):0;
-    const action=captured?'carried':water.system.peeing?'pee':water.system.drinking?'drink':consumables.system.target?'eat':'idle';
+    const action=captured?'carried':water.system.peeing?'pee':water.system.drinking?'drink':consumables.system.target||mazeHeart.action.active?'eat':'idle';
     const rendered=captured?rabbit.root.position:controller;
     const clearance=Math.min(visualHeadroom(world,rendered),capturedHeadroom);
     rabbit.animate(time,captured?0:speed,controller.grounded,controller.charge/.8,
@@ -780,7 +820,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     joints.head.localToWorld(sightSamples[7].set(0,.15,0));
     mistressInView=mistressSight.inView(camera,sightSamples,{visible:mistressModel.root.visible});
     const ripples=mistressFootsteps.ripples;
-    drawLevelMap(map,170,192,controller,floorAt(controller.y),discovered,false,{mistress:mistressInView?mistress.renderPosition:null,ripples});
+    drawLevelMap(map,170,192,controller,floorAt(controller.y),discovered,false,{mistress:mistressInView?mistress.renderPosition:null,ripples,maze:maze.layout});
     setData('mapMistressVisible',String(mistressInView));setData('mapFootstepCount',String(ripples.length));
     setData('mapFootsteps',JSON.stringify(ripples));
   }
@@ -816,12 +856,17 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
       // sample before any capture/home teleport can change the position.
       if(dt>0)roundStats.travel(dt,{sprinting:controller.sprinting,speed:Math.hypot(controller.x-motionX,controller.z-motionZ)/dt});
       poop.supply.observePosition(controller);
+      poop.supply.observeMazePosition(controller,maze.layout.heart);
+      const affectionBefore=mazeHeart.action.progress;
+      const affectionReward=mazeHeart.action.update(dt,controller,{blocked:water.system.peeing||mistress.playerLocked});
+      if(affectionReward&&happiness.award(affectionReward)) {toast('A special kiss! +500 happiness ♡',5);sound.chime();}
+      if(mazeHeart.action.active&&Math.hypot(controller.vx,controller.vz)<.5)controller.facing=Math.atan2(mazeHeart.item.x-controller.x,mazeHeart.item.z-controller.z);
       const previousConsumeProgress=consumables.system.progress;
       const resourceEvents = consumables.system.update(dt, controller,0);
       // A target alone is only a selection. Noise begins when the held action
       // actually progresses, including an interrupted hold or its final frame.
       const eating=consumables.system.progress>previousConsumeProgress ? consumables.system.target : resourceEvents.find(event=>event.kind==='consume')?.item;
-      const noiseEvents=noise.update(dt,controller,{consuming:eating,longJump:controller.lastJump==='long',locked:water.system.peeing||mistress.playerLocked});
+      const noiseEvents=noise.update(dt,controller,{consuming:eating,affection:affectionReward>0||mazeHeart.action.progress>affectionBefore,longJump:controller.lastJump==='long',locked:water.system.peeing||mistress.playerLocked});
       noiseRipples.emit(noiseEvents);noiseRipples.update(dt);
       const context=enemyContext();mistress.update(0,context);senseCloseContact(context);settlePursuitEvents();
       consumables.handle(resourceEvents);
@@ -829,9 +874,13 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
         const type = consumableDetails(event.item);
         const poopGained=poop.supply.grantFromConsumption(event,controller);
         happiness.consume(event);
+        if(basementAccess.update(happiness.score)) {
+          setHidden('basement-notice',false);basementNoticeUntil=time+7;
+          renderer.shadowMap.needsUpdate=true;
+        }
         roundStats.consume(event);
         const rewards=[type.happiness ? `+${type.happiness} happiness` : '',type.energy ? `+${type.energy} energy` : '',poopGained ? `+${poopGained} poop balls` : ''].filter(Boolean).join(' · ');
-        toast(event.item.permanent ? `Energy fully restored!${poopGained ? ` +${poopGained} poop balls.` : ' Leave and re-enter the den for more poop balls.'}` : `${type.name} · ${rewards}`, 2.2); sound.chime();
+        toast(event.item.permanent ? `Energy fully restored!${poopGained ? ` +${poopGained} poop balls.` : ` Leave and re-enter ${event.item.mazeHay?'the carpet':'the den'} for more poop balls.`}` : `${type.name} · ${rewards}`, 2.2); sound.chime();
         setData('lastConsumed', event.item.type);
         setData('lastConsumedId', event.item.id);
       }
@@ -893,6 +942,9 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     setData('roofVisible',String(roof.shell.visible));setData('interiorCeilingsVisible',String(roof.ceilings.visible));
     setData('discoveries', String(discovered.size));
     if (renderer.shadowMap.needsUpdate) setData('shadowRevision', String(++shadowRevision));
+    mazeHeart.update(frozen?0:dt,camera,{visible:showBasement});
+    setData('heartCount',String(mazeHeart.heartCount));
+    setData('mazeGlass',JSON.stringify({opacity:maze.glassMaterial.opacity,transparency:Number((1-maze.glassMaterial.opacity).toFixed(2)),reflections:false,capturePasses:0}));
     renderProfile.begin();
     renderer.render(scene, camera);
     setData('shaderPrograms',String(renderer.info.programs.length));

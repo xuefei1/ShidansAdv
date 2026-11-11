@@ -2,6 +2,10 @@
 
 A cozy third-person 3D action adventure starring Shidan, a black rabbit with a white nose patch and white paws. **Explore, snack and recharge during a ten-minute day, from bright noon to a cozy, lamplit night.**
 
+The basement staircase starts fenced off. Earn **200 happiness** to open it for the rest of the adventure; a popup announces the unlock. Its first magical scene is a **blue frosted-glass maze chosen from five fixed designs**. Each new game chooses a different design from the previous round and locks the stairs again.
+
+Maze basements have blue floors and ceilings. The mistress's normal chores stay above ground; she can follow Shidan downstairs during a chase.
+
 ## Screenshots
 
 Captured from the playable v0.3.0 build. Click an image to view it at full size.
@@ -37,7 +41,7 @@ Open **http://localhost:4173** if the browser does not open automatically. No pa
 | Tap Space | Small hop, triggered on release |
 | Hold Space, then release | Charged long jump on bedding, carpet, grass, and balcony; hold a movement key to travel |
 | Scroll wheel | Camera distance |
-| Hold left mouse near an item or fountain | Eat / chew for the time shown, or keep drinking water; releasing stops the action |
+| Hold left mouse near an item, fountain or blue bunny | Eat / chew, drink water, or kiss the maze’s plush for five seconds; releasing stops the action |
 | Right mouse click / P | Spend one carried poop ball; 1-second cooldown |
 | Q | Pee for one second; 60-second cooldown before another pee or drink |
 | C | Center camera behind Shidan |
@@ -64,9 +68,13 @@ Visible, physically reachable messes interrupt her routine or pursuit. She runs 
 
 ## Basement
 
-The former protected passage behind the library shelves is now the house’s single basement staircase. Enter at its south end, near **(−22.4, 0, −5)**, and descend into a **48 × 40 m utility basement at y=−4.2 m**. Its cement floor has firm grip and allows charged jumps. Six support pillars, a furnace and a water heater break up the open space. The mistress can follow down, search and catch Shidan; the basement is not a safe hiding zone.
+The library's staircase leads to a magical **48 × 40 m basement at y=−4.2 m**, matching the ground floor's footprint. Basement content type is selected first (currently always a maze), followed by one of five fixed designs: **Willow Paths, Ribbon Switchbacks, Clockwork Spiral, Twin Courtyards and Four Winds**. Every design is a **192-cell blue frosted-glass maze**, with a **41.6 × 36.6 m maze footprint** (27% larger than before), narrow passages, many dead ends, escape loops and **four maze entrances/exits** reached from the surrounding perimeter route. Four distinct doorways lead into the central chamber, and every maze entrance has at least two independent approaches to it, so a chase has several ways in and out. These gates connect to the existing single house staircase. Full-height frosted privacy-glass walls collide with Shidan and block the mistress's direct sight; the mistress can follow, search and catch Shidan throughout the maze. The cement floor has firm grip and allows charged jumps. A layout stays the same through catches, home returns and menus; only starting a new game chooses another design.
 
-Six ceiling lamps stay dimly lit at noon, starting at **22%** of their nighttime power, then warm and brighten with the existing day cycle. The same fixed four local lights serve the current floor. The ground-floor slab remains the basement ceiling throughout play, with one stair opening. Select **Basement** in the **M** map or **V** house tour to inspect B1. Food, chewables and water fountains do not spawn underground; the existing **46 starting snacks** and **14 fountains** remain above ground.
+Each maze contains **10–20 random bonus consumables**. These supplies have their ordinary rewards, do not count toward the house's 46 starting snacks or replenishment pool, and never regenerate after consumption. **Four additional fountains** bring the total to 18; each has its own 100% water reserve. At the center, a yellow round rug has a **large carrot drawing**, beside permanent special hay and a small blue rabbit plush. The drawing is decoration, not a consumable carrot. The hay repeatedly refills energy to 100% and grants three carried poop balls once per carpet visit; leave and land on the carpet again to renew that ball reward.
+
+Hold left-click beside the small blue bunny for **five uninterrupted seconds** to kiss it amid a fuller stream of floating hearts and gain **500 happiness once per game**. The toy stands about half Shidan's height. Release, leave, jump, open a menu or get caught before completion to cancel; an unfinished kiss can be retried. It makes globally audible noise while in progress, so a quiet mistress will investigate. Her own noise masks it normally. The carpet and kiss grant no capture immunity.
+
+Six ceiling lamps sit at maze cell centers, clear of walls in every design. They start at **22%** power at noon, then warm and brighten with the day cycle. The same fixed four local lights serve the current floor. The ground-floor slab stays above the maze as its ceiling. Select **Basement** in the **M** map or **V** house tour to inspect B1. The walls are cloudy frosted privacy glass with **8% transparency (92% opacity)**. Their rough, finely grained surface is nonreflective and reveals only faint shapes beyond it. They remain solid and block direct sight during a chase. No mirrored scene captures or reflection textures are rendered.
 
 ## Studio shelf
 
@@ -117,7 +125,7 @@ Each day starts with **10 carried poop balls**, capped at **20**. The lower-left
 
 Dropped balls keep their gravity, rolling and collisions, and can be pushed. Hold left-click near one for **one second** to eat it, remove it and recover **five energy** over the usual one-second recovery period. It grants no happiness or carried balls and does not count as a regular snack. At most **1,000 dropped balls** remain on the map; a new drop beyond that limit replaces the oldest. Home, title and menus preserve both supply and dropped balls; bedtime starts again with ten carried balls and an empty map.
 
-There are **14 immovable water fountains** across the above-ground rooms, halls, balcony and both yards. There is no basement fountain. Each starts with **100 percentage points of water**, enough to fill one empty bladder. Hold left-click nearby to drink with a nibbling motion from Shidan. The bladder starts empty and fills at **10 percentage points per second**: 0.1 second adds exactly 1%, and filling stops at 100% or when that fountain is empty. Only the water actually drunk leaves its reservoir: drinking 25% leaves 75% for later. Each fountain has its own supply; the prompt shows what remains, and an empty fountain stays empty until the next round or Restart game. The left-side bladder meter shows two decimal places. Water grants no energy, happiness or poop balls.
+There are **18 immovable water fountains**: fourteen across the above-ground rooms, halls, balcony and both yards, plus four in the frosted-glass maze. Each starts with **100 percentage points of water**, enough to fill one empty bladder. Hold left-click nearby to drink with a nibbling motion from Shidan. The bladder starts empty and fills at **10 percentage points per second**: 0.1 second adds exactly 1%, and filling stops at 100% or when that fountain is empty. Only the water actually drunk leaves its reservoir: drinking 25% leaves 75% for later. Each fountain has its own supply; the prompt shows what remains, and an empty fountain stays empty until the next round or Restart game. The left-side bladder meter shows two decimal places. Water grants no energy, happiness or poop balls.
 
 Drinking gives no capture protection. The mistress can approach beside the fixed bowl and reach Shidan there, including in a narrow gap beside a wall. A catch immediately stops water transfer and starts the usual pickup animation. Walls and closed glass still block physical contact.
 
@@ -280,3 +288,4 @@ Open **http://localhost:4173/tests/day-cycle.html** to preview noon/dusk/night o
 ## License
 
 The repository’s original Apache-2.0 license is retained for project code and original assets. Three.js remains under its own MIT license in `vendor/THREE-LICENSE.txt`. Shidan’s personal reference photographs are not distributed. See `docs/ASSETS.md` for attribution and asset provenance.
+Both glass faces use the same unlit blue tint; the four outer basement walls are sky blue. New games exclude the immediately preceding layout, while home returns and menus keep the chosen design.

@@ -4,6 +4,7 @@ import { FLOOR_HEIGHT, HOUSE, floorAt } from './layout.js';
 import { cylinder, sceneryEllipsoid, beam, mat } from './model.js';
 import { batchStaticGeometry } from './render-batching.js';
 import { applySurfaceOverlay } from './surface-materials.js';
+import { mazeFountainPlacements } from './maze-supplies.js';
 
 export const MAX_PUDDLES = 256;
 export const PUDDLE_CLEARANCE = .045;
@@ -60,18 +61,22 @@ function createFountainWaterModel(stream=false) {
 }
 
 const outdoorItem=item=>['balcony','yard','front-yard'].includes(item.room);
-const poolFor=event=>event.y>=FLOOR_HEIGHT-.1 && event.x>=HOUSE.minX && event.x<=HOUSE.maxX && event.z>=HOUSE.minZ && event.z<=HOUSE.maxZ ? 1 :
+const poolFor=event=>event.y< -1?3:event.y>=FLOOR_HEIGHT-.1 && event.x>=HOUSE.minX && event.x<=HOUSE.maxX && event.z>=HOUSE.minZ && event.z<=HOUSE.maxZ ? 1 :
   event.x<HOUSE.minX || event.x>HOUSE.maxX || event.z<HOUSE.minZ || event.z>HOUSE.maxZ ? 2 : 0;
 
-export function createWaterFountains(scene, world) {
-  const groups=[new THREE.Group(),new THREE.Group(),new THREE.Group()];
-  groups.forEach((group,index)=>{group.name=['Ground-floor fountains','Upper-floor fountains','Outdoor fountains'][index];scene.add(group);});
-  const items=FOUNTAIN_PLACEMENTS.map(placement=>({...placement}));
+export function createWaterFountains(scene, world, {mazeLayout=null}={}) {
+  const readMaze=()=>typeof mazeLayout==='function'?mazeLayout():mazeLayout;
+  const mazeItems=mazeFountainPlacements(readMaze());
+  const groups=Array.from({length:mazeItems.length?4:3},()=>new THREE.Group());
+  groups.forEach((group,index)=>{group.name=['Ground-floor fountains','Upper-floor fountains','Outdoor fountains','Maze fountains'][index];scene.add(group);});
+  const items=[...FOUNTAIN_PLACEMENTS.map(placement=>({...placement})),...mazeItems];
   for(const item of items) {
-    item.colliders=[world.addBox(item.x,item.y+.155,item.z,.84,.31,.84,'wood'),
-      world.addBox(item.x,item.y+.425,item.z-.18,.14,.23,.32,'wood')];
+    const addBox=(...args)=>item.mazeFixture?world.addDynamicBox(...args):world.addBox(...args);
+    item.colliders=[addBox(item.x,item.y+.155,item.z,.84,.31,.84,'wood'),
+      addBox(item.x,item.y+.425,item.z-.18,.14,.23,.32,'wood')];
     for(const [index,collider] of item.colliders.entries()) {
       collider.id=`${item.id}:${index}`;collider.fountainId=item.id;
+      if(item.mazeFixture)collider.mazeFixture=true;
       world.fixtures?.set(collider.id,collider);
     }
     item.collider=item.colliders[0];
@@ -83,9 +88,10 @@ export function createWaterFountains(scene, world) {
   const waterMeshes=[],streamMeshes=[],stationLayers=[],stationMeshes=[];
   let floorView=null,upperVisible=true;
   groups.forEach((group,layer)=>{
-    const stations=items.filter(item=>(outdoorItem(item)?2:item.floor)===layer);
+    const stations=items.filter(item=>(item.floor===-1?3:outdoorItem(item)?2:item.floor)===layer);
     const mesh=new THREE.InstancedMesh(source.geometry,source.material,stations.length);
     mesh.name=`Water fountains layer ${layer}`;mesh.receiveShadow=true;mesh.frustumCulled=false;
+    if(layer===3)mesh.userData.dynamicMaze=true;
     stations.forEach((item,index)=>{transform.position.set(item.x,item.y,item.z);transform.updateMatrix();mesh.setMatrixAt(index,transform.matrix);});
     group.add(mesh);
     stationMeshes.push(mesh);
@@ -93,9 +99,26 @@ export function createWaterFountains(scene, world) {
     for(const [model,name,collection] of [[waterSource,'Fountain water',waterMeshes],[streamSource,'Fountain streams',streamMeshes]]) {
       const liquid=new THREE.InstancedMesh(model.geometry,model.material,stations.length);
       liquid.name=`${name} layer ${layer}`;liquid.receiveShadow=true;liquid.frustumCulled=false;
+      if(layer===3)liquid.userData.dynamicMaze=true;
       liquid.instanceMatrix.setUsage(THREE.DynamicDrawUsage);group.add(liquid);collection.push(liquid);
     }
   });
+  function moveMazeStations() {
+    const next=mazeFountainPlacements(readMaze());
+    for(let i=0;i<mazeItems.length;i++) {
+      const item=mazeItems[i],place=next[i];if(!place)continue;
+      const dx=place.x-item.x,dy=place.y-item.y,dz=place.z-item.z;
+      for(const collider of item.colliders)world.moveDynamicBox(collider,dx,dy,dz);
+      Object.assign(item,{x:place.x,y:place.y,z:place.z});
+    }
+    stationLayers.forEach((stations,layer)=>{
+      const mesh=stationMeshes[layer];
+      for(const [index,item] of stations.entries()) {
+        transform.position.set(item.x,item.y,item.z);transform.rotation.set(0,0,0);transform.scale.set(1,1,1);transform.updateMatrix();mesh.setMatrixAt(index,transform.matrix);
+      }
+      mesh.instanceMatrix.needsUpdate=true;
+    });
+  }
   const tint=new THREE.Color();
   function syncWater() {
     stationLayers.forEach((stations,layer)=>{
@@ -129,7 +152,7 @@ export function createWaterFountains(scene, world) {
     for(const mesh of puddleMeshes) mesh.count=0;
     for(const event of puddles) {
       if(floorView!==null&&floorAt(event.y)!==floorView)continue;
-      const mesh=puddleMeshes[poolFor(event)],radius=(.45+.6*Math.sqrt(event.amount/100))*(.18+.82*event.progress);
+      const mesh=puddleMeshes[poolFor(event)]??puddleMeshes[0],radius=(.45+.6*Math.sqrt(event.amount/100))*(.18+.82*event.progress);
       transform.position.set(event.x,event.y+PUDDLE_CLEARANCE,event.z);
       transform.rotation.set(-Math.PI/2,0,0);transform.scale.set(radius*1.3,radius,1);transform.updateMatrix();
       mesh.setMatrixAt(mesh.count++,transform.matrix);
@@ -156,12 +179,13 @@ export function createWaterFountains(scene, world) {
       // to WaterSystem and must survive removal of a completed puddle.
       puddles.splice(index,1);syncPuddles();return true;
     },
-    reset() {system.reset();puddles.length=0;syncPuddles();syncWater();},
+    reset() {moveMazeStations();system.reset();puddles.length=0;syncPuddles();syncWater();},
     setUpperVisible(visible) {upperVisible=visible;groups[1].visible=visible&&floorView!==-1;},
     setFloorView(floor=null) {
       const next=floor===-1?-1:null;if(next===floorView)return;
       floorView=next;groups[1].visible=upperVisible&&floorView!==-1;
-      for(const mesh of [...stationMeshes,...waterMeshes,...streamMeshes])mesh.visible=floorView===null;
+      for(const [index,mesh] of stationMeshes.entries())mesh.visible=floorView===null||index===3;
+      for(const collection of [waterMeshes,streamMeshes])for(const [index,mesh] of collection.entries())mesh.visible=floorView===null||index===3;
       syncPuddles();
     },
   };

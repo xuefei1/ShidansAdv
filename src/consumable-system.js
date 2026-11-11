@@ -3,6 +3,7 @@ import { consumableCollider } from './consumable-collision.js';
 import { ConsumableMotion } from './consumable-motion.js';
 import { DEN } from './layout.js';
 import { WIRE_SLOTS, RANDOM_CHEWABLE_LIMITS, createChewablePlaces } from './chewable-data.js';
+import { MazeSupplies } from './maze-supplies.js';
 
 export const CONSUME_REACH = 1.15;
 export const RESTOCK_SECONDS = 60;
@@ -26,13 +27,13 @@ export function canReachConsumable(player, item, world) {
   if (!player.grounded || player.y<item.y-.45 || player.y>Math.max(item.y+.45,top+.1) || Math.hypot(player.x - item.x, player.z - item.z) > CONSUME_REACH) return false;
   const a = { x: player.x, y: player.y + .32, z: player.z }, b = { x: item.x, y: item.y + .2, z: item.z };
   const insideDen = p => p.y>=-.05&&Math.hypot(p.x - DEN.x, p.z - DEN.z) < DEN.radius;
-  if (item.permanent && !insideDen(player)) return false;
+  if (item.permanent && !item.mazeHay && !insideDen(player)) return false;
   if (Math.min(a.y, b.y) < DEN.fenceHeight && insideDen(a) !== insideDen(b)) return false;
   return !world.query(Math.min(a.x,b.x), Math.min(a.z,b.z), Math.max(a.x,b.x), Math.max(a.z,b.z)).some(box => box.consumableId!==item.id && segmentHitsBox(a,b,box));
 }
 
 export class ConsumableSystem {
-  constructor(world, { slots = CONSUMABLE_SLOTS, random = Math.random, wires = WIRE_SLOTS, randomLimits = RANDOM_CHEWABLE_LIMITS, randomPlaces = null, canSpawn = () => true } = {}) {
+  constructor(world, { slots = CONSUMABLE_SLOTS, random = Math.random, wires = WIRE_SLOTS, randomLimits = RANDOM_CHEWABLE_LIMITS, randomPlaces = null, canSpawn = () => true, mazeLayout=null } = {}) {
     this.world = world; this.random = random;
     this.canSpawn=place=>{
       if(world.basement) {
@@ -43,6 +44,7 @@ export class ConsumableSystem {
       return canSpawn(place);
     };
     this.motion=new ConsumableMotion(world);
+    this.mazeSupplies=new MazeSupplies(mazeLayout,random);
     // Both the initial population and restocking use this pool. Leave enough
     // clearance that an item's geometry cannot overlap the den fence either.
     // Classify static placement pools once, rather than doing human navigation
@@ -56,23 +58,26 @@ export class ConsumableSystem {
   }
   reset() {
     this.motion.clear();
-    for(const item of [this.denHay,...(this.items?.values() || []),...(this.chewables?.values() || [])]) if(item.collider) this.world.removeBox(item.collider);
+    for(const item of [this.denHay,...(this.items?.values() || []),...(this.chewables?.values() || []),...this.mazeSupplies.availableItems()]) if(item.collider) this.world.removeBox(item.collider);
+    this.mazeSupplies.reset();
     this.denHay={...DEN_HAY};
     this.items = new Map(this.slots.map(slot => [slot.id, { ...slot }]));
     this.chewables = new Map(this.wires.map(slot => [slot.id, {...slot}]));
     this.pending = new Map(); this.elapsed = 0; this.restockTime = 0; this.cancel();
-    for(const item of [this.denHay,...this.items.values(),...this.chewables.values()]) this.addCollider(item);
+    for(const item of [this.denHay,...this.items.values(),...this.chewables.values(),...this.mazeSupplies.availableItems()]) this.addCollider(item);
     for(const [type,limit] of Object.entries(this.randomLimits)) for(let i=0;i<limit;i++) {
       const item=this.randomItem(`${type}-${i}`,type);
       if(item) this.addChewable(item);
     }
   }
   get count() { return this.items.size; }
+  get mazeCount() {return this.mazeSupplies.count;}
   addCollider(item) {
     item.spawnPosition ||= {x:item.x,y:item.y,z:item.z};
     item.collider=this.world.addDynamicBox(...consumableCollider(item));
     item.collider.consumableId=item.id;
-    this.motion.add(item);
+    if(item.mazeHay)item.collider.mazeFixture=true;
+    if(!item.fixed)this.motion.add(item);
   }
   get restockCount() { return [...this.items.values()].filter(item=>!consumableDetails(item).respawn).length; }
   addChewable(item) {
@@ -83,7 +88,7 @@ export class ConsumableSystem {
   get fraction() { return this.target ? Math.min(1,this.progress/consumptionSeconds(this.target)) : 0; }
   // Dropped balls share food's reach/hold rules without joining its restock pool.
   setExternalItems(provider) { this.external = provider; }
-  *availableItems() { yield this.denHay; yield* this.items.values(); yield* this.chewables.values(); if(this.external) yield* this.external.availableItems(); }
+  *availableItems() { yield this.denHay; yield* this.items.values(); yield* this.chewables.values(); yield* this.mazeSupplies.availableItems(); if(this.external) yield* this.external.availableItems(); }
   randomItem(id,type,player=null) {
     // Reserve fixed locations even when empty, so returning food/cables cannot
     // appear inside a random box while their own cooldown is running.
@@ -138,7 +143,7 @@ export class ConsumableSystem {
     } else this.restockTime = 0;
     this.motion.update(dt);
     if (!this.target) return events;
-    if ((this.target !== this.denHay && !this.items.has(this.target.id) && !this.chewables.has(this.target.id) && !this.external?.has(this.target)) || !canReachConsumable(player, this.target, this.world)) { this.cancel(); return events; }
+    if ((this.target !== this.denHay && !this.items.has(this.target.id) && !this.chewables.has(this.target.id) && !this.mazeSupplies.has(this.target) && !this.external?.has(this.target)) || !canReachConsumable(player, this.target, this.world)) { this.cancel(); return events; }
     // Do not credit the part of the first frame before the mouse was pressed.
     this.progress += Math.max(0, dt - this.holdDelay);
     this.holdDelay = Math.max(0, this.holdDelay - dt);
@@ -149,10 +154,10 @@ export class ConsumableSystem {
       }
       else if (item.permanent) player.energy.refill();
       else {
-        this.items.delete(item.id); this.chewables.delete(item.id);
+        this.items.delete(item.id); this.chewables.delete(item.id);this.mazeSupplies.remove(item);
         if(item.collider) { this.motion.remove(item);this.world.removeBox(item.collider); delete item.collider; }
         if(type.energy>0) player.energy.consume(type.energy);
-        if(type.respawn) this.pending.set(item.id,{item,at:this.elapsed+type.respawn});
+        if(type.respawn&&!item.oneShot) this.pending.set(item.id,{item,at:this.elapsed+type.respawn});
       }
       events.push({ kind: 'consume', item, energy: type.energy, happiness: type.happiness || 0, poop: type.poop || 0 });
       // A fresh press is required for the next item, even if the button stays down.

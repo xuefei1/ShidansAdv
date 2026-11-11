@@ -15,7 +15,7 @@ const validPosition = point => point && ['x','y','z'].every(axis => Number.isFin
 export function canHearNoise(event, listener) {
   if (!event || !validPosition(listener) || !validPosition(event.position)) return false;
   if (event.scope === 'house') {
-    if(event.source==='shidan'&&event.kind==='eat')return true;
+    if(event.source==='shidan'&&['eat','affection'].includes(event.kind))return true;
     return listener.x >= HOUSE.minX && listener.x <= HOUSE.maxX &&
       listener.z >= HOUSE.minZ && listener.z <= HOUSE.maxZ && listener.y >= BASEMENT.y && listener.y <= FLOOR_HEIGHT * 2;
   }
@@ -29,7 +29,7 @@ export class NoiseSystem {
   constructor() { this.reset(); }
   reset() {
     this.elapsed = 0; this.sequence = 0; this._events = [];
-    this.sprint = null; this.eating = null; this.longJumpHeld = false;
+    this.sprint = null; this.eating = null; this.affection = null; this.longJumpHeld = false;
   }
   get events() { return this._events.slice(); }
   get activeKinds() { return [...new Set(this._events.map(event => event.kind))]; }
@@ -41,7 +41,7 @@ export class NoiseSystem {
   }
   emit(kind, player, time, emitted) {
     if (!Number.isFinite(time) || time + NOISE_LIFETIME <= this.elapsed + EPSILON) return;
-    const houseWide = kind === 'eat';
+    const houseWide = kind === 'eat'||kind==='affection';
     const event = Object.freeze({
       id: ++this.sequence, source: 'shidan', kind, scope: houseWide ? 'house' : 'local',
       radius: houseWide ? null : LOCAL_NOISE_RADIUS,
@@ -64,13 +64,13 @@ export class NoiseSystem {
     }
     state.next = last+1;
   }
-  update(dt, player, {consuming=null,longJump=false,active=true,locked=false}={}) {
+  update(dt, player, {consuming=null,affection=false,longJump=false,active=true,locked=false}={}) {
     if (!active || !Number.isFinite(dt) || dt<0 || !Number.isFinite(this.elapsed+dt)) return [];
     const frameStart = this.elapsed; this.elapsed += dt;
     this._events = this._events.filter(event => event.expiresAt > this.elapsed + EPSILON);
     const emitted = [];
     if (locked || !validPosition(player)) {
-      this.sprint = this.eating = null; this.longJumpHeld = false;
+      this.sprint = this.eating = this.affection = null; this.longJumpHeld = false;
       return emitted;
     }
     if (longJump && !this.longJumpHeld) this.emit('long-jump',validPosition(player.lastJumpPosition)?player.lastJumpPosition:player,this.elapsed,emitted);
@@ -78,6 +78,7 @@ export class NoiseSystem {
     this.pulse('sprint',player.sprinting ? 'sprint' : null,SPRINT_NOISE_INTERVAL,'sprint',player,frameStart,emitted);
     const rewarding = consuming && (consumableDetails(consuming)?.happiness || 0)>0;
     this.pulse('eating',rewarding ? consuming.id ?? consuming.type : null,EATING_NOISE_INTERVAL,'eat',player,frameStart,emitted);
+    this.pulse('affection',affection?'blue-bunny':null,EATING_NOISE_INTERVAL,'affection',player,frameStart,emitted);
     return emitted;
   }
 }

@@ -12,6 +12,7 @@ export const MISTRESS_FOUNTAIN_REACH = 1.2;
 const GRID = .5;
 const CELL = 4;
 const EPSILON = 1e-6;
+const NO_GATE_COLLIDERS = Object.freeze([]);
 const point = p => ({x:p.x,y:p.y,z:p.z});
 const distance = (a,b) => Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 const validPoint = p => p && ['x','y','z'].every(axis=>Number.isFinite(p[axis]));
@@ -76,13 +77,16 @@ class MinHeap {
 // Static, human-sized navigation is authored separately from rabbit physics.
 // Build once after the house and fountains: moving food and Shidan never
 // invalidate this graph, and following a route does not perform path searches.
+// The basement gate filters this fixed graph only when its lock changes.
 export class MistressNavigation {
   constructor(world) {
+    this.world=world;this._buildingGraph=true;this._gateLocked=false;
+    this._gateBlockedNodes=null;this._gateBlockedEdges=null;
     this.radius=MISTRESS_RADIUS;this.height=MISTRESS_HEIGHT;
     this.rampEnds=RAMPS.map(ramp=>[{x:(ramp.minX+ramp.maxX)/2,y:rampBase(ramp),z:ramp.startZ},
       {x:(ramp.minX+ramp.maxX)/2,y:rampBase(ramp)+ramp.height,z:ramp.endZ}]);
     this.rampLengths=this.rampEnds.map(([low,high])=>distance(low,high));
-    this.obstacles=(world.solids ?? []).filter(box=>!box.pushable && !world.dynamicBoxes?.has(box)).map(box=>({...box}));
+    this.obstacles=(world.solids ?? []).filter(box=>!box.pushable && (!world.dynamicBoxes?.has(box)||box.mazeWall||box.mazeFixture)).map(box=>({...box}));
     this.tabletops=this.obstacles.filter(box=>box.tabletop);
     this._buildReachShelves();
     this._buildReachSurfaces();
@@ -105,6 +109,29 @@ export class MistressNavigation {
     this._pursuitCache=null;
     this._approachCache=null;
     this._cleanupCache=null;
+    this._buildingGraph=false;this._syncGate();
+  }
+
+  gateColliders() {
+    return !this._buildingGraph&&this.world.basementGate?.locked?this.world.basementGate.colliders??NO_GATE_COLLIDERS:NO_GATE_COLLIDERS;
+  }
+
+  _syncGate() {
+    if(this._buildingGraph)return;
+    const locked=!!this.world.basementGate?.locked;
+    if(this._gateLocked===locked)return;
+    this._gateLocked=locked;
+    const boxes=this.gateColliders();
+    this._gateBlockedNodes=locked?new Uint8Array(this.nodes.length):null;
+    this._gateBlockedEdges=locked?new WeakSet():null;
+    if(locked)for(const node of this.nodes) {
+      if(boxes.some(box=>segmentHitsBox(node,node,box,this.radius,this.height)))this._gateBlockedNodes[node.id]=1;
+      for(const edge of node.edges)if(boxes.some(box=>segmentHitsBox(node,this.nodes[edge.id],box,this.radius,this.height)))this._gateBlockedEdges.add(edge);
+    }
+    this.labelComponents();
+    this.mainComponent=this.componentAt({x:-15.8,y:0,z:6.9});
+    if(this.mainComponent<0)this.mainComponent=this.components.find(component=>component>=0)??-1;
+    this._pursuitCache=this._approachCache=this._cleanupCache=null;
   }
 
   // Low front-wing roofs are not upstairs floors. The authored ramps connect
@@ -178,6 +205,7 @@ export class MistressNavigation {
 
   canStand(p) {
     if(!this.hasFloor(p)) return false;
+    if(this.gateColliders().some(box=>segmentHitsBox(p,p,box,this.radius,this.height)))return false;
     if(p.y>=-.25&&p.y<DEN.fenceHeight && Math.hypot(p.x-DEN.x,p.z-DEN.z)<DEN.radius+this.radius+.02) return false;
     for(const box of this.candidates(p.x-this.radius,p.z-this.radius,p.x+this.radius,p.z+this.radius)) {
       if(box.rabbitRamp&&p.y>=(box.reachableShelf?.baseY??box.minY)-.13&&p.y<=box.maxY+.13&&
@@ -193,6 +221,7 @@ export class MistressNavigation {
 
   segmentClear(a,b) {
     if(!this.canStand(a) || !this.canStand(b)) return false;
+    if(this.gateColliders().some(box=>segmentHitsBox(a,b,box,this.radius,this.height)))return false;
     if(Math.max(a.y,b.y)>=-.25&&Math.min(a.y,b.y)<DEN.fenceHeight && distanceToSegmentXZ(DEN,a,b)<DEN.radius+this.radius+.02) return false;
     for(const box of this.candidates(Math.min(a.x,b.x)-this.radius,Math.min(a.z,b.z)-this.radius,
       Math.max(a.x,b.x)+this.radius,Math.max(a.z,b.z)+this.radius)) {
@@ -258,16 +287,17 @@ export class MistressNavigation {
   labelComponents() {
     this.components=new Int32Array(this.nodes.length).fill(-1);this.componentCount=0;
     for(const start of this.nodes) {
-      if(this.components[start.id]>=0)continue;
+      if(this.components[start.id]>=0||this._gateBlockedNodes?.[start.id])continue;
       const label=this.componentCount++,queue=[start.id];this.components[start.id]=label;
       for(let index=0;index<queue.length;index++)for(const edge of this.nodes[queue[index]].edges) {
-        if(this.components[edge.id]>=0)continue;
+        if(this.components[edge.id]>=0||this._gateBlockedNodes?.[edge.id]||this._gateBlockedEdges?.has(edge))continue;
         this.components[edge.id]=label;queue.push(edge.id);
       }
     }
   }
 
   componentAt(p) {
+    this._syncGate();
     if(!this.canStand(p))return -1;
     const floor=floorIndex(p.y),ix=Math.round(p.x/GRID),iz=Math.round(p.z/GRID);
     for(const [dx,dz] of [[0,0],[0,1],[1,0],[0,-1],[-1,0],[1,1],[-1,1],[1,-1],[-1,-1]]) {
@@ -305,6 +335,7 @@ export class MistressNavigation {
   }
 
   nearestReachable(p,from,{maxDistance=3}={}) {
+    this._syncGate();
     const target=this.floorPoint(p),component=from?this.componentAt(from):this.mainComponent;
     if(!target || component<0 || !Number.isFinite(maxDistance) || maxDistance<0)return null;
     if(this.canStand(target) && this.componentAt(target)===component)return point(target);
@@ -322,6 +353,7 @@ export class MistressNavigation {
   }
 
   pursuitTarget(player,from,{preferFrom=false}={}) {
+    this._syncGate();
     if(!validPoint(player))return null;
     const component=from?this.componentAt(from):this.mainComponent;
     const key=`${player.x},${player.y},${player.z},${component}${preferFrom&&validPoint(from)?`,${from.x},${from.y},${from.z}`:''}`;
@@ -429,6 +461,7 @@ export class MistressNavigation {
   // Waste and rabbits use the same reachable table perimeter. A separate
   // cache avoids repeated waste queries displacing the live rabbit query.
   cleanupTarget(position,from) {
+    this._syncGate();
     if(!validPoint(position))return null;
     const component=from?this.componentAt(from):this.mainComponent;
     const key=`${position.x},${position.y},${position.z},${component}`;
@@ -569,11 +602,12 @@ export class MistressNavigation {
     return found;
   }
 
-  findPath(from,to) {
+  findPath(from,to,{minY=-Infinity}={}) {
+    if(from?.y<minY-EPSILON||to?.y<minY-EPSILON)return [];
     if(!this.canStand(from) || !this.canStand(to)) return [];
     const component=this.componentAt(from);if(component<0 || this.componentAt(to)!==component)return [];
     if(this.segmentClear(from,to)) return [point(from),point(to)];
-    const starts=this.nearbyNodes(from),ends=this.nearbyNodes(to);
+    const starts=this.nearbyNodes(from).filter(id=>this.nodes[id].y>=minY-EPSILON),ends=this.nearbyNodes(to).filter(id=>this.nodes[id].y>=minY-EPSILON);
     if(!starts.length || !ends.length) return [];
     const goals=new Set(ends),count=this.nodes.length,g=new Float64Array(count).fill(Infinity);
     const previous=new Int32Array(count).fill(-1),closed=new Uint8Array(count),open=new MinHeap();
@@ -589,7 +623,7 @@ export class MistressNavigation {
       closed[id]=1;
       for(const edge of this.nodes[id].edges) {
         const cost=g[id]+edge.cost;
-        if(closed[edge.id] || cost>=g[edge.id]) continue;
+        if(closed[edge.id] || this.nodes[edge.id].y<minY-EPSILON || cost>=g[edge.id]||this._gateBlockedEdges?.has(edge)) continue;
         g[edge.id]=cost;previous[edge.id]=id;open.push(edge.id,cost+estimate(edge.id));
       }
     }

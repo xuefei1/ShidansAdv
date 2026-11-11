@@ -1,5 +1,6 @@
 import * as THREE from '../vendor/three.module.js';
 import { canHearNoise } from './noise.js';
+import {blockedBySolids} from './mistress-vision.js';
 
 export const MISTRESS_FOOTSTEP_RADIUS = 5;
 export const MISTRESS_FOOTSTEP_INTERVAL = .45;
@@ -19,7 +20,8 @@ const shown = object => {
 // triangle intersections preserve window panes, wire gaps and furniture legs.
 // Transparent glass and contact-shadow sheets never obstruct a visual sighting.
 export class MistressSight {
-  constructor(roots=[]) {
+  constructor(roots=[],{world=null}={}) {
+    this.world=world;
     this.entries=[];this.cells=new Map();
     this._frustum=new THREE.Frustum();this._projection=new THREE.Matrix4();
     this._sample=new THREE.Vector3();this._origin=new THREE.Vector3();
@@ -31,7 +33,7 @@ export class MistressSight {
       if(!root?.traverse) continue;
       root.updateWorldMatrix(true,true);
       root.traverse(mesh=>{
-        if(!mesh.isMesh || visited.has(mesh)) return;
+        if(!mesh.isMesh || mesh.userData.dynamicGate || mesh.userData.dynamicMaze || visited.has(mesh)) return;
         visited.add(mesh);
         const materials=Array.isArray(mesh.material)?mesh.material:[mesh.material];
         if(!materials.some(opaque)) return;
@@ -49,6 +51,7 @@ export class MistressSight {
     }
   }
   _clear(origin,target,distance,includeHidden=false) {
+    if(this.world&&blockedBySolids(origin,target,this.world.queryDynamic(Math.min(origin.x,target.x),Math.min(origin.z,target.z),Math.max(origin.x,target.x),Math.max(origin.z,target.z))))return false;
     this._direction.subVectors(target,origin).divideScalar(distance);
     this._raycaster.set(origin,this._direction);this._raycaster.near=.005;
     this._raycaster.far=Math.max(.005,distance-.025);

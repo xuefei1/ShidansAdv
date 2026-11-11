@@ -21,7 +21,7 @@ async function until(condition,label) {
   status.textContent=label;const deadline=performance.now()+240000;
   while(!condition()) {status.dataset.game=JSON.stringify(data());if(performance.now()>deadline || !game().getElementById('fatal').hidden) throw Error(`Timed out: ${label} (${JSON.stringify(data())})`);await wait(40);}
 }
-async function walk(x,z,{run=false,observe=null}={}) {
+async function walk(x,z,{run=false,observe=null,consumeTarget=null}={}) {
   const held=new Set(),deadline=performance.now()+240000;
   const setKeys=codes=>{for(const code of [...held])if(!codes.includes(code)){key('keyup',code);held.delete(code);}for(const code of codes)if(!held.has(code)){key('keydown',code);held.add(code);}};
   status.textContent=`Walking to (${x}, ${z})`;
@@ -29,6 +29,7 @@ async function walk(x,z,{run=false,observe=null}={}) {
     while(performance.now()<deadline) {
       const p=pos(),dx=x-p[0],dz=z-p[2];
       observe?.(p);
+      if(consumeTarget&&data().consumeTarget===consumeTarget) {setKeys([]);await wait(600);if(data().consumeTarget===consumeTarget)return;}
       if(Math.hypot(dx,dz)<.23) {setKeys([]);await wait(600);if(Math.hypot(x-pos()[0],z-pos()[2])<.23)return;}
       const yaw=Number(data().camera.split(',')[0]),forward=-Math.sin(yaw)*dx-Math.cos(yaw)*dz,right=Math.cos(yaw)*dx-Math.sin(yaw)*dz;
       setKeys([...(run&&Math.hypot(dx,dz)>2.5?['ShiftLeft']:[]),...(Math.abs(right)>.14?[right>0?'KeyD':'KeyA']:[]),...(Math.abs(forward)>.14?[forward>0?'KeyW':'KeyS']:[])]);await wait(40);
@@ -168,26 +169,66 @@ async function runRepeatDrinkingChecks() {
   }
 }
 async function runBasementChecks() {
+  document.querySelector('header b').textContent='Basement happiness gate';
+  const previousYaw=Number(data().camera.split(',')[0]);mouse('mousedown');
+  frame.contentWindow.dispatchEvent(new frame.contentWindow.MouseEvent('mousemove',{clientX:300+previousYaw/.003,clientY:400}));mouse('mouseup');
+  await until(()=>Math.abs(Number(data().camera.split(',')[0]))<.001,'Align the camera with the basement staircase');
+  check('A new adventure locks the basement and starts without an unlock notice',data().basementUnlocked==='false'&&game().getElementById('basement-notice').hidden);
+  // Earn the milestone through real held consumption. No score/position
+  // injection: carrot (10), a library cable (150), then two books (20 each).
+  // This established snack approach passes west of the fountain and plant.
+  await walk(-12,17.1,{consumeTarget:'carrot-0'});
+  await until(()=>data().consumeTarget==='carrot-0','Reach the first happiness snack');
+  mouse('mousedown');await until(()=>data().lastConsumedId==='carrot-0'&&data().happiness==='10','Finish the carrot');mouse('mouseup');
+  check('Ten happiness leaves the basement locked',data().happiness==='10'&&data().basementUnlocked==='false');
   for(const [x,z] of [[-6,12],[-6,4],[-14,4],[-14,-5.8],[-19,-5.8],[-19,-4.1],[-22.4,-4.1]])await walk(x,z,{run:true});
   check('The library entrance reveals the basement before descending',data().basementVisible==='true'&&data().basementCeilingVisible==='true');
+  const yaw=Number(data().camera.split(',')[0]),towardStairs=[...(Math.abs(Math.sin(yaw))>.3?[Math.sin(yaw)>0?'KeyD':'KeyA']:[]),...(Math.abs(Math.cos(yaw))>.3?[Math.cos(yaw)>0?'KeyW':'KeyS']:[])];
+  for(const code of towardStairs)key('keydown',code);await wait(1000);for(const code of towardStairs)key('keyup',code);await wait(300);
+  check('The closed fence physically prevents walking onto the staircase',pos()[2]>-5&&Math.abs(pos()[1])<.02&&data().basementUnlocked==='false');
+  if(new URLSearchParams(location.search).has('gate-preview')) {
+    status.textContent='Locked basement preview ready.';return;
+  }
+  for(const [x,z] of [[-19,-4.1],[-19,-5.8]])await walk(x,z);
+  await walk(-18,-5.0,{consumeTarget:'wire-library-lamp'});
+  await until(()=>data().consumeTarget==='wire-library-lamp','Reach the library cable');
+  mouse('mousedown');await until(()=>data().lastConsumedId==='wire-library-lamp'&&data().happiness==='160','Chew the cable');mouse('mouseup');
+  check('The gate stays locked at 160 happiness',data().happiness==='160'&&data().basementUnlocked==='false');
+  await walk(-18,-6.4,{consumeTarget:'book-2'});await until(()=>data().consumeTarget==='book-2','Reach the first library book');
+  mouse('mousedown');await until(()=>data().lastConsumedId==='book-2'&&data().happiness==='180','Finish the first book');mouse('mouseup');
+  check('The gate stays locked at 180 happiness without an early popup',data().happiness==='180'&&data().basementUnlocked==='false'&&game().getElementById('basement-notice').hidden);
+  await walk(-18,-14.8);await walk(-17,-14.8,{consumeTarget:'book-3'});await until(()=>data().consumeTarget==='book-3','Reach the second library book');
+  mouse('mousedown');await until(()=>data().lastConsumedId==='book-3'&&data().happiness==='200'&&data().basementUnlocked==='true','Reach exactly 200 happiness');mouse('mouseup');
+  check('Exactly 200 happiness opens the fence and displays its own notice',data().happiness==='200'&&data().basementUnlocked==='true'&&!game().getElementById('basement-notice').hidden&&game().getElementById('basement-notice').textContent.includes('Basement unlocked'));
+  click('menu-button');await advance(1);
+  check('Pause retains the unlocked basement and the earned score',data().basementUnlocked==='true'&&data().happiness==='200');click('resume');
+  for(const [x,z] of [[-18,-14.8],[-19,-5.8],[-19,-4.1],[-22.4,-4.1]])await walk(x,z,{run:true});
   await walk(-22.4,-18.1,{run:true});await until(()=>data().grounded==='true','Reach the concrete basement landing');
   check('The real stairway reaches B1 without resetting Shidan',Math.abs(pos()[1]+H)<.02&&data().surface==='concrete'&&data().mapFloor==='-1'&&game().getElementById('map-floor').textContent==='B1');
-  check('The basement has its ceiling and no food or fountain target',data().basementCeilingVisible==='true'&&data().consumeTarget===''&&data().consumableCount==='46'&&Object.values(JSON.parse(data().fountainWater)).length===14);
-  await walk(-19,-18.1,{run:true});
+  check('The basement landing stays clear while the maze adds four independent fountains',data().basementCeilingVisible==='true'&&data().consumeTarget===''&&data().consumableCount==='43'&&Object.values(JSON.parse(data().fountainWater)).length===18);
+  const basementBypassX=JSON.parse(data().mazeLayout).perimeter.westX;
+  await walk(basementBypassX,-18.1,{run:true});
   click('map-button');await until(()=>!game().getElementById('atlas').hidden,'Open the basement map');
   check('The atlas selects its basement floor',game().getElementById('atlas-floor-name').textContent==='Basement'&&game().querySelector('.floor-switch [data-floor="-1"]').getAttribute('aria-pressed')==='true');click('close-atlas');
   await walk(-22.4,-18.1,{run:true});await walk(-22.4,-4,{run:true});
   check('The single flight also returns Shidan to the first floor',Math.abs(pos()[1])<.02&&data().mapFloor==='0');
-  await walk(-22.4,-18.1,{run:true});await walk(-19,-18.1,{run:true});
-  await advance(480);
+  await walk(-22.4,-18.1,{run:true});await walk(basementBypassX,-18.1,{run:true});
+  await advance(Number(data().dayRemaining)-120);
   check('Night reaches the basement with only basement lamps selected',data().dayRemaining==='120.00'&&data().lamps==='1.000'&&JSON.parse(data().localLampFloors).every(floor=>floor===-1));
   key('keydown','KeyV');key('keyup','KeyV');await until(()=>!game().getElementById('survey').hidden,'Inspect the basement cutaway');
   check('Basement house view opens the ceiling without revealing upstairs',data().visibleFloor==='-1'&&data().basementCeilingVisible==='false'&&data().ceilingVisible==='false'&&data().roofVisible==='false');
   check('The basement round has no fatal error',game().getElementById('fatal').hidden);
-  status.textContent='All basement checks passed.';
   if(new URLSearchParams(location.search).has('capture')) {
     document.querySelector('header').hidden=true;results.hidden=true;Object.assign(frame.style,{position:'fixed',inset:'0',height:'100vh',minHeight:'0'});
+    status.textContent='All basement checks passed.';return;
   }
+  key('keydown','KeyV');key('keyup','KeyV');click('home');await until(()=>Math.hypot(pos()[0]+16,pos()[2]-12)<.03,'Return to the den');
+  check('Returning home preserves the basement unlock',data().basementUnlocked==='true'&&data().happiness==='200');
+  click('menu-button');click('back-title');await until(()=>data().mode==='title','Return to title');click('play');await until(()=>data().mode==='play','Continue the current adventure');
+  check('Continuing from the main menu preserves the unlocked gate',data().basementUnlocked==='true'&&data().happiness==='200');
+  click('menu-button');click('reset');await until(()=>data().mode==='play'&&data().happiness==='0','Restart the adventure');
+  check('Restart locks the fence and removes the previous unlock popup',data().basementUnlocked==='false'&&game().getElementById('basement-notice').hidden&&data().dayRemaining==='600.00');
+  status.textContent='All basement checks passed.';
 }
 async function runDrinkingCaptureChecks() {
   await walk(-10.5,17);await until(()=>data().consumeTarget==='fountain-living','Reach the living-room fountain');
@@ -820,7 +861,7 @@ document.getElementById('run').onclick=async()=>{
     click('reset');await until(()=>data().mode==='play'&&data().dayRemaining==='600.00','Restart a partially peed round');
     check('Restart clears the active pee, bladder, balls, puddles and cooldowns',data().peeing==='false'&&data().bladder==='0.00'&&data().poopCount==='0'&&data().poopSupply==='10'&&data().puddleCount==='0'&&data().drinkCooldown==='0.000');
     check('Restart preserves the name and restores a fresh complete round',data().happiness==='0'&&data().energy==='100.00'&&data().consumableCount==='46'&&data().chewableCount==='22'&&data().discoveries==='0'&&data().freeDenJump==='true'&&game().getElementById('score-player').textContent==='Body QA'&&Math.hypot(pos()[0]+16,pos()[2]-12)<.03);
-    check('Restart restores all fourteen fountain reservoirs',Object.values(JSON.parse(data().fountainWater)).length===14&&Object.values(JSON.parse(data().fountainWater)).every(value=>value===100));
+    check('Restart restores all eighteen fountain reservoirs',Object.values(JSON.parse(data().fountainWater)).length===18&&Object.values(JSON.parse(data().fountainWater)).every(value=>value===100));
     await advance(600);await until(()=>data().mode==='gameover','Finish day');
     click('game-over-new');await until(()=>data().mode==='play','Start the next day from results');
     check('New day resets supply, bladder, puddles and cooldowns',data().poopSupply==='10'&&data().poopCount==='0'&&data().bladder==='0.00'&&data().puddleCount==='0'&&data().drinkCooldown==='0.000');

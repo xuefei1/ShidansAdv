@@ -52,7 +52,11 @@ export class HappinessRun {
     this.board.rememberName(name); return true;
   }
   consume(event) {
-    if(this.active && event.kind==='consume' && Number.isSafeInteger(event.happiness) && event.happiness>0) this.score+=event.happiness;
+    if(event.kind==='consume')this.award(event.happiness);
+  }
+  award(amount) {
+    if(!this.active||!Number.isSafeInteger(amount)||amount<=0||!Number.isSafeInteger(this.score+amount))return false;
+    this.score+=amount;return true;
   }
   restart(name=this.name) {
     name=playerName(name);if(!name) return false;

@@ -1,5 +1,5 @@
 // A finished day is a fresh run without rebuilding the renderer or the house.
-export function resetAdventure({clock,controller,consumables,poop,water,noise,noiseRipples,mistress,mistressRipples,mistressFootsteps,mistressStepRipples},now) {
+export function resetAdventure({clock,controller,consumables,poop,water,noise,noiseRipples,mistress,mistressRipples,mistressFootsteps,mistressStepRipples,basementAccess},now) {
   clock.reset(now);
   controller.energy.refill(); controller.sprintExhausted=false; controller.resetDay();
   poop.reset(); consumables.reset(); water?.reset();
@@ -7,4 +7,5 @@ export function resetAdventure({clock,controller,consumables,poop,water,noise,no
   mistress?.reset();mistressRipples?.clear();
   mistressFootsteps?.reset();
   mistressStepRipples?.clear();
+  basementAccess?.reset();
 }

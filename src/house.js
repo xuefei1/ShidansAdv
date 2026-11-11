@@ -10,7 +10,7 @@ import { createBasement } from './basement.js';
 
 // The house is a set of connected spaces, authored at rabbit scale. Ground and
 // upper art are batched separately for a readable floor-by-floor cutaway.
-export function createHouse(scene) {
+export function createHouse(scene, {basementType='utility',basementLayout=null}={}) {
   const group = new THREE.Group(); group.name = 'Clover House'; scene.add(group);
   const ground = new THREE.Group(), upper = new THREE.Group(), outside = new THREE.Group(), ceiling = new THREE.Group();
   const basement = new THREE.Group(), basementCeiling = new THREE.Group();
@@ -27,7 +27,7 @@ export function createHouse(scene) {
   // Art-only geometry is limited to floor decals, thin trim, leaves, and details
   // contained by a solid prop. Every walkable furnishing uses solid().
   const detail = (parent, color, ...dimensions) => { const mesh = cube(parent, color, ...dimensions); mesh.userData.decoration = true; mesh.castShadow = false; return mesh; };
-  const art = { group, ground, upper, outside, basement, basementCeiling, solid, detail, world, label };
+  const art = { group, ground, upper, outside, basement, basementCeiling, solid, detail, world, label, basementType, basementLayout, utility:basementType==='utility' };
   const { groundSlabs, stairOpening } = createBasement(art);
   const opening = BASEMENT_STAIR_OPENING;
   const planks = [0xd6b386, 0xe2bf92, 0xdec097, 0xdaba91, 0xe4c69e];

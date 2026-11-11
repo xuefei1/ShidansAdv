@@ -1,9 +1,15 @@
 import { BASEMENT as B, BASEMENT_STAIRS as STAIRS, BASEMENT_STAIR_OPENING as OPENING, HOUSE } from './layout.js';
 import { cylinder } from './model.js';
+import {Color,Float32BufferAttribute} from '../vendor/three.module.js';
+
+export const BASEMENT_WALL_COLOR=0x87ceeb;
+export const MAZE_BASEMENT_SURFACE_COLOR=0x87ceeb;
 
 // Concrete structure and one stair flight. All other household furnishings stay
 // upstairs; this open utility floor leaves long, readable chase routes.
-export function createBasement({ basement, basementCeiling, ground, solid, detail, world, label }) {
+export function createBasement({ basement, basementCeiling, ground, solid, detail, world, label, utility=true, basementType='utility' }) {
+  const maze=basementType==='maze'||basementType==='mirror-maze';
+  let paintedSlabMaterial=null;
   const groundSlabs = [];
   for (const [id, minX, maxX, minZ, maxZ] of [
     ['west', HOUSE.minX, OPENING.minX, HOUSE.minZ, HOUSE.maxZ],
@@ -13,20 +19,34 @@ export function createBasement({ basement, basementCeiling, ground, solid, detai
   ]) {
     const mesh = solid(basementCeiling, 0xb4b2aa, (minX + maxX) / 2, B.ceilingY / 2,
       (minZ + maxZ) / 2, maxX - minX, -B.ceilingY, maxZ - minZ, 'wood', `ground-floor:${id}`);
+    if(maze) {
+      // These slabs are also the house's ground floor. Paint only their
+      // underside, without adding an overlapping ceiling sheet or tinting
+      // the timber upstairs. cube() shares its primitive, so clone it first.
+      const geometry=mesh.geometry.clone(),normal=geometry.getAttribute('normal');
+      const colors=new Float32Array(normal.count*3),blue=new Color(MAZE_BASEMENT_SURFACE_COLOR),base=mesh.material.color;
+      for(let i=0;i<normal.count;i++) {
+        const color=normal.getY(i)<-.5?blue:base;
+        colors[i*3]=color.r;colors[i*3+1]=color.g;colors[i*3+2]=color.b;
+      }
+      geometry.setAttribute('color',new Float32BufferAttribute(colors,3));mesh.geometry=geometry;
+      if(!paintedSlabMaterial) {paintedSlabMaterial=mesh.material.clone();paintedSlabMaterial.color.set(0xffffff);paintedSlabMaterial.vertexColors=true;}
+      mesh.material=paintedSlabMaterial;
+    }
     groundSlabs.push(mesh.userData.collider);
   }
 
-  solid(basement, 0x9b9e9b, 0, B.y - .12, 0, 48.24, .24, 40.24, 'concrete', 'basement-floor');
+  solid(basement, maze?MAZE_BASEMENT_SURFACE_COLOR:0x9b9e9b, 0, B.y - .12, 0, 48.24, .24, 40.24, 'concrete', 'basement-floor');
   const wallHeight = B.ceilingY - B.y, wallY = (B.y + B.ceilingY) / 2;
   for (const z of [B.minZ, B.maxZ]) {
-    const mesh = solid(basement, 0xb4b8b1, 0, wallY, z, 48.24, wallHeight, .24, 'concrete', `basement-wall:${z < 0 ? 'rear' : 'front'}`);
+    const mesh = solid(basement, BASEMENT_WALL_COLOR, 0, wallY, z, 48.24, wallHeight, .24, 'concrete', `basement-wall:${z < 0 ? 'rear' : 'front'}`);
     mesh.userData.collider.verticalBarrier = true;
   }
   for (const x of [B.minX, B.maxX]) {
-    const mesh = solid(basement, 0xa7afad, x, wallY, 0, .24, wallHeight, 39.76, 'concrete', `basement-wall:${x < 0 ? 'west' : 'east'}`);
+    const mesh = solid(basement, BASEMENT_WALL_COLOR, x, wallY, 0, .24, wallHeight, 39.76, 'concrete', `basement-wall:${x < 0 ? 'west' : 'east'}`);
     mesh.userData.collider.verticalBarrier = true;
   }
-  for (const x of [-12, 0, 12]) for (const z of [-6, 8]) {
+  if(utility)for (const x of [-12, 0, 12]) for (const z of [-6, 8]) {
     solid(basement, 0x8f9693, x, wallY, z, .52, wallHeight, .52, 'concrete', `basement-pillar:${x}:${z}`);
   }
 
@@ -56,6 +76,7 @@ export function createBasement({ basement, basementCeiling, ground, solid, detai
     tread.userData.collider.rampId = tread.userData.collider.analyticRamp = STAIRS.id;
   }
 
+  if(utility) {
   const furnace = solid(basement, 0x7e8e89, 16, B.y + 1.1, -16, 1.8, 2.2, 1.2, 'concrete', 'basement-furnace');
   furnace.userData.utility = 'furnace';
   detail(basement, 0xb5bdb3, 16, B.y + 1.15, -15.388, 1.45, 1.7, .018);
@@ -70,6 +91,7 @@ export function createBasement({ basement, basementCeiling, ground, solid, detai
   tank.userData.utility = 'water-heater'; world.fixtures.set(tankBox.id, tankBox);
   solid(basement, 0x8fa3a1, 19.25, B.y + 2.45, -16, .07, .7, .07, 'concrete', 'basement-hot-water-pipe');
   solid(basement, 0xa5b3a4, 19.75, B.y + 2.45, -16, .07, .7, .07, 'concrete', 'basement-cold-water-pipe');
+  }
   label(ground, 'BASEMENT', -22.4, .55, -4.78, 1.8, .35);
 
   return { groundSlabs, stairOpening: OPENING };

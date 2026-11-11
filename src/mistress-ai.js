@@ -11,6 +11,8 @@ const copy = p => ({x:p.x,y:p.y,z:p.z});
 const distance = (a,b) => Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 const clamp = (value,min,max) => Math.max(min,Math.min(max,value));
 const smooth = t => t*t*(3-2*t);
+const aboveGround=point=>point&&Number.isFinite(point.y)&&point.y>=-EPSILON;
+const routineActivity=activity=>activity&&aboveGround(activity.approach)&&(!activity.seat||aboveGround(activity.seat));
 
 // Navigation ends beside a piece of furniture. The short authored docking
 // motion then sits or lies down, rather than asking the walker to cross it.
@@ -82,7 +84,7 @@ export class MistressAI {
   }
   _nextActivity() {
     if(!this._bag.length) {
-      this._bag=this._shuffle(MISTRESS_ACTIVITIES.map(activity=>activity.id));
+      this._bag=this._shuffle(MISTRESS_ACTIVITIES.filter(routineActivity).map(activity=>activity.id));
       const last=this._bag.length-1;
       if(this._bag[last]===this.activity) [this._bag[0],this._bag[last]]=[this._bag[last],this._bag[0]];
     }
@@ -94,17 +96,24 @@ export class MistressAI {
     this.yaw=this.definition.yaw;this.speed=0;this.poseWeight=1;this.blocked=false;
     this._path=[];this._pathIndex=0;this._dockTime=0;this._laughUntil=-Infinity;this._noiseReadyAt=-Infinity;this._walkingSpeed=MISTRESS_WALK_SPEED;
     this._duration=this._range(this.definition.duration);this._nextNoise=this._range(this.definition.interval);
-    this._bag=this._shuffle(MISTRESS_ACTIVITIES.filter(activity=>activity.id!=='phone').map(activity=>activity.id));
+    this._bag=this._shuffle(MISTRESS_ACTIVITIES.filter(activity=>routineActivity(activity)&&activity.id!=='phone').map(activity=>activity.id));
+  }
+  _routinePath(from,activity) {
+    if(!routineActivity(activity))return [];
+    // Chores never visit or take shortcuts through the basement. An explicit
+    // recovery from below can leave via the stairs, but cannot go deeper.
+    const minY=Math.min(0,from.y),path=this.navigation.findPath(from,activity.approach,{minY});
+    return path.every(point=>Number.isFinite(point.y)&&point.y>=minY-EPSILON)?path:[];
   }
   resumeFrom(position,{yaw=this.yaw,elapsed=this.elapsed}={}) {
     if(!position||!['x','y','z'].every(axis=>Number.isFinite(position[axis]))||
       (this.navigation.canStand&&!this.navigation.canStand(position)))return false;
     // Choose a reachable next task before changing any pose. Failed routing
     // cannot send her back to the couch or snap her into a distant seat.
-    this._bag=this._shuffle(MISTRESS_ACTIVITIES.filter(activity=>activity.id!==this.activity).map(activity=>activity.id));
+    this._bag=this._shuffle(MISTRESS_ACTIVITIES.filter(activity=>routineActivity(activity)&&activity.id!==this.activity).map(activity=>activity.id));
     let choice=null,path=null;
     for(let attempt=0;attempt<MISTRESS_ACTIVITIES.length-1;attempt++) {
-      const candidate=definitions.get(this._nextActivity()),route=this.navigation.findPath(position,candidate.approach);
+      const candidate=definitions.get(this._nextActivity()),route=this._routinePath(position,candidate);
       if(route.length){choice=candidate;path=route.map(copy);break;}
     }
     if(!choice)return false;
@@ -132,8 +141,8 @@ export class MistressAI {
     let choice=null,path=null;
     for(let attempt=0;attempt<MISTRESS_ACTIVITIES.length;attempt++) {
       const candidate=definitions.get(this._nextActivity());
-      if(candidate.id===this.activity) continue;
-      const route=this.navigation.findPath(this.position,candidate.approach);
+      if(!candidate||candidate.id===this.activity) continue;
+      const route=this._routinePath(this.position,candidate);
       if(!route.length) continue;
       choice=candidate;path=route.map(copy);break;
     }

@@ -3,7 +3,7 @@ import * as THREE from '../vendor/three.module.js';
 export const MISTRESS_VIEW_ANGLE=Math.PI/2;
 export const MISTRESS_VIEW_RANGE=50;
 const valid=point=>point&&['x','y','z'].every(axis=>Number.isFinite(point[axis]));
-function blockedBySolids(origin,target,boxes) {
+export function blockedBySolids(origin,target,boxes) {
   for(const box of boxes) {
     let first=0,last=1;
     for(const axis of ['x','y','z']) {

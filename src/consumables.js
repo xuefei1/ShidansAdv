@@ -129,14 +129,14 @@ export function createConsumables(scene, world, options) {
   for (const type of Object.keys(CONSUMABLE_TYPES)) {
     const source = createConsumableModel(type);
     for (const floor of [0,1]) {
-      const mesh = new THREE.InstancedMesh(source.geometry, source.material, CONSUMABLE_SLOTS.length);
+      const mesh = new THREE.InstancedMesh(source.geometry, source.material, CONSUMABLE_SLOTS.length+21);
       mesh.name = `${type} collectibles`; mesh.count = 0; mesh.receiveShadow = true;
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); mesh.frustumCulled = false;
       floors[floor].add(mesh); batches.set(`${type}:${floor}`, mesh);
     }
   }
   const denSource = createConsumableModel('hay', true);
-  const denMesh = new THREE.InstancedMesh(denSource.geometry, denSource.material, 1);
+  const denMesh = new THREE.InstancedMesh(denSource.geometry, denSource.material, 2);
   denMesh.name = 'Special den hay'; denMesh.receiveShadow = true; denMesh.frustumCulled = false;
   denMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   floors[0].add(denMesh); batches.set('den-hay', denMesh);

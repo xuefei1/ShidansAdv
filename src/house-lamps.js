@@ -18,7 +18,23 @@ export const LAMP_PLACEMENTS = Object.freeze([
   ['basement-centre-south',-1,'ceiling',0,10], ['basement-east-south',-1,'ceiling',16,10],
 ].map(([id,floor,kind,x,z]) => Object.freeze({id,floor,kind,x,z,y:floor*H+(kind==='ceiling'?3.48:1.72)})));
 
-export function createHouseLamps({ground,upper,basement,world}) {
+// All five maze designs share their cell grid, even though their passages
+// differ. Centering pendants in those cells clears every possible wall line
+// and keeps baked shades, colliders and live light positions in agreement.
+export function mazeCeilingLampPlacements(layout) {
+  if(!layout)return LAMP_PLACEMENTS.filter(lamp=>lamp.floor===-1);
+  const {columns,rows}=layout.bounds;
+  const columnsAt=[Math.floor(columns/6),Math.floor((columns-1)/2),columns-1-Math.floor(columns/6)];
+  const rowsAt=[Math.floor(rows/4)-1,rows-Math.floor(rows/4)];
+  return LAMP_PLACEMENTS.filter(lamp=>lamp.floor===-1).map((lamp,index)=>{
+    const column=columnsAt[index%3],row=rowsAt[Math.floor(index/3)];
+    const cell=layout.cells.find(cell=>cell.column===column&&cell.row===row);
+    if(!cell)throw new RangeError(`Maze is missing ceiling-lamp cell ${column},${row}`);
+    return Object.freeze({...lamp,x:cell.x,z:cell.z,cellId:cell.id});
+  });
+}
+
+export function createHouseLamps({ground,upper,basement,world,basementLayout=null}) {
   const glowMaterial = new THREE.MeshStandardMaterial({color:0xffefd3,emissive:0xffba65,emissiveIntensity:0,roughness:.8});
   const basementGlowMaterial=glowMaterial.clone();
   const glowGeometry = new THREE.CylinderGeometry(.42,.42,.045,20);
@@ -30,7 +46,9 @@ export function createHouseLamps({ground,upper,basement,world}) {
     cube(parent,0xcbbba2,x,y,z,width-.04,.08,.12);
     colliders.push(world.addBox(x,y,z,width-.04,.08,.12));
   }
-  const fixtures=LAMP_PLACEMENTS.filter(l=>l.floor!==-1||basement);
+  const basementFixtures=mazeCeilingLampPlacements(basementLayout);
+  let basementIndex=0;
+  const fixtures=LAMP_PLACEMENTS.filter(l=>l.floor!==-1||basement).map(lamp=>lamp.floor===-1?basementFixtures[basementIndex++]:lamp);
   const groups=new Map();
   for (const floor of basement?[-1,0,1]:[0,1]) {
     const parent=floor===-1?basement:floor===1?upper:ground, floorFixtures=fixtures.filter(l=>l.floor===floor);
@@ -46,16 +64,18 @@ export function createHouseLamps({ground,upper,basement,world}) {
       } else {
         if(floor===-1){
           const mount=BASEMENT.ceilingY-.045,rodTop=mount-.035,rodBottom=y+.18;
-          cylinder(parent,0xa78a63,x,mount,z,.16,.07,.16,12);
-          cylinder(parent,0x998365,x,(rodTop+rodBottom)/2,z,.022,rodTop-rodBottom,.022,8);
+          const cap=cylinder(parent,0xa78a63,x,mount,z,.16,.07,.16,12);
+          const rod=cylinder(parent,0x998365,x,(rodTop+rodBottom)/2,z,.022,rodTop-rodBottom,.022,8);
+          cap.userData.lampId=rod.userData.lampId=lamp.id;
         } else {
           cylinder(parent,0xa78a63,x,base+3.84,z,.16,.07,.16,12);
           cylinder(parent,0x998365,x,base+3.66,z,.022,.35,.022,8);
         }
       }
       const shade=cylinder(parent,0xf3debd,x,y+.18,z,.47,.4,.24,20);
-      shade.name=lamp.id;
-      colliders.push(world.addBox(x,y+.18,z,.94,.4,.94));
+      shade.name=lamp.id;shade.userData.lampId=lamp.id;
+      const shadeCollider=world.addBox(x,y+.18,z,.94,.4,.94);
+      shadeCollider.lampId=lamp.id;shade.userData.collider=shadeCollider;colliders.push(shadeCollider);
       // Instancing preserves the live emissive material through static batching.
       transform.position.set(x,y-.025,z); transform.updateMatrix(); glow.setMatrixAt(i,transform.matrix);
     }

@@ -1,6 +1,8 @@
 # Clover House — playable level design
 
-Clover House has two above-ground floors and a full-size utility basement, with 32 solid glazed exterior windows, moderate indoor wood slide, and ceilings that stay visible during play. The layout prioritizes escape choices for pursuit: broad circulation loops, corners that break sightlines, short rabbit-only alternatives, and elevated routes. Food, happiness, the mistress's routine and noise/visibility pursuit are implemented; the current balance is described below.
+Clover House has two above-ground floors and a magical basement containing one of five blue frosted-glass maze designs, with 32 solid glazed exterior windows, moderate indoor wood slide, and ceilings that stay visible during play. The layout prioritizes escape choices for pursuit: broad circulation loops, corners that break sightlines, short rabbit-only alternatives, and elevated routes. Food, happiness, the mistress's routine and noise/visibility pursuit are implemented; the current balance is described below.
+
+The library's basement stairwell begins behind a locked fence. Reaching 200 happiness opens the fence and announces the new route with a popup. Shidan can then use the stairs, and the mistress can follow during pursuit. Her normal routine stays above ground. Maze content uses blue paint on the floor and ceiling as well as the four surrounding walls. The unlock lasts through catches, home returns and pauses; starting a new game restores the fence. Tall stairwell fencing prevents jumping around the locked entrance.
 
 ## Scale and spaces
 
@@ -8,7 +10,7 @@ Coordinates are metres, X east/west, Z north/south, Y up. The garden is north (n
 
 | Space | Extents | Design role |
 | --- | --- | --- |
-| Basement | y −4.2; x −24…24, z −20…20 | 48 × 40 m concrete utility room, pillars and open pursuit space |
+| Basement | y −4.2; x −24…24, z −20…20 | 48 × 40 m magical frosted-glass maze scene, perimeter circulation and central reward carpet |
 | Ground house | x −24…24, z −20…20 | 48 × 40 m footprint, roughly 3.8× the previous ground area |
 | Den | (−16, 12), radius 4, fence 1.1 high | 50.3 m² of bedding, over 3× the previous den area; clear charge runway |
 | Lounge | x −24…−5, z 2…20 | Spawn, mistress couch, sofa and table climbing |
@@ -38,7 +40,11 @@ All exterior elevations now have glazed windows: four broad front windows, six p
 3. **Vertical loop:** entrance stairs → upstairs gallery → reading room → balcony → outdoor stairs → backyard → garden door → cross-hall. Both flights are walkable in either direction.
 4. **Upper room loop:** gallery → bedroom → reading room → studio → gallery. The studio has an exposed two-level shelf and ramp for climbing and charged-jump escapes.
 5. **Outdoor loop:** garden doors / library window → raised beds and hedge → second garden door. The front porch and narrow paths on both sides connect around the exterior.
-6. **Basement detour:** library → west stair flight → utility basement → the same flight back to the library. This has one entrance; pillars and utility equipment offer corners for breaking sight but no protected hiding passage.
+6. **Frosted-glass maze detour:** library → west stair flight → perimeter loop → one of four maze gates → winding passages / central carpet → another gate → the same house stair flight. Full-height frosted privacy-glass walls use 8% transparency (92% opacity), break direct sight and remain solid without creating protected hiding places. Both pane faces use the same blue, unlit frosted finish so warm lighting cannot turn one side yellow. Their cloudy grain is nonreflective and needs no reflection captures. The four outer basement walls are sky blue. The maze has four entrances/exits within the basement; the house keeps its single basement staircase.
+
+The basement scene changes only when starting a new game. Content type is selected first; it currently always selects a maze, leaving a separate selection step for future basement types. Maze selection then chooses one of five fixed designs: Willow Paths, Ribbon Switchbacks, Clockwork Spiral, Twin Courtyards and Four Winds. The previous round's design is excluded. Every design is a 192-cell frosted-glass maze: a 16 × 12 grid with 2.6 × 3.05 m cell spacing occupying x −19.3…22.3, z −18.3…18.3, inside the ground floor's 48 × 40 m footprint. The enlarged 41.6 × 36.6 m maze uses 26.9% more area than before. The outer walls sit 1.48 m from the north, east and south basement walls, with a 1.54 m walking lane beside the west stair cheek. This preserves all four gate approaches while using more of the basement. Narrower passages fit more walls, with meaningful dead ends and multiple escape routes between entrances and the center. A two-by-two-cell, 5.2 × 6.1 m chamber opens around (1.5, −4.2, 0), with four distinct doorways. Every maze entrance has at least two internally vertex-disjoint approaches to the central chamber. Four outer gate openings connect the maze to its surrounding route, allowing different approaches and exits during pursuit. The 200-happiness fence at the house stairs remains in place until unlocked; catches, home returns and menus preserve both the unlock and maze layout.
+
+Ten to twenty randomly placed bonus consumables are separate from household counts and never respawn, including bonus copies of items that normally regenerate upstairs. The central 2.05 m-radius yellow rug has a large carrot drawing, with no dedicated edible carrot there. It also holds permanent special hay and an original small blue rabbit plush, approximately half Shidan’s height. Four additional fixed fountains have independent 100% reserves. Special hay refills energy completely and grants three carried poop balls once per carpet visit. Holding left-click beside the plush for five uninterrupted seconds emits a dense stream of floating hearts and grants 500 happiness once per game. Cancelling before completion allows another attempt. The interaction is globally audible unless the mistress is actively making masking noise; she can catch Shidan normally during it or on the carpet. New games choose another maze design, replenish supplies and reset the plush reward.
 
 The mistress uses the wide doors and stairs, while Shidan can break sight through small passages and alternate exits. The paths are not intended as permanent invulnerability zones.
 
@@ -54,7 +60,7 @@ The mistress uses the wide doors and stairs, while Shidan can break sight throug
 
 The basement floor is at y=−4.2; its ceiling underside is y=−0.22, just under four metres above the floor. Six 0.52 m square pillars stand at x −12, 0 and 12, each at z −6 and 8. The furnace is near (16, −16), with the water heater beside it at (19.5, −16). The concrete floor stops promptly and supports charged jumps.
 
-Six ceiling lamps are arranged at x −16, 0 and 16, each at z −10 and 10. They start at 22% power in daylight and warm to full power through dusk, sharing the existing fixed four-point-light budget. The B1 house-tour view hides the floors above it for inspection; during play the slab ceiling stays in place.
+Six ceiling lamps are centered in grid columns 2, 7 and 13, at rows 2 and 9: x approximately −12.8, 0.2 and 15.8, each at z ±10.68. Their shades, mounts, stems, colliders and glowing diffusers all use those positions, safely clear of the full-height maze walls in all five designs. They start at 22% power in daylight and warm to full power through dusk, sharing the existing fixed four-point-light budget. The B1 house-tour view hides the floors above it for inspection; during play the slab ceiling stays in place.
 
 The mistress has no basement routine, but can pursue, search and catch Shidan underground. The room contains no newly spawned food, chewables or water fountains.
 
@@ -89,7 +95,7 @@ Ordinary hay starts with twelve stacks, up from six. The six added recovery poin
 | Front yard | −11 | 0 | 23 |
 | Backyard | 14 | 0 | −30 |
 
-There are 47 authored snack placements and 46 available at the start of play: 45 regular snacks plus one cake. The old library book slot is now inside the basement stair opening and is excluded, including by the default furnished-world consumable system. No food, chewable or fountain spawns in the basement; the fourteen existing fountains remain above ground. Permanent den hay remains separate. Passive energy recovery is continuous at 0.01 per half second (0.02 per second), with no recovery during pauses; the simultaneous sprint drain still gives a full bar 30 seconds of uninterrupted sprinting.
+There are 47 authored house snack placements and 46 available at the start of play: 45 regular snacks plus one cake. The old library book slot lies in the basement stair opening and is excluded. The maze adds its independent 10–20 random one-use supplies; these do not affect household counts or restock timers. The carrot printed on the central rug is decorative. Four maze fountains supplement the fourteen above ground. Permanent den hay and central maze hay remain separate recovery points. Passive energy recovery is continuous at 0.01 per half second (0.02 per second), with no recovery during pauses; simultaneous sprint drain still gives a full bar 30 seconds of uninterrupted sprinting.
 
 Shidan walks silently for both audio and AI hearing. Only moving sprints generate footstep effects and local movement noise; actual long jumps and happiness-granting chewing retain their existing noise rules. The mistress starts chasing at 60% of the current terrain sprint speed, increasing to 65%, 70%, 75% and 80% after 2, 4, 6 and 8 minutes. Puddle rage still adds its existing movement bonus.
 

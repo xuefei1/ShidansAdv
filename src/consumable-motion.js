@@ -21,7 +21,7 @@ export class ConsumableMotion {
   canPlace(body,dx,dz) {
     const b=body.box,minX=b.minX+dx,maxX=b.maxX+dx,minZ=b.minZ+dz,maxZ=b.maxZ+dz;
     if(minX<BOUNDS.minX+.01||maxX>BOUNDS.maxX-.01||minZ<BOUNDS.minZ+.01||maxZ>BOUNDS.maxZ-.01)return false;
-    if(b.minY<DEN.fenceHeight) {
+    if(b.minY<DEN.fenceHeight&&b.maxY>0) {
       const old=Math.hypot(body.item.x-DEN.x,body.item.z-DEN.z),next=Math.hypot(body.item.x+dx-DEN.x,body.item.z+dz-DEN.z);
       const radius=Math.hypot(maxX-minX,maxZ-minZ)/2;
       if(old<DEN.radius && next+radius>DEN.radius-.025)return false;
