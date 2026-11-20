@@ -18,6 +18,8 @@ Captured from the playable v0.3.0 build. Click an image to view it at full size.
 
 ## Play
 
+**Play online:** [Shidan’s Adventure on GitHub Pages](https://xuefei1.github.io/ShidansAdv/). Use a desktop browser with WebGL 2, a keyboard and a mouse. Scores stay in the browser you play in.
+
 **Windows:** double-click `Start-Game.cmd`.
 
 **macOS (Apple silicon or Intel):** install [Node.js LTS](https://nodejs.org/en/download) once, then double-click `Start-Game.command`. The launcher opens the game in your default browser. Keep its Terminal window open while playing; Control-C stops the server. If Finder reports a permission problem after downloading a ZIP, open Terminal in the project folder and run `bash Start-Game.command` instead. See [the macOS guide](docs/MACOS.md).

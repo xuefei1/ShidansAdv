@@ -1,7 +1,11 @@
-name: Check game
+name: Check game and publish to Pages
 on:
   push:
   pull_request:
+  workflow_dispatch:
+concurrency:
+  group: game-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -12,10 +16,13 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
         with:
           node-version: '22'
+          package-manager-cache: false
       - run: node scripts/check.mjs
       - run: node --test
       - run: node scripts/build.mjs
@@ -30,3 +37,24 @@ jobs:
           GAME_PID=$!
           trap 'kill "$GAME_PID" 2>/dev/null || true' EXIT
           node scripts/smoke-server.mjs http://127.0.0.1:4317
+      - name: Package the playable build for Pages
+        if: runner.os == 'Linux' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+
+  deploy:
+    name: Publish the game
+    needs: verify
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
