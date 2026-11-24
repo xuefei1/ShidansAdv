@@ -1,6 +1,7 @@
 export function bindTouchControls({
-  canvas, stick, jump, interact, sprint, poop, pee, canControl,
+  canvas, stick, jump, interact, sprint, poop, pee, rear, canControl,
   onMove, onLook, onJump, onPrimary, onSprint, onPoop, onPee,
+  onRear = () => {},
   window = canvas.ownerDocument.defaultView, document = canvas.ownerDocument
 }) {
   const contacts = new Map(), occupied = new Set(), removers = [];
@@ -41,6 +42,7 @@ export function bindTouchControls({
       onMove(0, 0); setRun(false);
     } else if (target === jump) onJump(false, cancel);
     else if (target === interact) onPrimary(false, cancel);
+    else if (target === rear) onRear(false);
   }
   function reset() {
     for (const id of [...contacts.keys()]) finish(id, true);
@@ -64,8 +66,9 @@ export function bindTouchControls({
     else if (target === sprint) setRun(!running);
     else if (target === poop) onPoop();
     else if (target === pee) onPee();
+    else if (target === rear) onRear(true);
   }
-  for (const target of [canvas, stick, jump, interact, sprint, poop, pee]) {
+  for (const target of [canvas, stick, jump, interact, sprint, poop, pee, rear].filter(Boolean)) {
     listen(target, 'pointerdown', event => begin(target, event), { passive: false });
     listen(target, 'lostpointercapture', event => {
       if (contacts.get(event.pointerId)?.target === target) finish(event.pointerId, true);

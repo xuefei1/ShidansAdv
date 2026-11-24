@@ -36,7 +36,9 @@ Open **http://localhost:4173** if the browser does not open automatically. No pa
 
 Choose **Auto**, **Touch**, or **Keyboard & mouse** at the title screen or in the pause menu. Auto uses the device’s pointing capabilities to choose a default, then follows actual gameplay input on hybrids. Typing a player name doesn’t change the mode. An explicit choice is remembered in this browser and wins over automatic detection. The HUD uses the available screen space independently: a small window with a mouse gets a compact HUD, and a large tablet can still show touch controls.
 
-**Touch:** Drag the left stick to move and swipe the open scene to look around. Tap the sprint control to toggle running. Tap **Jump** for a hop; for a long jump, hold the stick outward with one thumb and hold, then release **Jump** with the other. Hold the interaction button near a target to eat, drink, or kiss the plush; lift to stop. Tap the poop or pee button to use it when ready. Use Pause for options instead of a keyboard shortcut.
+**Touch.** Drag the left stick to move. The camera follows behind Shidan as she turns. Swipe the open scene to look around. The camera returns behind her three seconds after your last swipe movement, or sooner if you start moving again. Hold **Rear** to look behind her while steering. Release it to face forward again.
+
+Tap **Sprint** to toggle running. Tap **Jump** for a hop; for a long jump, hold the stick outward with one thumb and hold, then release **Jump** with the other. Hold the interaction button near a target to eat, drink, or kiss the plush; lift to stop. Tap the poop or pee button to use it when ready. Use Pause for options instead of a keyboard shortcut.
 
 Touch play uses landscape. Starting play requests fullscreen and landscape where the browser allows it. If the rotate prompt appears, turn the device sideways; the game clock does not run while that prompt is blocking play. Keyboard and mouse play works in either orientation.
 

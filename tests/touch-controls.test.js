@@ -7,7 +7,7 @@ function fixture() {
   const events = [], nodes = {}, input = { x: 0, z: 0, jump: false, run: false };
   const window = new EventTarget(), document = new EventTarget();
   const state = { allowed: true };
-  for (const name of ['canvas', 'stick', 'jump', 'interact', 'sprint', 'poop', 'pee']) {
+  for (const name of ['canvas', 'stick', 'jump', 'interact', 'sprint', 'poop', 'pee', 'rear']) {
     const node = new EventTarget(), captures = new Set(), classes = new Set(), properties = new Map();
     node.style = { setProperty: properties.set.bind(properties), removeProperty: properties.delete.bind(properties) };
     node.classList = { add: classes.add.bind(classes), remove: classes.delete.bind(classes) };
@@ -22,6 +22,7 @@ function fixture() {
     onMove: (right, forward) => { input.x = right; input.z = -forward; },
     onJump: (held, cancelled) => { events.push(['jump', held, cancelled]); input.jump = held; },
     onPrimary: (...args) => events.push(['interact', ...args]), onLook: (...args) => events.push(['look', ...args]),
+    onRear: held => events.push(['rear', held]),
     onSprint: active => { input.run = active; }, onPoop: () => events.push(['poop']), onPee: () => events.push(['pee'])
   });
   function emit(target, name, pointerId = 0, clientX = 50, clientY = 50, options = {}) {
@@ -58,6 +59,30 @@ test('steering has a dead zone, proportional travel and capped diagonals indepen
   assert.ok(view.input.x > 0 && view.input.z < 0);
   assert.deepEqual(view.events, [['look', 30, -10]]);
   view.emit(view.window, 'pointerup', 20); assert.ok(view.input.x > 0);
+});
+
+test('rear view follows its own finger while steering and swiping, including capture loss', () => {
+  const view = fixture();
+  view.emit(view.stick, 'pointerdown', 1, 100, 50);
+  view.emit(view.canvas, 'pointerdown', 2);
+  view.emit(view.rear, 'pointerdown', 3);
+  view.emit(view.rear, 'pointerdown', 4);
+  view.emit(view.window, 'pointerup', 4);
+  view.emit(view.window, 'pointercancel', 2);
+  assert.deepEqual(view.events, [['rear', true]]);
+  assert.equal(view.rear.hasPointerCapture(3), true);
+  view.emit(view.rear, 'lostpointercapture', 3);
+  view.emit(view.window, 'pointerup', 3);
+  assert.deepEqual(view.events.slice(1), [['rear', false]]);
+  assert.equal(view.input.x, 1);
+  view.emit(view.rear, 'pointerdown', 5);
+  view.emit(view.window, 'pointerup', 5);
+  assert.deepEqual(view.events.slice(2), [['rear', true], ['rear', false]]);
+  view.emit(view.canvas, 'pointerdown', 6);
+  view.emit(view.rear, 'pointerdown', 7);
+  view.controls.reset();
+  assert.deepEqual(view.events.slice(4), [['rear', true], ['rear', false]]);
+  assert.equal(view.input.x, 0);
 });
 
 test('cancellation clears holds without sending a normal jump release or repeating a primary action', () => {

@@ -54,7 +54,7 @@ document.getElementById('run').onclick=async()=>{
     click('play');check('Blank name cannot start a round',!game().getElementById('welcome').hidden);
     game().getElementById('player-name').value='Happiness QA';click('play');await until(()=>canvas().dataset.mode==='play','Start named run');
     check('Named round starts with zero happiness and the full initial item population',score()===0&&canvas().dataset.chewableCount===initialChewables&&canvas().dataset.consumableCount===initialConsumables&&Number(initialChewables)>0);
-    check('Special hay prompt uses its four-second reward-based hold',game().getElementById('consume-action').textContent.includes('4 seconds'));
+    check('Special hay prompt uses its four-second reward-based hold',game().getElementById('consume-action').textContent.includes('4s'));
     mouse('mousedown');await until(()=>canvas().dataset.lastConsumedId==='den-hay','Eat special hay');mouse('mouseup');check('Permanent hay never farms happiness',score()===0);
     const yaw=Number(canvas().dataset.camera.split(',')[0]);mouse('mousedown');
     frame.contentWindow.dispatchEvent(new frame.contentWindow.MouseEvent('mousemove',{clientX:300+yaw/.003,clientY:400}));mouse('mouseup');

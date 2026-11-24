@@ -9,6 +9,7 @@ import { createTerrainBackdrop } from './terrain-backdrop.js';
 import { drawLevelMap } from './level-map.js';
 import { bindMouseControls } from './mouse.js';
 import { bindTouchControls } from './touch-controls.js';
+import { TouchCamera } from './touch-camera.js';
 import { createInputMode } from './input-mode.js';
 import { createLandscapeSession } from './landscape-session.js';
 import { createPoopBalls } from './poop.js';
@@ -314,12 +315,15 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     updateHUD();
   }
   const landscape=createLandscapeSession({window,document});
+  const touchCamera=new TouchCamera();
+  function cameraYaw() {return touchCamera.rear ? controller.facing : yaw;}
   function inPlay() {return mode==='play'&&!overview&&!mapOpen&&!rotateBlocked&&!document.hidden;}
   function onLook(dx,dy) {yaw-=dx*.003;pitch=clamp(pitch+dy*.0027,.06,1.15);}
   function movement() {
     const forward=stickForward+Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown'));
     const right=stickRight+Number(keys.has('KeyD')||keys.has('ArrowRight'))-Number(keys.has('KeyA')||keys.has('ArrowLeft'));
-    return {x:-Math.sin(yaw)*forward+Math.cos(yaw)*right,z:-Math.cos(yaw)*forward-Math.sin(yaw)*right};
+    const steeringYaw=touchCamera.movementYaw??yaw;
+    return {x:-Math.sin(steeringYaw)*forward+Math.cos(steeringYaw)*right,z:-Math.cos(steeringYaw)*forward-Math.sin(steeringYaw)*right};
   }
   function jumpEdge(held,cancelled=false) {
     if(cancelled) {queuedHop=false;jumpSeen=false;controller.releaseInput();}
@@ -337,14 +341,20 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   });
   canvas.addEventListener('pointerdown',event=>{if(inPlay())inputMode.noteGameplay(event);},{capture:true});
   const touch=bindTouchControls({
-    canvas,stick:$('touch-stick'),jump:$('touch-jump'),interact:$('touch-interact'),sprint:$('touch-sprint'),poop:$('touch-poop'),pee:$('touch-pee'),
+    canvas,stick:$('touch-stick'),jump:$('touch-jump'),interact:$('touch-interact'),sprint:$('touch-sprint'),poop:$('touch-poop'),pee:$('touch-pee'),rear:$('touch-rear'),
     canControl:()=>inputMode.mode==='touch'&&inPlay()&&!water.system.peeing&&!mistress.playerLocked,
-    onMove:(right,forward)=>{stickRight=right;stickForward=forward;},onLook,
+    onMove:(right,forward)=>{stickRight=right;stickForward=forward;touchCamera.setMovement(right,forward,yaw);},
+    onLook:(dx,dy)=>{
+      if(touchCamera.rear||(!dx&&!dy))return;
+      touchCamera.noteSwipe(performance.now());
+      onLook(dx,dy);
+    },
+    onRear:held=>{touchCamera.setRear(held);cameraInitialized=false;},
     onJump:(held,cancelled)=>{touchJump=held;jumpEdge(held,cancelled);},
     onPrimary:primaryAction,onSprint:active=>{touchSprint=active;},onPoop:dropPoop,onPee:peeAction
   });
   function cancelHolds() {
-    keys.clear();touch.reset();mouse.clear(true);water.system.stop();consumables.system.cancel();mazeHeart.action.cancel();
+    keys.clear();touch.reset();touchCamera.reset();mouse.clear(true);water.system.stop();consumables.system.cancel();mazeHeart.action.cancel();
     controller.releaseInput();queuedHop=false;jumpSeen=false;
   }
   function syncInputMode() {
@@ -424,7 +434,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     landscape.enter(inputMode.mode);
     setHidden('day-ended',true);
     escaped = upstairs = false; discovered.clear();
-    reset(); showGame(); lock(); toast('Watch her floor pattern: amber sight, blue noise masking. Her vision stays active while she laughs. The den is safe.', 6);
+    reset(); showGame(); lock(); toast('The cone shows her view. Blue means she can’t hear you.', 4);
   }
   $('play').addEventListener('click',startAdventure);
   $('player-name').addEventListener('input',()=>{$('player-name').setCustomValidity('');});
@@ -659,8 +669,9 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     } else {
       const follow=mistress.playerLocked&&captureVisual.active?rabbit.root.position:controller;
       target.set(follow.x, follow.y + .62, follow.z);
-      desiredCamera.set(follow.x + Math.sin(yaw) * Math.cos(pitch) * distance,
-        target.y + Math.sin(pitch) * distance, follow.z + Math.cos(yaw) * Math.cos(pitch) * distance);
+      const viewYaw=cameraYaw();
+      desiredCamera.set(follow.x + Math.sin(viewYaw) * Math.cos(pitch) * distance,
+        target.y + Math.sin(pitch) * distance, follow.z + Math.cos(viewYaw) * Math.cos(pitch) * distance);
       // Prevent camera clipping through the real floor, furniture and back/side walls.
       desiredCamera.x = clamp(desiredCamera.x, BOUNDS.minX, BOUNDS.maxX); desiredCamera.z = clamp(desiredCamera.z, BOUNDS.minZ, BOUNDS.maxZ);
       cameraRay.origin.copy(target); cameraRay.direction.copy(desiredCamera).sub(target).normalize();
@@ -705,9 +716,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     $('energy-panel').dataset.low = String(controller.energy.value < 10);
     $('energy-panel').dataset.recovering = String(controller.energy.recovering);
     const usingTouch=inputMode.mode==='touch';
-    const holdControl=usingTouch?'hold the action button':'hold left mouse';
-    const peeControl=usingTouch?'tap Pee':'press Q to pee';
-    setText('energy-status', controller.energy.recovering ? 'Restoring energy…' : controller.sprintExhausted ? (usingTouch?'Rest to recover · toggle Sprint off':'Rest to recover · release Shift to sprint') : controller.sprinting ? 'Sprinting · using energy' : 'Restoring 0.01% every 0.5 seconds');
+    setText('energy-status', controller.energy.recovering ? 'Recovering…' : controller.sprintExhausted ? (usingTouch?'Rest · toggle Sprint off':'Rest · release Shift') : controller.sprinting ? 'Sprinting' : '+0.01% every 0.5 seconds');
     const bladderValue=water.system.bladder.value;
     // Do not round a nearly full bladder up to a misleading 100.00%.
     const bladder=(bladderValue<100 ? Math.min(bladderValue,99.99) : bladderValue).toFixed(2), drinkWait=water.system.cooldownRemaining;
@@ -715,8 +724,9 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     setText('bladder-value',`${bladder}%`); $('bladder-fill').style.width=`${bladder}%`;
     $('bladder-meter').setAttribute('aria-valuenow',bladder);
     $('bladder-panel').dataset.full=String(water.system.bladder.value===100);
-    setText('bladder-status',water.system.peeing ? 'Emptying bladder · actions locked' : drinkWait>0 ? `${water.system.pending?'Keep holding · ready':'Drink again'} in ${cooldownText(drinkWait)}s` : water.system.bladder.value===100 ? `Full · ${peeControl}` : water.system.drinking ? 'Drinking · +10% per second' : nearbyWater===0 ? 'Fountain empty · try another room' : usingTouch?'Hold Drink near a fountain':'Hold left-click near a fountain');
-    setText('pee-cooldown',water.system.peeing ? `Peeing · ${cooldownText(water.system.peeRemaining)}s` : drinkWait>0 ? `Pee ready in ${cooldownText(drinkWait)}s` : water.system.bladder.value===100 ? (usingTouch?'Pee ready':'Q · pee ready · 0.0s') : (usingTouch?'Fill to 100%':'Q · fill to 100%'));
+    setText('bladder-status',water.system.peeing ? 'Movement locked' : drinkWait>0 ? (water.system.pending?'Keep holding to drink':'Drinking on cooldown') : bladderValue===100 ? (usingTouch?'Tap Pee':'Press Q to pee') : water.system.drinking ? 'Drinking · +10%/s' : nearbyWater===0 ? 'Fountain empty' : usingTouch?'Hold Drink at a fountain':'Hold left-click at a fountain');
+    setText('pee-cooldown',water.system.peeing ? `Peeing · ${cooldownText(water.system.peeRemaining)}s` : drinkWait>0 ? `Pee in ${cooldownText(drinkWait)}s` : bladderValue===100 ? 'Pee ready' : (usingTouch?'Fill to 100%':'Q · fill to 100%'));
+    $('pee-cooldown').toggleAttribute('data-active',water.system.peeing||drinkWait>0);
     setHidden('pee-progress',!water.system.peeing);
     $('pee-fill').style.width=`${water.system.peeProgress*100}%`;
     $('pee-progress').setAttribute('aria-valuenow',(water.system.peeProgress*100).toFixed(0));
@@ -731,8 +741,9 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
       $('touch-poop').disabled=poopWait>0||!poop.supply.value||water.system.peeing||mistress.playerLocked;
       $('touch-pee').disabled=bladderValue<100||drinkWait>0||water.system.peeing||mistress.playerLocked;
     }
-    setText('poop-status',water.system.peeing ? 'Wait until peeing finishes' : poop.supply.value===0 ? 'Eat to replenish your supply' : usingTouch?'Tap Poop':'Right-click or P');
-    setText('poop-cooldown',poopWait>0 ? `Poop ready in ${cooldownText(poopWait)}s` : 'Poop ready · 0.0s');
+    setText('poop-status',water.system.peeing ? 'Wait until finished peeing' : poop.supply.value===0 ? 'Eat to refill' : usingTouch?'Tap Poop':'Right-click or P');
+    setText('poop-cooldown',poopWait>0 ? `Poop in ${cooldownText(poopWait)}s` : poop.supply.value>0&&!water.system.peeing ? 'Ready' : '');
+    $('poop-cooldown').toggleAttribute('data-active',poopWait>0);
     setData('poopSupply',String(poop.supply.value)); setData('poopCapacity',String(MAX_CARRIED_POOP));
     setData('poopCooldown',poopWait.toFixed(3)); setData('denHayPoopReady',String(poop.supply.denHayRewardAvailable));
     setData('bladder',bladder); setData('drinking',String(water.system.drinking)); setData('drinkCooldown',drinkWait.toFixed(3));
@@ -747,11 +758,11 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
       const fountain=nearby.id.startsWith('fountain-');
       setHidden('consume-meter',fountain);
       if(fountain) {
-        setText('consume-name','Water fountain'); setText('consume-energy',`${nearbyWater.toFixed(1)}% water left · +10% bladder per second`);
-        setText('consume-action',nearbyWater===0 ? 'Empty · refills next round' : drinkWait>0 ? (water.system.pending?`Keep holding · drink in ${cooldownText(drinkWait)}s`:`Wait ${Math.ceil(drinkWait)}s after peeing`) : water.system.bladder.value===100 ? `Bladder full · ${peeControl}` : `Drink · ${holdControl}`);
+        setText('consume-name','Water fountain'); setText('consume-energy',`${nearbyWater.toFixed(1)}% water · +10% bladder/s`);
+        setText('consume-action',nearbyWater===0 ? 'Empty · refills next round' : drinkWait>0 ? (water.system.pending?`Keep holding · ${cooldownText(drinkWait)}s`:`Drink in ${Math.ceil(drinkWait)}s`) : bladderValue===100 ? `Full · ${usingTouch?'tap Pee':'press Q'}` : usingTouch?'Hold Drink':'Hold left-click to drink');
       } else if(nearby===mazeHeart.item) {
-        setText('consume-name','Blue bunny plush');setText('consume-energy',mazeHeart.action.completed?'Already shared a special moment':'+500 happiness · once per adventure');
-        setText('consume-action',mazeHeart.action.completed?'Come back next adventure for another kiss':`Give a kiss · ${holdControl} for ${AFFECTION_SECONDS} seconds`);
+        setText('consume-name','Blue bunny plush');setText('consume-energy',mazeHeart.action.completed?'Kissed this round':'+500 happiness · once');
+        setText('consume-action',mazeHeart.action.completed?'':`${usingTouch?'Hold Kiss':'Hold left-click to kiss'} · ${AFFECTION_SECONDS}s`);
         $('consume-fill').style.width=`${mazeHeart.action.fraction*100}%`;
         $('consume-meter').setAttribute('aria-valuenow',(mazeHeart.action.fraction*100).toFixed(0));
       } else {
@@ -759,7 +770,9 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
         const poopReward=nearby.permanent&&!(nearby.mazeHay?poop.supply.mazeHayRewardAvailable:poop.supply.denHayRewardAvailable) ? 0 : type.poop||0;
         const rewards=[nearby.permanent ? '100% energy' : type.energy ? `+${type.energy} energy` : '',type.happiness ? `+${type.happiness} happiness` : '',poopReward ? `+${poopReward} poop balls` : ''].filter(Boolean).join(' · ');
         setText('consume-name', type.name); setText('consume-energy', rewards);
-        setText('consume-action',`${type.verb} · ${holdControl} for ${seconds} ${seconds>1 ? 'seconds' : 'second'}${nearby.permanent&&!poopReward ? ' · leave and re-enter for more poop' : ''}`);
+        const buttonLabel=type.verb==='Chew'?'Chew':'Eat';
+        const hold=usingTouch?`Hold ${buttonLabel}`:'Hold left-click';
+        setText('consume-action',`${hold} · ${seconds}s${nearby.permanent&&!poopReward ? ' · re-enter for more balls' : ''}`);
         $('consume-fill').style.width = `${progress*100}%`;
         $('consume-meter').setAttribute('aria-valuenow', (progress*100).toFixed(0));
       }
@@ -787,7 +800,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     setText('floor-label', onStairs ? 'ON THE STAIRS' :floor===-1?'BASEMENT': ['yard', 'front-yard', 'balcony'].includes(room?.id) ? 'OUTSIDE' : high ? 'UPSTAIRS' : 'GROUND FLOOR');
     setText('map-floor',floor===-1?'B1':high?'2F':'1F');
     setText('location', onStairs ? (controller.y<0?'The basement stairs':'A little climb') : floor===-1 ? 'The frosted-glass maze' : distFromDen < DEN.radius && floor===0 ? 'Shidan’s den' : room?.name || 'The garden path');
-    const surfaces = { bedding: 'Soft bedding · good grip', carpet: 'Cozy carpet · good grip', wood: 'Wooden floor · a little slide', stairs: 'Stair runner · steady paws', grass: 'Soft grass · sure-footed paws', deck: 'Outdoor deck · sure-footed paws',concrete:'Cement floor · sure-footed paws' };
+    const surfaces = { bedding: 'Bedding · firm grip', carpet: 'Carpet · firm grip', wood: 'Wood · slippery', stairs: 'Stairs · firm grip', grass: 'Grass · firm grip', deck: 'Deck · firm grip', concrete: 'Cement · firm grip' };
     setText('surface', surfaces[controller.surface]);
     if (canvas.dataset.surface !== controller.surface) $('surface-dot').style.background = controller.surface === 'wood' ? '#bd995d' : '#91a773';
     setHidden('charge', !controller.charging);
@@ -810,14 +823,15 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
         discovered.add(l.id); toast(`A little discovery: ${l.name.toLowerCase()} (${discovered.size}/${LANDMARKS.length})`, 5); sound.chime();
       }
     }
-    setText('discoveries', `${discovered.size} / ${LANDMARKS.length} little discoveries`);
+    setText('discoveries', `${discovered.size} / ${LANDMARKS.length} discoveries`);
     setData('escaped',String(escaped));
     if (time > toastUntil) setHidden('toast', true);
     if (time > basementNoticeUntil) setHidden('basement-notice', true);
     // Useful DOM-level telemetry for browser QA, without exposing a mutable debug API.
     setData('position', `${controller.x.toFixed(2)},${controller.y.toFixed(2)},${controller.z.toFixed(2)}`);
     setData('surface', controller.surface); setData('mode', mode); setData('grounded', String(controller.grounded));
-    setData('camera', `${yaw.toFixed(2)},${pitch.toFixed(2)}`);
+    setData('camera', `${cameraYaw().toFixed(2)},${pitch.toFixed(2)}`);
+    setData('facing',controller.facing.toFixed(3));
     setData('poopCount', String(poop.physics.count));
     setData('poopActive', String(poop.physics.active.size));
     setData('noiseSequence',String(noise.sequence));setData('noiseCount',String(noise.events.length));
@@ -986,6 +1000,9 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     const action=syncRabbitModel();
     const mistressPosition=mistress.renderPosition;syncMistressModel();
     setData('rabbitAction',action);
+    if(inputMode.mode==='touch'&&inPlay()&&!mistress.playerLocked) {
+      ({yaw,pitch}=touchCamera.update(yaw,pitch,controller.facing,now,dt));
+    }
     updateCamera(dt);
     const surveying = overview || mode === 'tour' || (mode === 'pause' && previousMode === 'tour');
     const lightingAnchor=surveying?{x:controller.x,y:surveyFloor*FLOOR_HEIGHT,z:controller.z}:controller;
