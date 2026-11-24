@@ -3,7 +3,7 @@
 export function bindMouseControls({ canvas, document, window, canControl, onLook, onPoop, onLockChange, onLockDenied, onPrimary = () => {} }) {
   let dragging = false, primaryHeld = false, lastX = 0, lastY = 0, pending = false, wasLocked = false;
   const denied = () => { pending = false; onLockDenied(); };
-  const clear = () => { dragging = false; if (primaryHeld) { primaryHeld = false; onPrimary(false); } };
+  const clear = (cancelled=false) => { dragging = false; if (primaryHeld) { primaryHeld = false; if(cancelled===true)onPrimary(false,true);else onPrimary(false); } };
   function unlock() {
     clear();
     try { if (document.pointerLockElement === canvas) document.exitPointerLock?.(); } catch { denied(); }
@@ -29,7 +29,7 @@ export function bindMouseControls({ canvas, document, window, canControl, onLook
     onLockChange(locked, lostLock);
   });
   canvas.addEventListener('mousedown', event => {
-    if (!canControl()) return;
+    if (!canControl() || event.sourceCapabilities?.firesTouchEvents) return;
     if (event.button === 2) { event.preventDefault(); canvas.focus(); onPoop(); return; }
     if (event.button !== 0) return;
     canvas.focus(); dragging = true; lastX = event.clientX; lastY = event.clientY;

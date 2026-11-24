@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><title>Shidan · Touch controls QA</title>
+  <style>
+    body{margin:0;background:#ecf0df;color:#344a39;font:14px system-ui}
+    header{padding:12px 18px;display:flex;align-items:center;gap:16px}button{padding:8px 14px}
+    #results{max-height:135px;overflow:auto}.fail{color:#973721}iframe{display:block;border:0;background:#e6e4d4}
+  </style>
+</head>
+<body>
+  <header><b>Touch play &amp; compact HUD</b><button id="run">Run touch checks</button><span id="status" role="status">Ready</span></header>
+  <ol id="results"></ol><iframe id="app" title="Game running at the test viewport" width="844" height="390" allow="fullscreen 'none'"></iframe>
+  <script type="module" src="./touch-qa.js"></script>
+</body></html>

@@ -8,6 +8,9 @@ import { FLOOR_HEIGHT, BOUNDS, HOUSE, LANDMARKS, roomAt, floorAt } from './layou
 import { createTerrainBackdrop } from './terrain-backdrop.js';
 import { drawLevelMap } from './level-map.js';
 import { bindMouseControls } from './mouse.js';
+import { bindTouchControls } from './touch-controls.js';
+import { createInputMode } from './input-mode.js';
+import { createLandscapeSession } from './landscape-session.js';
 import { createPoopBalls } from './poop.js';
 import { upperRoomsVisible, basementRoomsVisible } from './visibility.js';
 import { createRenderProfile } from './render-profile.js';
@@ -59,6 +62,7 @@ window.addEventListener('error', event => {
 // uses real time through start.js; there are no time cheats in the game controls.
 export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMovementPerFrame=.1,mazeRandom=Math.random}={}) {
   renderConsumableLegend($('consumable-legend-rows'));
+  renderConsumableLegend($('pause-legend-rows'));
   $('play').disabled = $('tour').disabled = true;
   $('load-status').hidden = false;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -132,6 +136,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   setText('effects-volume-value',`${Math.round(sound.volume*100)}%`);
   $('effects-volume').setAttribute('aria-valuetext',`${Math.round(sound.volume*100)} percent`);
   const keys = new Set();
+  let stickRight=0,stickForward=0,touchJump=false,touchSprint=false,rotateBlocked=false,allowPortrait=false;
   let mode = 'title', previousMode = 'play', overview = false, mapOpen = false, surveyFloor = 0, gardenView = false;
   let roofView=false;
   const discovered = new Set();
@@ -193,8 +198,8 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   function settlePursuitEvents() {
     for(const event of mistress.takeEvents()) {
       if(event.kind==='caught'||event.kind==='return-den') {
-        keys.clear();mouse.clear();water.system.stop();consumables.system.cancel();
-        controller.releaseInput();controller.vx=controller.vy=controller.vz=0;controller.sprinting=false;queuedHop=false;jumpSeen=false;
+        cancelHolds();
+        controller.vx=controller.vy=controller.vz=0;controller.sprinting=false;
         noise.update(0,controller,{locked:true});
       }
       if(event.kind==='caught') {
@@ -291,7 +296,8 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     }
     updateHUD();
   }
-  function primaryAction(held) {
+  function primaryAction(held,cancelled=false) {
+    if(cancelled) {water.system.stop();consumables.system.cancel();mazeHeart.action.cancel();return;}
     // Settle the preceding active interval before changing the held action.
     // A 0.1-second drink earns exactly 1%, regardless of rendering speed.
     advanceResources();
@@ -307,27 +313,83 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     }
     updateHUD();
   }
+  const landscape=createLandscapeSession({window,document});
+  function inPlay() {return mode==='play'&&!overview&&!mapOpen&&!rotateBlocked&&!document.hidden;}
+  function onLook(dx,dy) {yaw-=dx*.003;pitch=clamp(pitch+dy*.0027,.06,1.15);}
+  function movement() {
+    const forward=stickForward+Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown'));
+    const right=stickRight+Number(keys.has('KeyD')||keys.has('ArrowRight'))-Number(keys.has('KeyA')||keys.has('ArrowLeft'));
+    return {x:-Math.sin(yaw)*forward+Math.cos(yaw)*right,z:-Math.cos(yaw)*forward-Math.sin(yaw)*right};
+  }
+  function jumpEdge(held,cancelled=false) {
+    if(cancelled) {queuedHop=false;jumpSeen=false;controller.releaseInput();}
+    else if(held) jumpSeen=false;
+    else if(!jumpSeen&&inPlay()) queuedHop=true;
+  }
+  const inputMode=createInputMode({window,storage,onChange:syncInputMode});
   const mouse = bindMouseControls({
-    canvas, document, window, canControl: () => mode === 'play' && !overview && !mapOpen,
-    onLook: (dx, dy) => { yaw -= dx * .003; pitch = clamp(pitch + dy * .0027, .06, 1.15); },
+    canvas, document, window, canControl: () => inputMode.mode==='desktop'&&inPlay(),
+    onLook,
     onPoop: dropPoop,
     onPrimary: primaryAction,
     onLockDenied: () => { $('camera-hint').hidden = false; setText('camera-hint', 'Drag to look · hold left-click to eat or drink · scroll to zoom'); },
-    onLockChange: (locked, lostLock) => { $('camera-hint').hidden = locked; if (lostLock && mode === 'play' && !overview && !mapOpen) pause(); },
+    onLockChange: (locked, lostLock) => { $('camera-hint').hidden = locked||inputMode.mode==='touch'; if (lostLock && inputMode.mode==='desktop'&&inPlay()) pause(); },
   });
+  canvas.addEventListener('pointerdown',event=>{if(inPlay())inputMode.noteGameplay(event);},{capture:true});
+  const touch=bindTouchControls({
+    canvas,stick:$('touch-stick'),jump:$('touch-jump'),interact:$('touch-interact'),sprint:$('touch-sprint'),poop:$('touch-poop'),pee:$('touch-pee'),
+    canControl:()=>inputMode.mode==='touch'&&inPlay()&&!water.system.peeing&&!mistress.playerLocked,
+    onMove:(right,forward)=>{stickRight=right;stickForward=forward;},onLook,
+    onJump:(held,cancelled)=>{touchJump=held;jumpEdge(held,cancelled);},
+    onPrimary:primaryAction,onSprint:active=>{touchSprint=active;},onPoop:dropPoop,onPee:peeAction
+  });
+  function cancelHolds() {
+    keys.clear();touch.reset();mouse.clear(true);water.system.stop();consumables.system.cancel();mazeHeart.action.cancel();
+    controller.releaseInput();queuedHop=false;jumpSeen=false;
+  }
+  function syncInputMode() {
+    const changed=document.body.dataset.inputMode!==inputMode.mode;
+    document.body.dataset.inputMode=inputMode.mode;
+    for(const id of ['input-preference-title','input-preference-pause']) $(id).value=inputMode.preference;
+    if(changed) {
+      cancelHolds();allowPortrait=false;
+      if(inputMode.mode==='touch') mouse.unlock();else landscape.leave();
+      syncOrientation();
+      if(inPlay()) canvas.focus();
+    }
+    setHidden('touch-controls',inputMode.mode!=='touch'||!inPlay());
+    setHidden('camera-hint',inputMode.mode==='touch'||document.pointerLockElement===canvas);
+    renderDirty=true;
+  }
+  for(const id of ['input-preference-title','input-preference-pause']) {
+    $(id).addEventListener('change',()=>inputMode.setPreference($(id).value));
+  }
+  function syncOrientation() {
+    if(innerWidth>=innerHeight)allowPortrait=false;
+    const blocked=mode==='play'&&!overview&&!mapOpen&&!allowPortrait&&landscape.portraitBlocked(inputMode.mode);
+    const changed=blocked!==rotateBlocked;
+    setHidden('rotate-notice',!blocked);
+    if(changed) {
+      rotateBlocked=blocked;cancelHolds();
+      dayClock.setActive(inPlay(),clockNow());renderDirty=true;
+      if(blocked)$('rotate-continue').focus();else if(inPlay())canvas.focus();
+    }
+    setHidden('touch-controls',inputMode.mode!=='touch'||!inPlay());
+  }
+  $('rotate-continue').addEventListener('click',()=>{allowPortrait=true;syncOrientation();});
   function clearInput() {
     mazeHeart.action.cancel();
     advanceResources();
     noise.update(0,controller,{locked:true});
-    keys.clear(); mouse.clear(); water.system.stop(); consumables.system.cancel(); setHidden('consume-prompt', true); queuedHop = false; jumpSeen = false; controller.releaseInput();
-    dayClock.setActive(mode==='play' && !overview && !mapOpen && !document.hidden,clockNow());
+    cancelHolds();setHidden('consume-prompt',true);syncOrientation();
+    dayClock.setActive(inPlay(),clockNow());
   }
   const { lock, unlock } = mouse;
   function showGame() {
     document.body.classList.add('playing'); document.body.classList.remove('touring');
     $('welcome').hidden = true; $('intro-caption').hidden = true; $('intro-footer').hidden = true;
     $('hud').hidden = false; $('menu-button').hidden = false; $('pause').hidden = true;$('game-over').hidden=true;
-    mode = 'play'; overview = false; mapOpen = false; $('atlas').hidden = true; cameraInitialized = false; clearInput(); canvas.focus();
+    mode = 'play'; overview = false; mapOpen = false; $('atlas').hidden = true; cameraInitialized = false; clearInput(); if(!rotateBlocked)canvas.focus();
     $('menu-button').innerHTML = 'Pause <kbd>Esc</kbd>'; $('view').innerHTML = '<kbd>V</kbd> House view';
   }
   function pause() {
@@ -336,19 +398,20 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     previousMode = mode; mode = 'pause'; clearInput(); unlock(); $('pause').hidden = false; $('resume').focus();
   }
   function resume() {
-    mode = previousMode; $('pause').hidden = true; clearInput(); canvas.focus();
+    if(previousMode==='play')landscape.enter(inputMode.mode);
+    mode = previousMode; $('pause').hidden = true; clearInput(); if(!rotateBlocked)canvas.focus();
     if (mode === 'play') lock();
   }
   function reset() {
     advanceResources();
     if(water.system.peeing||mistress.playerLocked) return;
     controller.reset();mistressFootsteps.relocateListener(controller);yaw = -.45; pitch = .43; distance = 5.2; clearInput(); cameraInitialized = false;
-    toast('Back in your cozy den. Hold left-click by the special hay to refill your energy.');
+    toast('Back in your cozy den. Eat the special hay to refill your energy.');
   }
   function setOverview() {
     if (mode !== 'play' || water.system.peeing || mistress.playerLocked) return;
     overview = !overview; roofView=false;setText('roof-view','Show roof');mapOpen = false; $('atlas').hidden = true; surveyFloor = floorAt(controller.y); clearInput(); renderAtlas();
-    if (overview) { unlock(); toast('House view · press V to return to Shidan', 3); }
+    if (overview) { unlock(); toast('House view · choose Follow Shidan to return', 3); }
     else { cameraInitialized = false; canvas.focus(); }
     $('view').innerHTML = overview ? '<kbd>V</kbd> Follow Shidan' : '<kbd>V</kbd> House view';
   }
@@ -358,6 +421,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
       returnToTitle(); $('player-name').setCustomValidity('Enter your name to start your adventure.'); $('player-name').reportValidity(); $('player-name').focus(); return;
     }
     $('player-name').value=happiness.name; $('player-name').disabled=true;
+    landscape.enter(inputMode.mode);
     setHidden('day-ended',true);
     escaped = upstairs = false; discovered.clear();
     reset(); showGame(); lock(); toast('Watch her floor pattern: amber sight, blue noise masking. Her vision stays active while she laughs. The den is safe.', 6);
@@ -400,12 +464,14 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   function restartGame() {
     const name=happiness.active ? happiness.name : $('player-name').value;
     if(!happiness.restart(name)) { startAdventure(); return; }
+    landscape.enter(inputMode.mode);
     clearInput();resetRunState();renderLeaderboard();
     $('player-name').value=happiness.name;$('player-name').disabled=true;
     showGame();updateHUD();drawMap();lock();
     toast('A fresh adventure! Ten minutes, full energy and a cozy den.',4);
   }
   function returnToTitle() {
+    landscape.leave();allowPortrait=false;
     mode = 'title'; overview = false; mapOpen = false; $('atlas').hidden = true; clearInput(); unlock();
     if(!water.system.peeing) {controller.reset();mistressFootsteps.relocateListener(controller);}
     cameraInitialized = false;
@@ -447,6 +513,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     const result=happiness.finish(dayClock);
     if(!result)return;
     const stats=roundStats.snapshot();mode='gameover';overview=false;mapOpen=false;captureVisual.reset();
+    landscape.leave();allowPortrait=false;
     clearInput();unlock();$('atlas').hidden=$('pause').hidden=$('survey').hidden=$('leaderboard').hidden=true;
     $('hud').hidden=$('menu-button').hidden=$('welcome').hidden=$('intro-caption').hidden=$('intro-footer').hidden=true;
     setHidden('toast',true);toastUntil=0;renderGameOver(result,stats);renderLeaderboard();
@@ -470,6 +537,17 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     document.querySelectorAll('[data-floor]').forEach(button => button.setAttribute('aria-pressed', String(Number(button.dataset.floor) === surveyFloor)));
   }
   $('map-button').addEventListener('click', toggleMap); $('close-atlas').addEventListener('click', toggleMap);
+  function fromPause(action) {
+    if(mode!=='pause'||previousMode!=='play')return;
+    mode='play';$('pause').hidden=true;canvas.focus();clearInput();action();
+  }
+  $('pause-home').addEventListener('click',()=>fromPause(reset));
+  $('pause-map').addEventListener('click',()=>fromPause(toggleMap));
+  $('pause-view').addEventListener('click',()=>fromPause(setOverview));
+  function centerCamera(){yaw=controller.facing+Math.PI;pitch=.43;renderDirty=true;}
+  $('pause-center').addEventListener('click',centerCamera);
+  $('pause-zoom-in').addEventListener('click',()=>{distance=clamp(distance-.65,1.5,9);renderDirty=true;});
+  $('pause-zoom-out').addEventListener('click',()=>{distance=clamp(distance+.65,1.5,9);renderDirty=true;});
   document.querySelectorAll('[data-floor]').forEach(button => button.addEventListener('click', () => { surveyFloor = Number(button.dataset.floor); renderAtlas(); }));
   $('garden-view').addEventListener('click', () => { gardenView = !gardenView; setText('garden-view', gardenView ? 'Front view' : 'Garden view'); });
   $('roof-view').addEventListener('click',()=>{roofView=!roofView;setText('roof-view',roofView?'Look inside':'Show roof');renderDirty=true;});
@@ -498,9 +576,20 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   });
   $('audio-settings').addEventListener('toggle',()=>{
     if(!$('audio-settings').open)return;
-    keys.clear();mouse.clear();controller.releaseInput();water.system.stop();consumables.system.cancel();queuedHop=false;jumpSeen=false;
+    cancelHolds();
   });
   canvas.addEventListener('mousedown',()=>sound.unlock());
+  function peeAction() {
+    advanceResources();
+    const pee=!dayClock.finished&&!mistress.playerLocked?water.pee(controller):null;
+    if(pee) {
+      roundStats.peeStarted(pee);cancelHolds();
+      controller.vx=controller.vz=0;controller.sprinting=false;
+      toast('Peeing… stay still for one second.',1);updateHUD();
+    } else if(!dayClock.finished && water.system.bladder.value<100) {
+      toast('Fill your bladder to 100% before peeing.',2);updateHUD();
+    }
+  }
   addEventListener('keydown', event => {
     if(mode==='play'&&!event.repeat&&event.target===canvas)sound.unlock();
     if(mode==='gameover') {
@@ -520,10 +609,13 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
       if(event.code==='Escape') {event.preventDefault();$('audio-settings').open=false;canvas.focus();}
       return;
     }
-    if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code) && mode === 'play' && event.target === canvas) event.preventDefault();
     if (event.code === 'Escape') { if (mapOpen) { toggleMap(); return; } if (mode === 'pause') resume(); else pause(); return; }
     // Disclosure and scroll-region keys belong to the board, not Shidan.
     if(event.target instanceof Element && event.target.closest('#consumable-legend')) return;
+    if(event.target instanceof Element&&event.target.closest('input,select,textarea,[contenteditable="true"]'))return;
+    if(mode==='play'&&!overview&&!mapOpen&&!event.repeat&&(event.target===canvas||event.target===document.body||event.target===window))inputMode.noteGameplay(event);
+    if(inputMode.mode==='touch'||rotateBlocked)return;
+    if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code) && mode === 'play' && event.target === canvas) event.preventDefault();
     if (mode === 'play' && (water.system.peeing||mistress.playerLocked)) {
       advanceResources();if(water.system.peeing||mistress.playerLocked) { event.preventDefault();return; }
     }
@@ -534,31 +626,21 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     if (mode !== 'play' || event.target instanceof HTMLButtonElement) return;
     keys.add(event.code);
     if (event.repeat) return;
-    if (event.code === 'Space') jumpSeen = false;
+    if (event.code === 'Space') jumpEdge(true);
     if (event.code === 'KeyR') reset();
     if (event.code === 'KeyP' && !overview && !mapOpen) dropPoop();
-    if (event.code === 'KeyQ' && !overview && !mapOpen) {
-      advanceResources();
-      const pee=!dayClock.finished&&!mistress.playerLocked?water.pee(controller):null;
-      if(pee) {
-        roundStats.peeStarted(pee);
-        keys.clear();mouse.clear();consumables.system.cancel();controller.releaseInput();
-        controller.vx=controller.vz=0;controller.sprinting=false;queuedHop=false;jumpSeen=false;
-        toast('Peeing… stay still for one second.',1);updateHUD();
-      } else if(!dayClock.finished && water.system.bladder.value<100) {
-        toast('Fill your bladder to 100% before peeing.',2);updateHUD();
-      }
-    }
-    if (event.code === 'KeyC') { yaw = controller.facing + Math.PI; pitch = .43; }
+    if (event.code === 'KeyQ' && !overview && !mapOpen) peeAction();
+    if (event.code === 'KeyC') centerCamera();
   });
   addEventListener('keyup', event => {
-    if (event.code === 'Space' && keys.has('Space') && !jumpSeen && mode === 'play' && !overview && !mapOpen) queuedHop = true;
+    if (event.code === 'Space' && keys.has('Space')) jumpEdge(false);
     keys.delete(event.code);
   });
   addEventListener('blur', () => { clearInput(); if (mode === 'play') pause(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden) { clearInput(); pause(); } });
   canvas.addEventListener('wheel', event => { event.preventDefault(); distance = clamp(distance + event.deltaY * .004, 1.5, 9); }, { passive: false });
   addEventListener('resize', () => {
+    syncOrientation();
     camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
     renderer.setPixelRatio(renderPixelRatio(innerWidth, innerHeight, devicePixelRatio));
     renderer.setSize(innerWidth, innerHeight); renderDirty = true;
@@ -622,7 +704,10 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     $('energy-meter').setAttribute('aria-valuenow', energy);
     $('energy-panel').dataset.low = String(controller.energy.value < 10);
     $('energy-panel').dataset.recovering = String(controller.energy.recovering);
-    setText('energy-status', controller.energy.recovering ? 'Restoring energy…' : controller.sprintExhausted ? 'Rest to recover · release Shift to sprint' : controller.sprinting ? 'Sprinting · using energy' : 'Restoring 0.01% every 0.5 seconds');
+    const usingTouch=inputMode.mode==='touch';
+    const holdControl=usingTouch?'hold the action button':'hold left mouse';
+    const peeControl=usingTouch?'tap Pee':'press Q to pee';
+    setText('energy-status', controller.energy.recovering ? 'Restoring energy…' : controller.sprintExhausted ? (usingTouch?'Rest to recover · toggle Sprint off':'Rest to recover · release Shift to sprint') : controller.sprinting ? 'Sprinting · using energy' : 'Restoring 0.01% every 0.5 seconds');
     const bladderValue=water.system.bladder.value;
     // Do not round a nearly full bladder up to a misleading 100.00%.
     const bladder=(bladderValue<100 ? Math.min(bladderValue,99.99) : bladderValue).toFixed(2), drinkWait=water.system.cooldownRemaining;
@@ -630,15 +715,23 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     setText('bladder-value',`${bladder}%`); $('bladder-fill').style.width=`${bladder}%`;
     $('bladder-meter').setAttribute('aria-valuenow',bladder);
     $('bladder-panel').dataset.full=String(water.system.bladder.value===100);
-    setText('bladder-status',water.system.peeing ? 'Emptying bladder · actions locked' : drinkWait>0 ? `${water.system.pending?'Keep holding · ready':'Drink again'} in ${cooldownText(drinkWait)}s` : water.system.bladder.value===100 ? 'Full · press Q to pee' : water.system.drinking ? 'Drinking · +10% per second' : nearbyWater===0 ? 'Fountain empty · try another room' : 'Hold left-click near a fountain');
-    setText('pee-cooldown',water.system.peeing ? `Peeing · ${cooldownText(water.system.peeRemaining)}s` : drinkWait>0 ? `Pee ready in ${cooldownText(drinkWait)}s` : water.system.bladder.value===100 ? 'Q · pee ready · 0.0s' : 'Q · fill to 100%');
+    setText('bladder-status',water.system.peeing ? 'Emptying bladder · actions locked' : drinkWait>0 ? `${water.system.pending?'Keep holding · ready':'Drink again'} in ${cooldownText(drinkWait)}s` : water.system.bladder.value===100 ? `Full · ${peeControl}` : water.system.drinking ? 'Drinking · +10% per second' : nearbyWater===0 ? 'Fountain empty · try another room' : usingTouch?'Hold Drink near a fountain':'Hold left-click near a fountain');
+    setText('pee-cooldown',water.system.peeing ? `Peeing · ${cooldownText(water.system.peeRemaining)}s` : drinkWait>0 ? `Pee ready in ${cooldownText(drinkWait)}s` : water.system.bladder.value===100 ? (usingTouch?'Pee ready':'Q · pee ready · 0.0s') : (usingTouch?'Fill to 100%':'Q · fill to 100%'));
     setHidden('pee-progress',!water.system.peeing);
     $('pee-fill').style.width=`${water.system.peeProgress*100}%`;
     $('pee-progress').setAttribute('aria-valuenow',(water.system.peeProgress*100).toFixed(0));
     $('home').disabled=$('view').disabled=$('map-button').disabled=water.system.peeing||mistress.playerLocked;
     setText('poop-count',String(poop.supply.value));
     const poopWait=Math.max(0,poop.supply.nextPoopAt-dayClock.elapsed);
-    setText('poop-status',water.system.peeing ? 'Wait until peeing finishes' : poop.supply.value===0 ? 'Eat to replenish your supply' : 'Right-click or P');
+    if(usingTouch){
+      const action=nearbyWater!==null?'Drink':nearby===mazeHeart.item?'Kiss':nearby?(consumableDetails(nearby).verb==='Chew'?'Chew':'Eat'):'Use';
+      setText('touch-interact-label',action);
+      setText('touch-poop-detail',poopWait>0?`${cooldownText(poopWait)}s`:`×${poop.supply.value}`);
+      setText('touch-pee-detail',drinkWait>0?`${cooldownText(drinkWait)}s`:bladderValue===100?'Ready':`${Math.floor(bladderValue)}%`);
+      $('touch-poop').disabled=poopWait>0||!poop.supply.value||water.system.peeing||mistress.playerLocked;
+      $('touch-pee').disabled=bladderValue<100||drinkWait>0||water.system.peeing||mistress.playerLocked;
+    }
+    setText('poop-status',water.system.peeing ? 'Wait until peeing finishes' : poop.supply.value===0 ? 'Eat to replenish your supply' : usingTouch?'Tap Poop':'Right-click or P');
     setText('poop-cooldown',poopWait>0 ? `Poop ready in ${cooldownText(poopWait)}s` : 'Poop ready · 0.0s');
     setData('poopSupply',String(poop.supply.value)); setData('poopCapacity',String(MAX_CARRIED_POOP));
     setData('poopCooldown',poopWait.toFixed(3)); setData('denHayPoopReady',String(poop.supply.denHayRewardAvailable));
@@ -655,10 +748,10 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
       setHidden('consume-meter',fountain);
       if(fountain) {
         setText('consume-name','Water fountain'); setText('consume-energy',`${nearbyWater.toFixed(1)}% water left · +10% bladder per second`);
-        setText('consume-action',nearbyWater===0 ? 'Empty · refills next round' : drinkWait>0 ? (water.system.pending?`Keep holding · drink in ${cooldownText(drinkWait)}s`:`Wait ${Math.ceil(drinkWait)}s after peeing`) : water.system.bladder.value===100 ? 'Bladder full · press Q to pee' : 'Drink · hold left mouse');
+        setText('consume-action',nearbyWater===0 ? 'Empty · refills next round' : drinkWait>0 ? (water.system.pending?`Keep holding · drink in ${cooldownText(drinkWait)}s`:`Wait ${Math.ceil(drinkWait)}s after peeing`) : water.system.bladder.value===100 ? `Bladder full · ${peeControl}` : `Drink · ${holdControl}`);
       } else if(nearby===mazeHeart.item) {
         setText('consume-name','Blue bunny plush');setText('consume-energy',mazeHeart.action.completed?'Already shared a special moment':'+500 happiness · once per adventure');
-        setText('consume-action',mazeHeart.action.completed?'Come back next adventure for another kiss':`Give a kiss · hold left mouse for ${AFFECTION_SECONDS} seconds`);
+        setText('consume-action',mazeHeart.action.completed?'Come back next adventure for another kiss':`Give a kiss · ${holdControl} for ${AFFECTION_SECONDS} seconds`);
         $('consume-fill').style.width=`${mazeHeart.action.fraction*100}%`;
         $('consume-meter').setAttribute('aria-valuenow',(mazeHeart.action.fraction*100).toFixed(0));
       } else {
@@ -666,7 +759,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
         const poopReward=nearby.permanent&&!(nearby.mazeHay?poop.supply.mazeHayRewardAvailable:poop.supply.denHayRewardAvailable) ? 0 : type.poop||0;
         const rewards=[nearby.permanent ? '100% energy' : type.energy ? `+${type.energy} energy` : '',type.happiness ? `+${type.happiness} happiness` : '',poopReward ? `+${poopReward} poop balls` : ''].filter(Boolean).join(' · ');
         setText('consume-name', type.name); setText('consume-energy', rewards);
-        setText('consume-action',`${type.verb} · hold left mouse for ${seconds} ${seconds>1 ? 'seconds' : 'second'}${nearby.permanent&&!poopReward ? ' · leave and re-enter for more poop' : ''}`);
+        setText('consume-action',`${type.verb} · ${holdControl} for ${seconds} ${seconds>1 ? 'seconds' : 'second'}${nearby.permanent&&!poopReward ? ' · leave and re-enter for more poop' : ''}`);
         $('consume-fill').style.width = `${progress*100}%`;
         $('consume-meter').setAttribute('aria-valuenow', (progress*100).toFixed(0));
       }
@@ -701,14 +794,12 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     if (controller.charging) {
       const power = Math.round(Math.min(1, controller.charge / .65) * 100);
       $('charge-fill').style.width = `${power}%`; setText('charge-percent', `${power}%`);
-      const forward=Number(keys.has('KeyW') || keys.has('ArrowUp'))-Number(keys.has('KeyS') || keys.has('ArrowDown'));
-      const right=Number(keys.has('KeyD') || keys.has('ArrowRight'))-Number(keys.has('KeyA') || keys.has('ArrowLeft'));
-      const cost = controller.jumpCost(controller.charge,{x:-Math.sin(yaw)*forward+Math.cos(yaw)*right,z:-Math.cos(yaw)*forward-Math.sin(yaw)*right});
+      const cost = controller.jumpCost(controller.charge,movement());
       setText('charge-label', controller.surface === 'wood' || controller.surface === 'stairs' ? 'Slippery floor · free small hop' : cost===0 ? 'Den jump · no energy cost' : controller.energy.value < cost ? 'Low energy · free small hop' : `${power >= 100 ? 'Release!' : 'Crouch & spring'} · −${cost.toFixed(2)} energy`);
     }
     if (!escaped && distFromDen > DEN.radius + .36 && controller.grounded) {
       escaped = true;
-      toast('Your first great escape! Press M for rooms, shortcuts, and little discoveries.', 6); sound.chime();
+      toast('Your first great escape! Open the map for rooms, shortcuts, and little discoveries.', 6); sound.chime();
     }
     if (!upstairs && high && controller.grounded && !onStairs) {
       upstairs = true;
@@ -837,15 +928,13 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     const dt = Math.min((now - previousTime) / 1000, .1); previousTime = now;
     advanceResources();
     if(dayClock.finished&&happiness.active) finishDay();
-    const frozen = mode === 'pause' || mode==='gameover' || mapOpen || document.hidden;
+    const frozen = mode === 'pause' || mode==='gameover' || mapOpen || rotateBlocked || document.hidden;
     if (frozen && wasFrozen && !renderDirty) return;
     wasFrozen = frozen; renderDirty = false;
     if (!document.hidden) frameTimes.push(frameMs);
     if (!frozen) time += dt;
     if (mode === 'play' && !overview && !frozen) {
-      const forward = Number(keys.has('KeyW') || keys.has('ArrowUp')) - Number(keys.has('KeyS') || keys.has('ArrowDown'));
-      const right = Number(keys.has('KeyD') || keys.has('ArrowRight')) - Number(keys.has('KeyA') || keys.has('ArrowLeft'));
-      const input = { x: -Math.sin(yaw) * forward + Math.cos(yaw) * right, z: -Math.cos(yaw) * forward - Math.sin(yaw) * right, run: keys.has('ShiftLeft') || keys.has('ShiftRight'), jump: keys.has('Space'),locked:water.system.peeing||mistress.playerLocked,captured:mistress.playerLocked };
+      const input = { ...movement(), run: touchSprint||keys.has('ShiftLeft')||keys.has('ShiftRight'), jump: touchJump||keys.has('Space'),locked:water.system.peeing||mistress.playerLocked,captured:mistress.playerLocked };
       const motionX=controller.x,motionZ=controller.z;
       let frameJump=null;
       if (queuedHop) { controller.update(.0001, { ...input, jump: true });frameJump=controller.lastJump; queuedHop = false; }
@@ -957,7 +1046,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     }
     npcMovementSpent=0;
   }
-  syncMistressModel();
+  syncInputMode();syncMistressModel();
   updateCamera(0); daylight.update(0,controller,camera); updateHUD(); drawMap();
   // Compile the upstairs and window variants too, before any camera turn can
   // reveal them. compileAsync uses parallel shader compilation when available.

@@ -18,7 +18,7 @@ Captured from the playable v0.3.0 build. Click an image to view it at full size.
 
 ## Play
 
-**Play online:** [Shidan’s Adventure on GitHub Pages](https://xuefei1.github.io/ShidansAdv/). Use a desktop browser with WebGL 2, a keyboard and a mouse. Scores stay in the browser you play in.
+**Play online:** [Shidan’s Adventure on GitHub Pages](https://xuefei1.github.io/ShidansAdv/). The game runs in a WebGL 2 browser. Scores stay in the browser you play in.
 
 **Windows:** double-click `Start-Game.cmd`.
 
@@ -33,6 +33,14 @@ node scripts/serve.mjs --open
 Open **http://localhost:4173** if the browser does not open automatically. No package installation, account, build step, or runtime internet connection is needed. The game and Three.js engine are included locally. Use a browser with WebGL 2 support. Mouse capture is optional: drag the scene to look around when capture is unavailable, including in browsers with limited pointer-lock support.
 
 ## Controls
+
+Choose **Auto**, **Touch**, or **Keyboard & mouse** at the title screen or in the pause menu. Auto uses the device’s pointing capabilities to choose a default, then follows actual gameplay input on hybrids. Typing a player name doesn’t change the mode. An explicit choice is remembered in this browser and wins over automatic detection. The HUD uses the available screen space independently: a small window with a mouse gets a compact HUD, and a large tablet can still show touch controls.
+
+**Touch:** Drag the left stick to move and swipe the open scene to look around. Tap the sprint control to toggle running. Tap **Jump** for a hop; for a long jump, hold the stick outward with one thumb and hold, then release **Jump** with the other. Hold the interaction button near a target to eat, drink, or kiss the plush; lift to stop. Tap the poop or pee button to use it when ready. Use Pause for options instead of a keyboard shortcut.
+
+Touch play uses landscape. Starting play requests fullscreen and landscape where the browser allows it. If the rotate prompt appears, turn the device sideways; the game clock does not run while that prompt is blocking play. Keyboard and mouse play works in either orientation.
+
+**Keyboard and mouse:**
 
 | Input | Action |
 | --- | --- |
@@ -51,6 +59,8 @@ Open **http://localhost:4173** if the browser does not open automatically. No pa
 | M | Floor plan, route hints, and discoveries |
 | R | Return to the den |
 | Esc | Pause / resume; menu includes Restart game; releases the mouse |
+
+**Testing on a computer:** Open the local game in Chrome, press **F12** and then **Ctrl+Shift+M** for the device toolbar. Set **Responsive** to **844 × 390** and use the toolbar’s device type selector (**⋮ → Add device type** if hidden). Compare **Mobile (no touch)** with **Mobile** at that same size, then repeat at **1280 × 800**. In Mobile mode, press or drag with the mouse to simulate one finger. Swap portrait and landscape to test the rotate prompt. Check simultaneous two-thumb movement and jumping, button reach, and frame rate on a real device; resizing the desktop browser alone does not test these.
 
 **First adventure:** charge a jump in the den and release while moving outward to escape. Every long jump launched inside the den is free, including repeated, stationary and inward jumps, even with empty energy. Find the hay outside the den and hold left-click nearby to try eating. Press **M** for the floor plan and seven little discoveries: sofa, basement entrance, upstairs, bed quilt, balcony, backyard, and hedge hideaway. Collect happiness from food, books, wires, cardboard and slippers while avoiding the mistress.
 
