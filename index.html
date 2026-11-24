@@ -36,7 +36,7 @@
     <p>Meet Shidan. Professional loaf.<br>Amateur escape artist. Your next adventure.</p>
     <div class="player-entry"><label for="player-name">YOUR NAME</label><input id="player-name" maxlength="24" autocomplete="nickname" placeholder="What should we call you?" aria-describedby="name-hint" required><small id="name-hint">Your completed score will be saved under this name.</small></div>
     <label class="input-choice" for="input-preference-title"><span>Controls</span><select id="input-preference-title"><option value="auto">Automatic</option><option value="touch">Touch</option><option value="desktop">Keyboard &amp; mouse</option></select></label>
-    <p class="touch-help">Move with the left pad. The camera follows Shidan. Swipe to look around, or hold Rear to look behind her. Hold Jump, then release to leap.</p>
+    <p class="touch-help">Drag the left pad to move in any direction. Lift your thumb to recenter the camera. Swipe to look around or hold Rear to look back. Hold Jump, then release to leap.</p>
     <div class="welcome-actions"><button id="play" disabled class="primary">Let’s explore <span>↗</span></button><button id="tour" disabled class="text-button">Take a house tour <span>→</span></button></div>
     <button id="show-leaderboard" class="text-button">Happiness leaderboard <span>→</span></button>
     <p id="load-status" role="status">Preparing your home…</p>
@@ -116,7 +116,7 @@
         <span id="touch-stick-knob" aria-hidden="true"></span>
       </div>
       <div class="touch-actions">
-        <button type="button" id="touch-rear" aria-label="Hold for rear view: look behind Shidan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 4 9l5 5M5 9h9a6 6 0 0 1 0 12h-2"/></svg><span>Rear</span><small>HOLD</small></button>
+        <button type="button" id="touch-rear" aria-label="Hold for rear view of Shidan’s face and the room behind her"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 4 9l5 5M5 9h9a6 6 0 0 1 0 12h-2"/></svg><span>Rear</span><small>HOLD</small></button>
         <button type="button" id="touch-poop" aria-label="Drop a poop ball"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="16" r="4"/><circle cx="17" cy="13" r="4"/><circle cx="9" cy="6" r="2"/></svg><span>Poop</span><small id="touch-poop-detail"></small></button>
         <button type="button" id="touch-pee" aria-label="Make a pee puddle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2s-7 9-7 13a7 7 0 0 0 14 0c0-4-7-13-7-13Z"/></svg><span>Pee</span><small id="touch-pee-detail"></small></button>
         <button type="button" id="touch-sprint" aria-label="Toggle sprint" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 4 8 8-8 8m-6-4 4-4-4-4m15-4 4 4"/></svg><span>Sprint</span></button>
@@ -140,7 +140,7 @@
   <section id="pause" class="modal-backdrop" hidden>
     <div class="modal"><span class="eyebrow">TAKE A LITTLE BREATHER</span><h2>Paused, little one.</h2><p>Your cozy home will be right here.</p>
       <label class="input-choice" for="input-preference-pause"><span>Controls</span><select id="input-preference-pause"><option value="auto">Automatic</option><option value="touch">Touch</option><option value="desktop">Keyboard &amp; mouse</option></select></label>
-      <p class="touch-help">Drag the left pad to move. Swipe to look around; the camera follows Shidan again after three seconds or when you start moving. Hold Rear to look behind her. Tap Sprint to run, hold Jump for a longer leap, or hold the action button to eat, drink or kiss.</p>
+      <p class="touch-help">Steer in any screen direction. The camera holds its angle until you lift off the pad, even if you stop in the center. Swipe to look around. Each swipe delays recentering by three seconds. Hold Rear to see Shidan’s face and what’s behind her. Tap Sprint to run. Hold Jump for a longer leap or hold the action button to eat, drink or kiss.</p>
       <button id="resume" class="primary">Back to exploring <span>↗</span></button>
       <details class="pause-tools"><summary>Map, camera &amp; supplies</summary>
         <div class="pause-shortcuts">

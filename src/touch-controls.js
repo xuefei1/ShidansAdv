@@ -1,7 +1,7 @@
 export function bindTouchControls({
   canvas, stick, jump, interact, sprint, poop, pee, rear, canControl,
   onMove, onLook, onJump, onPrimary, onSprint, onPoop, onPee,
-  onRear = () => {},
+  onRear = () => {}, onStickHeld = () => {},
   window = canvas.ownerDocument.defaultView, document = canvas.ownerDocument
 }) {
   const contacts = new Map(), occupied = new Set(), removers = [];
@@ -40,6 +40,7 @@ export function bindTouchControls({
     if (target === stick) {
       stick.style.removeProperty('--stick-x'); stick.style.removeProperty('--stick-y');
       onMove(0, 0); setRun(false);
+      onStickHeld(false);
     } else if (target === jump) onJump(false, cancel);
     else if (target === interact) onPrimary(false, cancel);
     else if (target === rear) onRear(false);
@@ -60,6 +61,7 @@ export function bindTouchControls({
       const bounds = stick.getBoundingClientRect();
       contact.centerX = bounds.left + bounds.width / 2; contact.centerY = bounds.top + bounds.height / 2;
       contact.radius = Math.max(1, Math.min(bounds.width, bounds.height) * .32);
+      onStickHeld(true);
       steer(contact, event.clientX, event.clientY);
     } else if (target === jump) onJump(true, false);
     else if (target === interact) onPrimary(true, false);

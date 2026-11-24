@@ -3,6 +3,7 @@ const delay = duration => new Promise(resolve => setTimeout(resolve, duration));
 const game = () => frame.contentDocument, win = () => frame.contentWindow, element = id => game().getElementById(id);
 const data = () => element('game')?.dataset, position = () => data().position.split(',').map(Number);
 const cameraYaw = () => Number(data().camera.split(',')[0]);
+const cameraPitch = () => Number(data().camera.split(',')[1]);
 const facing = () => Number(data().facing);
 const angleGap = (first, second) => Math.abs(Math.atan2(Math.sin(first - second), Math.cos(first - second)));
 const nearFollow = () => angleGap(cameraYaw(), facing() + Math.PI) < .09;
@@ -34,6 +35,42 @@ function center(id) {
 function hit(id) {
   const {clientX, clientY} = center(id);
   return element(id).contains(game().elementFromPoint(clientX, clientY));
+}
+function gesturePrevented(target, type, contactCount = 0) {
+  const event = new (win().Event)(type, {bubbles:true, cancelable:true});
+  if (contactCount) {
+    // Synthetic gestures exercise the handlers even on a desktop without TouchEvent constructors.
+    Object.defineProperty(event, 'touches', {value:Array.from({length:contactCount}, () => ({target}))});
+  }
+  target.dispatchEvent(event);
+  return event.defaultPrevented;
+}
+function checkBrowserGestures(label, active, target) {
+  const doc = game(), surface = doc.documentElement;
+  const styleOf = node => win().getComputedStyle(node);
+  const hasState = surface.dataset.touchPlaying === 'true';
+  const suppressed = node => {
+    const style = styleOf(node);
+    return style.touchAction === 'none' && style.userSelect === 'none' &&
+      (!win().CSS.supports('-webkit-touch-callout','none') || style.getPropertyValue('-webkit-touch-callout') === 'none');
+  };
+  if (active) {
+    check('Touch play disables browser pan, zoom and text selection across the HUD and controls',
+      hasState && [surface, target, element('game'), element('touch-stick'), element('touch-jump')].every(suppressed));
+    check('The item legend permits vertical scrolling and ordinary buttons keep their taps',
+      styleOf(doc.querySelector('.legend-scroll')).touchAction === 'pan-y' &&
+      !gesturePrevented(element('map-button'), 'touchstart', 1));
+  } else {
+    check(label + ' restores browser touch and selection styles', !hasState &&
+      styleOf(surface).touchAction !== 'none' && styleOf(target).userSelect !== 'none');
+  }
+  const wrong = ['selectstart','contextmenu','dragstart','dblclick','gesturestart','gesturechange','gestureend']
+    .filter(type => gesturePrevented(target, type) !== active);
+  for (const type of ['touchstart','touchmove']) {
+    if (gesturePrevented(target, type, 2) !== active) wrong.push(type);
+  }
+  check(label + (active ? ' suppresses native pinch and long-press events' : ' leaves native gesture events available'),
+    !wrong.length, wrong.join(', '));
 }
 const touchActions = ['touch-jump', 'touch-interact', 'touch-sprint', 'touch-poop', 'touch-pee', 'touch-rear'];
 function checkTouchLayout(width, height) {
@@ -88,10 +125,15 @@ function pointer(type, id, target, coords) {
   target.dispatchEvent(new (win().PointerEvent)(type, {bubbles:true, cancelable:true, pointerType:'touch',
     pointerId:id, button:type === 'pointermove' ? -1 : 0, buttons:type === 'pointerup' || type === 'pointercancel' ? 0 : 1, ...coords}));
 }
-function swipe(target, start, dx) {
+function swipe(target, start, dx, dy = 0) {
   pointer('pointerdown',4,target,start);
-  const end={clientX:start.clientX+dx,clientY:start.clientY};
+  const end={clientX:start.clientX+dx,clientY:start.clientY+dy};
   pointer('pointermove',4,target,end); pointer('pointerup',4,target,end);
+}
+async function restartAtDen() {
+  element('menu-button').click(); element('reset').click();
+  await until(() => data().mode === 'play' && Math.hypot(position()[0]+16,position()[2]-12)<.05 &&
+    data().consumeTarget === 'den-hay', 'Start a fresh round with the hay back at its original position');
 }
 async function checkDesktopCamera() {
   const canvas=element('game'), before=cameraYaw();
@@ -106,9 +148,80 @@ async function checkDesktopCamera() {
   } finally {key('keyup','KeyS');}
   await delay(3300);
   check('Keyboard movement and three idle seconds leave the mouse camera unchanged',angleGap(cameraYaw(),manual)<.025&&!visible('touch-rear'));
-  element('menu-button').click(); element('reset').click();
-  await until(() => data().mode === 'play' && Math.hypot(position()[0]+16,position()[2]-12)<.05 &&
-    data().consumeTarget === 'den-hay', 'Start a fresh round with the hay back at its original position');
+  await restartAtDen();
+}
+async function checkHeldStickCamera(scene, openScene) {
+  await until(nearFollow, 'Line up the camera before testing screen-relative walking');
+  const pad = element('touch-stick'), stick = center('touch-stick'), initialYaw = cameraYaw();
+  const steer = (x, y) => pointer('pointermove', 7, pad, {clientX:stick.clientX+x, clientY:stick.clientY+y});
+  function distanceAlong(from, x, z) {
+    const to = position();
+    return (to[0] - from[0]) * x + (to[2] - from[2]) * z;
+  }
+  const backwardX = Math.sin(initialYaw), backwardZ = Math.cos(initialYaw);
+  const rightX = Math.cos(initialYaw), rightZ = -Math.sin(initialYaw);
+  const start = position();
+  pointer('pointerdown', 7, pad, stick);
+  steer(0, 90);
+  await until(() => distanceAlong(start, backwardX, backwardZ) > .75, 'Walk toward the bottom of the screen');
+  check('Holding down moves backward on screen without orbiting the camera', angleGap(cameraYaw(), initialYaw) < .03);
+  steer(0, 0);
+  const centeredAt = performance.now();
+  await until(() => performance.now() - centeredAt > 600, 'Rest the same finger in the joystick dead zone');
+  await new Promise(resolve => win().requestAnimationFrame(() => win().requestAnimationFrame(resolve)));
+  check('Centering the pad keeps the camera fixed until the finger lifts', angleGap(cameraYaw(), initialYaw) < .03);
+
+  const beforeRight = position();
+  steer(90, 0);
+  await until(() => distanceAlong(beforeRight, rightX, rightZ) > .75, 'Move right after moving backward');
+  check('Switching to right stays screen-relative on the same stick contact', angleGap(cameraYaw(), initialYaw) < .03);
+  steer(0, 0);
+  swipe(scene, openScene, 155, 100);
+  await until(() => angleGap(cameraYaw(), initialYaw) > .4 && cameraPitch() > .65, 'Angle and tilt the normal view before using Rear');
+  const orbitYaw = cameraYaw(), orbitPitch = cameraPitch();
+  const rear = element('touch-rear'), rearCenter = center('touch-rear');
+  const showsFace = () => angleGap(cameraYaw(), facing()) < .015 && cameraPitch() === .43;
+  pointer('pointerdown', 13, rear, rearCenter);
+  await until(showsFace, 'Show Shidan’s face from the standard height while holding Rear');
+  const rearStartFacing = facing();
+  steer(0, 90);
+  await until(() => angleGap(facing(), orbitYaw) < .09, 'Walk toward the normal camera while holding Rear');
+  check('Rear stays in front of Shidan as she backs toward the screen', showsFace() && angleGap(facing(), rearStartFacing) > .8);
+  const beforeLeft = position();
+  steer(-90, 0);
+  await until(() => distanceAlong(beforeLeft, -Math.cos(orbitYaw), Math.sin(orbitYaw)) > .65, 'Steer left while holding Rear');
+  check('Rear tracks the turn and keeps movement relative to the normal view', showsFace() && angleGap(facing(), orbitYaw) > .8);
+  pointer('pointerup', 13, rear, rearCenter);
+  await until(() => cameraYaw() === orbitYaw && cameraPitch() === orbitPitch, 'Release Rear without releasing the stick');
+  check('Releasing Rear restores the precise swipe angle and tilt', cameraYaw() === orbitYaw && cameraPitch() === orbitPitch);
+
+  // A quick thumb transfer can re-engage the pad in its dead zone.
+  pointer('pointerup', 7, pad, stick);
+  pointer('pointerdown', 17, pad, stick);
+  await delay(420);
+  check('Re-grabbing the stick interrupts pending recentering', angleGap(cameraYaw(), orbitYaw) < .03);
+  pointer('pointerup', 17, pad, stick);
+  await until(nearFollow, 'The camera follows again after the stick is released');
+  check('Releasing after a side move recenters behind the new heading', angleGap(cameraYaw(), orbitYaw) > .8);
+
+  const followedYaw = cameraYaw();
+  pointer('pointerdown', 18, pad, stick);
+  const beforeSwipe = position();
+  pointer('pointermove', 18, pad, {clientX:stick.clientX, clientY:stick.clientY-90});
+  await until(() => distanceAlong(beforeSwipe, -Math.sin(followedYaw), -Math.cos(followedYaw)) > .35, 'Walk forward before manually turning the camera');
+  swipe(scene, openScene, -520);
+  await until(() => angleGap(cameraYaw(), followedYaw) > 1.4, 'Look around with a second finger on the canvas');
+  const turnedYaw = cameraYaw(), beforeForward = position();
+  await until(() => distanceAlong(beforeForward, -Math.sin(turnedYaw), -Math.cos(turnedYaw)) > .7, 'Move forward in the manually rotated view');
+  check('A swipe updates the direction of a stick already held down', angleGap(cameraYaw(), turnedYaw) < .03);
+  pointer('pointermove', 18, pad, stick);
+  swipe(scene, openScene, -220);
+  await until(() => angleGap(cameraYaw(), turnedYaw) > .55, 'Look aside just before releasing the joystick');
+  const manualYaw = cameraYaw();
+  pointer('pointerup', 18, pad, stick);
+  await delay(1000);
+  check('Releasing the stick preserves the manual swipe’s three-second grace', angleGap(cameraYaw(), manualYaw) < .03);
+  await until(nearFollow, 'Return from manual look with the stick released');
 }
 function setPreference(id, value) {
   element(id).value = value;
@@ -133,14 +246,27 @@ async function run() {
   frame.srcdoc = html.replace('<head>', '<head><base href="/">').replace('<script type="module" src="./src/start.js"></script>', entry);
   await loaded;
   await until(() => data()?.ready === 'true', 'Prepare the actual game');
+  setPreference('input-preference-title', 'touch');
+  checkBrowserGestures('The touch title screen', false, game().querySelector('#welcome h1'));
   element('game').requestPointerLock = () => Promise.reject(new Error('QA tests drag fallback'));
   element('player-name').value = 'Touch QA'; setPreference('input-preference-title', 'desktop'); element('play').click();
   await until(() => data().mode === 'play', 'Start a small-screen keyboard game');
+  checkBrowserGestures('Keyboard and mouse play', false, element('energy-value'));
   const chips = ['day-countdown', 'happiness-value', 'energy-value', 'bladder-value', 'poop-count'];
   check('Phone HUD fits with keyboard and mouse, without drawing thumb controls', !visible('touch-stick') && chips.every(fits));
   await checkDesktopCamera();
   const clockWidth = element('day-clock').getBoundingClientRect().width;
   await changeMode('touch');
+  checkBrowserGestures('Touch play', true, element('energy-value'));
+  element('menu-button').click();
+  await until(() => !element('pause').hidden, 'Open Pause using touch controls');
+  checkBrowserGestures('The touch pause menu', false, game().querySelector('#pause h2'));
+  element('resume').click();
+  element('map-button').click();
+  await until(() => !element('atlas').hidden, 'Open the floor map from the HUD');
+  checkBrowserGestures('The touch map', false, game().querySelector('#atlas h2'));
+  element('close-atlas').click();
+  await until(() => visible('touch-stick'), 'Resume touch play after closing the map');
   check('Choosing touch on the same phone keeps the compact clock', visible('touch-stick') && element('day-clock').getBoundingClientRect().width === clockWidth);
   await until(() => visible('consume-prompt'), 'Show the den hay interaction prompt before checking control spacing');
   for (const [width, height] of [[568,320],[667,375],[844,390],[1024,768],[1280,800]]) {
@@ -155,6 +281,7 @@ async function run() {
   await until(() => !element('charge').hidden && element('charge-percent').textContent === '100%', 'Charge before rotating');
   await resize(390,844);
   await until(() => !element('rotate-notice').hidden, 'Rotate prompt appears');
+  checkBrowserGestures('The rotate prompt', false, element('rotate-title'));
   const remaining = data().dayRemaining;
   game().dispatchEvent(new (win().CustomEvent)('qa-advance',{detail:15})); await delay(100);
   check('Portrait rotation cancels holds, hides controls, and pauses the clock', !visible('touch-stick') && element('day-clock').dataset.paused === 'true' && remaining === data().dayRemaining);
@@ -192,15 +319,15 @@ async function run() {
   await until(() => data().lastConsumedId === 'den-hay', 'Complete a fresh hold on the hay', 120000);
   pointer('pointerup',6,use,useCenter);
   check('Holding Interact finishes the normal four-second den hay action', Number(data().energy) === 100);
+  await checkHeldStickCamera(scene, openScene);
+  await restartAtDen();
   const resting=cameraYaw();swipe(scene,openScene,-190);
   await until(()=>angleGap(cameraYaw(),resting)>.45,'Look aside before starting to walk');
-  const yaw=cameraYaw(),stick=center('touch-stick'),movedAt=performance.now();
+  const yaw=cameraYaw(),stick=center('touch-stick');
   pointer('pointerdown',7,element('touch-stick'),stick);
   pointer('pointermove',7,element('touch-stick'),{clientX:stick.clientX+90*Math.cos(yaw),clientY:stick.clientY+90*Math.sin(yaw)});
-  await until(()=>angleGap(cameraYaw(),yaw)>.08,'New movement interrupts free look');
-  check('Starting the stick resumes camera follow before the idle timeout',performance.now()-movedAt<3000);
   await until(() => position()[0] > -12.6, 'Walk east to the den fence with the touch stick');
-  check('Holding the stick steers straight as the camera turns',Math.abs(position()[2]-12)<.3);
+  check('A swipe followed by a held stick gives a straight eastward approach',Math.abs(position()[2]-12)<.3 && angleGap(cameraYaw(),yaw)<.03);
   pointer('pointerdown',9,element('touch-jump'),jumpCenter);
   await until(() => !element('charge').hidden && element('charge-percent').textContent === '100%', 'Charge with a second contact while holding the stick');
   pointer('pointerup',9,element('touch-jump'),jumpCenter);
@@ -213,6 +340,7 @@ async function run() {
   check('Touch actions use normal resources', Number(element('poop-count').textContent) === oldSupply-1 && element('fatal').hidden);
   game().dispatchEvent(new (win().CustomEvent)('qa-advance',{detail:601}));
   await until(() => data().mode === 'gameover', 'Reach bedtime and record the touch round');
+  checkBrowserGestures('The Game Over screen', false, game().querySelector('#game-over h2'));
   check('The local score, long jump and dropped ball reach Game Over', data().lastPlayer === 'Touch QA' && data().finalRank === '1' &&
     element('result-poop').textContent === '1' && element('result-long-jumps').textContent === '1' && !visible('touch-stick'));
   status.textContent = 'All touch and compact HUD checks passed.';

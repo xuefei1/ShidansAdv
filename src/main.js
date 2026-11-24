@@ -9,6 +9,7 @@ import { createTerrainBackdrop } from './terrain-backdrop.js';
 import { drawLevelMap } from './level-map.js';
 import { bindMouseControls } from './mouse.js';
 import { bindTouchControls } from './touch-controls.js';
+import { bindGameplayGestures } from './touch-gestures.js';
 import { TouchCamera } from './touch-camera.js';
 import { createInputMode } from './input-mode.js';
 import { createLandscapeSession } from './landscape-session.js';
@@ -148,6 +149,8 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   let resourceElapsed=0;
   const target = new THREE.Vector3(), desiredCamera = new THREE.Vector3(), lookAt = new THREE.Vector3();
   const cameraRay = new THREE.Ray(), collisionPoint = new THREE.Vector3();
+  const lotCameraBounds = new THREE.Box3(new THREE.Vector3(BOUNDS.minX,-Infinity,BOUNDS.minZ),
+    new THREE.Vector3(BOUNDS.maxX,Infinity,BOUNDS.maxZ));
   const collisionBoxes = new WeakMap();
 
   function renderLeaderboard() {
@@ -316,14 +319,22 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   }
   const landscape=createLandscapeSession({window,document});
   const touchCamera=new TouchCamera();
-  function cameraYaw() {return touchCamera.rear ? controller.facing : yaw;}
+  function cameraView() {return touchCamera.view(yaw,pitch,controller.facing);}
   function inPlay() {return mode==='play'&&!overview&&!mapOpen&&!rotateBlocked&&!document.hidden;}
+  function touchPlaying() {return inputMode.mode==='touch'&&inPlay();}
+  function syncTouchSurface() {
+    const active=touchPlaying();
+    document.documentElement.dataset.touchPlaying=String(active);
+    // A hybrid in Auto can switch on pointerdown, after the browser chose how to handle that first swipe.
+    canvas.classList.toggle('touch-switchable',!active&&inputMode.preference==='auto'&&inPlay());
+    setHidden('touch-controls',!active);
+  }
   function onLook(dx,dy) {yaw-=dx*.003;pitch=clamp(pitch+dy*.0027,.06,1.15);}
   function movement() {
     const forward=stickForward+Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown'));
     const right=stickRight+Number(keys.has('KeyD')||keys.has('ArrowRight'))-Number(keys.has('KeyA')||keys.has('ArrowLeft'));
-    const steeringYaw=touchCamera.movementYaw??yaw;
-    return {x:-Math.sin(steeringYaw)*forward+Math.cos(steeringYaw)*right,z:-Math.cos(steeringYaw)*forward-Math.sin(steeringYaw)*right};
+    // Rear is a temporary view. Steer against the normal orbit even while looking back.
+    return {x:-Math.sin(yaw)*forward+Math.cos(yaw)*right,z:-Math.cos(yaw)*forward-Math.sin(yaw)*right};
   }
   function jumpEdge(held,cancelled=false) {
     if(cancelled) {queuedHop=false;jumpSeen=false;controller.releaseInput();}
@@ -331,6 +342,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     else if(!jumpSeen&&inPlay()) queuedHop=true;
   }
   const inputMode=createInputMode({window,storage,onChange:syncInputMode});
+  bindGameplayGestures(document,touchPlaying);
   const mouse = bindMouseControls({
     canvas, document, window, canControl: () => inputMode.mode==='desktop'&&inPlay(),
     onLook,
@@ -342,14 +354,15 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   canvas.addEventListener('pointerdown',event=>{if(inPlay())inputMode.noteGameplay(event);},{capture:true});
   const touch=bindTouchControls({
     canvas,stick:$('touch-stick'),jump:$('touch-jump'),interact:$('touch-interact'),sprint:$('touch-sprint'),poop:$('touch-poop'),pee:$('touch-pee'),rear:$('touch-rear'),
-    canControl:()=>inputMode.mode==='touch'&&inPlay()&&!water.system.peeing&&!mistress.playerLocked,
-    onMove:(right,forward)=>{stickRight=right;stickForward=forward;touchCamera.setMovement(right,forward,yaw);},
+    canControl:()=>touchPlaying()&&!water.system.peeing&&!mistress.playerLocked,
+    onMove:(right,forward)=>{stickRight=right;stickForward=forward;},
+    onStickHeld:held=>touchCamera.setStickHeld(held,performance.now()),
     onLook:(dx,dy)=>{
       if(touchCamera.rear||(!dx&&!dy))return;
       touchCamera.noteSwipe(performance.now());
       onLook(dx,dy);
     },
-    onRear:held=>{touchCamera.setRear(held);cameraInitialized=false;},
+    onRear:held=>{touchCamera.rear=held;cameraInitialized=false;},
     onJump:(held,cancelled)=>{touchJump=held;jumpEdge(held,cancelled);},
     onPrimary:primaryAction,onSprint:active=>{touchSprint=active;},onPoop:dropPoop,onPee:peeAction
   });
@@ -367,7 +380,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
       syncOrientation();
       if(inPlay()) canvas.focus();
     }
-    setHidden('touch-controls',inputMode.mode!=='touch'||!inPlay());
+    syncTouchSurface();
     setHidden('camera-hint',inputMode.mode==='touch'||document.pointerLockElement===canvas);
     renderDirty=true;
   }
@@ -384,7 +397,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
       dayClock.setActive(inPlay(),clockNow());renderDirty=true;
       if(blocked)$('rotate-continue').focus();else if(inPlay())canvas.focus();
     }
-    setHidden('touch-controls',inputMode.mode!=='touch'||!inPlay());
+    syncTouchSurface();
   }
   $('rotate-continue').addEventListener('click',()=>{allowPortrait=true;syncOrientation();});
   function clearInput() {
@@ -648,7 +661,11 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   });
   addEventListener('blur', () => { clearInput(); if (mode === 'play') pause(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden) { clearInput(); pause(); } });
-  canvas.addEventListener('wheel', event => { event.preventDefault(); distance = clamp(distance + event.deltaY * .004, 1.5, 9); }, { passive: false });
+  canvas.addEventListener('wheel', event => {
+    event.preventDefault();
+    if (event.ctrlKey && touchPlaying()) return;
+    distance = clamp(distance + event.deltaY * .004, 1.5, 9);
+  }, { passive: false });
   addEventListener('resize', () => {
     syncOrientation();
     camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
@@ -658,6 +675,8 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   canvas.addEventListener('webglcontextlost', event => { event.preventDefault(); pause(); fatal('The graphics context was lost. Reload to resume exploration.'); });
 
   function updateCamera(dt) {
+    const touchOrbit = mode === 'play' && !overview && inputMode.mode === 'touch';
+    const previousDistance = touchOrbit ? camera.position.distanceTo(lookAt) : 0;
     if (mode === 'title') {
       desiredCamera.set(DEN.x + 5.8 + Math.sin(time * .12) * .15, 3.8, DEN.z + 5.5);
       lookAt.set(DEN.x - 1.5, .65, DEN.z);
@@ -669,12 +688,17 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     } else {
       const follow=mistress.playerLocked&&captureVisual.active?rabbit.root.position:controller;
       target.set(follow.x, follow.y + .62, follow.z);
-      const viewYaw=cameraYaw();
-      desiredCamera.set(follow.x + Math.sin(viewYaw) * Math.cos(pitch) * distance,
-        target.y + Math.sin(pitch) * distance, follow.z + Math.cos(viewYaw) * Math.cos(pitch) * distance);
+      const view = cameraView();
+      desiredCamera.set(follow.x + Math.sin(view.yaw) * Math.cos(view.pitch) * distance,
+        target.y + Math.sin(view.pitch) * distance, follow.z + Math.cos(view.yaw) * Math.cos(view.pitch) * distance);
       // Prevent camera clipping through the real floor, furniture and back/side walls.
-      desiredCamera.x = clamp(desiredCamera.x, BOUNDS.minX, BOUNDS.maxX); desiredCamera.z = clamp(desiredCamera.z, BOUNDS.minZ, BOUNDS.maxZ);
+      if (!touchOrbit) {
+        desiredCamera.x = clamp(desiredCamera.x, BOUNDS.minX, BOUNDS.maxX);
+        desiredCamera.z = clamp(desiredCamera.z, BOUNDS.minZ, BOUNDS.maxZ);
+      }
       cameraRay.origin.copy(target); cameraRay.direction.copy(desiredCamera).sub(target).normalize();
+      // At the lot edge shorten the touch orbit along its bearing, including when holding Rear.
+      if (touchOrbit && !lotCameraBounds.containsPoint(desiredCamera)) cameraRay.intersectBox(lotCameraBounds, desiredCamera);
       let nearest = desiredCamera.distanceTo(target);
       for (const solid of world.query(Math.min(target.x, desiredCamera.x) - .12, Math.min(target.z, desiredCamera.z) - .12, Math.max(target.x, desiredCamera.x) + .12, Math.max(target.z, desiredCamera.z) + .12)) {
         if(solid.pushable)continue;
@@ -683,11 +707,17 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
         if (b.containsPoint(target)) continue;
         if (cameraRay.intersectBox(b, collisionPoint)) nearest = Math.min(nearest, target.distanceTo(collisionPoint) - .12);
       }
-      desiredCamera.copy(target).addScaledVector(cameraRay.direction, Math.max(.55, nearest));
+      let boomLength = Math.max(.55, nearest);
+      // A lateral position lerp would still swing the visible view during a side step.
+      // In touch mode smooth only the distance when there is room to pull back.
+      if (touchOrbit && cameraInitialized && previousDistance < boomLength) {
+        boomLength = THREE.MathUtils.lerp(previousDistance, boomLength, 1 - Math.exp(-dt * 8));
+      }
+      desiredCamera.copy(target).addScaledVector(cameraRay.direction, boomLength);
       desiredCamera.y = Math.max(follow.y + .27, desiredCamera.y);
       lookAt.copy(target);
     }
-    if (!cameraInitialized) { camera.position.copy(desiredCamera); cameraInitialized = true; }
+    if (!cameraInitialized || touchOrbit) { camera.position.copy(desiredCamera); cameraInitialized = true; }
     else camera.position.lerp(desiredCamera, 1 - Math.exp(-dt * 8));
     const surveying=overview||mode==='tour'||(mode==='pause'&&previousMode==='tour');
     const near=cameraNearPlane(camera.position.distanceTo(lookAt),surveying);
@@ -830,7 +860,8 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     // Useful DOM-level telemetry for browser QA, without exposing a mutable debug API.
     setData('position', `${controller.x.toFixed(2)},${controller.y.toFixed(2)},${controller.z.toFixed(2)}`);
     setData('surface', controller.surface); setData('mode', mode); setData('grounded', String(controller.grounded));
-    setData('camera', `${cameraYaw().toFixed(2)},${pitch.toFixed(2)}`);
+    const view = cameraView();
+    setData('camera', `${view.yaw.toFixed(2)},${view.pitch.toFixed(2)}`);
     setData('facing',controller.facing.toFixed(3));
     setData('poopCount', String(poop.physics.count));
     setData('poopActive', String(poop.physics.active.size));
@@ -1000,7 +1031,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     const action=syncRabbitModel();
     const mistressPosition=mistress.renderPosition;syncMistressModel();
     setData('rabbitAction',action);
-    if(inputMode.mode==='touch'&&inPlay()&&!mistress.playerLocked) {
+    if(touchPlaying()&&!mistress.playerLocked) {
       ({yaw,pitch}=touchCamera.update(yaw,pitch,controller.facing,now,dt));
     }
     updateCamera(dt);

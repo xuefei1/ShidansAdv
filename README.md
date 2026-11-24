@@ -36,7 +36,9 @@ Open **http://localhost:4173** if the browser does not open automatically. No pa
 
 Choose **Auto**, **Touch**, or **Keyboard & mouse** at the title screen or in the pause menu. Auto uses the device’s pointing capabilities to choose a default, then follows actual gameplay input on hybrids. Typing a player name doesn’t change the mode. An explicit choice is remembered in this browser and wins over automatic detection. The HUD uses the available screen space independently: a small window with a mouse gets a compact HUD, and a large tablet can still show touch controls.
 
-**Touch.** Drag the left stick to move. The camera follows behind Shidan as she turns. Swipe the open scene to look around. The camera returns behind her three seconds after your last swipe movement, or sooner if you start moving again. Hold **Rear** to look behind her while steering. Release it to face forward again.
+**Touch.** Drag the left stick in any direction to move that way on screen. Keep your thumb on the stick, even at its center, to hold the camera angle as Shidan turns. Lift your thumb and the camera eases behind her. You can swipe the scene to look around at any time. After a swipe, the camera waits until the stick is released and three seconds have passed since your last swipe movement.
+
+Hold **Rear** from any camera angle to see Shidan’s face and the room behind her. The view follows her face as she turns, so you can check for the mistress while keeping your course. Release **Rear** to return to your usual view. During play, swipes and multi-finger presses control the game. Open Pause to use browser zoom or select text.
 
 Tap **Sprint** to toggle running. Tap **Jump** for a hop; for a long jump, hold the stick outward with one thumb and hold, then release **Jump** with the other. Hold the interaction button near a target to eat, drink, or kiss the plush; lift to stop. Tap the poop or pee button to use it when ready. Use Pause for options instead of a keyboard shortcut.
 
