@@ -8,6 +8,21 @@ for (let i = 0; i < 60; i++) {
   await setTimeout(100);
 }
 assert.ok(ready, 'The launcher started the local HTTP server');
+const manifestUrl = base + '/manifest.webmanifest';
+const manifestResponse = await fetch(manifestUrl);
+assert.equal(manifestResponse.status, 200);
+assert.match(manifestResponse.headers.get('content-type'), /application\/manifest\+json/);
+const manifest = await manifestResponse.json();
+assert.equal(manifest.display, 'standalone');
+const pagesBase = 'https://xuefei1.github.io/ShidansAdv/';
+for (const field of ['start_url', 'scope']) {
+  assert.equal(new URL(manifest[field], pagesBase + 'manifest.webmanifest').href, pagesBase, field);
+}
+for (const icon of manifest.icons) {
+  const response = await fetch(new URL(icon.src, manifestUrl));
+  assert.equal(response.status, 200, icon.src);
+  assert.ok(response.headers.get('content-type')?.startsWith(icon.type), icon.src);
+}
 for (const path of ['/', '/src/main.js', '/src/happiness.js', '/src/chewable-data.js', '/src/start.js', '/src/day-cycle.js', '/src/day-lighting.js', '/src/house-lamps.js', '/src/adventure-session.js', '/src/layout.js', '/src/furnishings.js', '/src/level-map.js', '/src/render-batching.js', '/src/render-quality.js', '/src/surface-materials.js', '/src/render-profile.js', '/src/energy.js', '/src/consumable-data.js', '/src/consumable-collision.js', '/src/consumable-motion.js', '/src/house-roof.js', '/src/consumable-system.js', '/src/consumables.js', '/vendor/three.module.js', '/style.css']) {
   const response = await fetch(base + path);
   assert.equal(response.status, 200, path); assert.ok((await response.text()).length > 50, path);

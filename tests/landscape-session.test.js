@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createLandscapeSession } from '../src/landscape-session.js';
 
-function setup() {
+function setup(navigator = {}) {
   const document = Object.assign(new EventTarget(), { documentElement: {}, fullscreenElement: null });
   const calls = [];
   function changeFullscreen(element) {
@@ -12,7 +12,7 @@ function setup() {
   document.documentElement.requestFullscreen = async () => { calls.push('fullscreen'); changeFullscreen(document.documentElement); };
   document.exitFullscreen = async () => { calls.push('exit'); changeFullscreen(null); };
   const orientation = { lock: async direction => calls.push(direction), unlock: () => calls.push('unlock') };
-  const window = { innerWidth: 390, innerHeight: 844, screen: { orientation } };
+  const window = { navigator, innerWidth: 390, innerHeight: 844, screen: { orientation } };
   const controls = createLandscapeSession({ document, window });
   return { controls, changeFullscreen, window, orientation, calls, document };
 }
@@ -35,6 +35,38 @@ test('fullscreen and landscape are requested on touch entry and released on exit
   await controls.enter('touch');
   controls.leave();
   assert.deepEqual(calls, ['fullscreen', 'landscape', 'unlock', 'exit']);
+});
+
+test('Apple mobile browsers stay in the normal viewport on start and resume, with the rotate prompt available', async () => {
+  for (const navigator of [
+    { userAgent: 'Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X) CriOS/134.0 Mobile' },
+    { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Version/18.0 Mobile' },
+    { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15)', platform: 'MacIntel', maxTouchPoints: 5 },
+    { platform: 'MacIntel', maxTouchPoints: 5 }
+  ]) {
+    const {controls, calls, window} = setup(navigator);
+    await controls.enter('touch');
+    assert.equal(controls.portraitBlocked('touch'), true);
+    [window.innerWidth, window.innerHeight] = [844, 390];
+    assert.equal(controls.portraitBlocked('touch'), false);
+    controls.leave();
+    await controls.enter('touch');
+    controls.dispose();
+    assert.deepEqual(calls, [], JSON.stringify(navigator));
+  }
+});
+
+test('Android touch, Windows hybrids and desktop Mac touch simulation keep their fullscreen path', async () => {
+  for (const navigator of [
+    {userAgent: 'Mozilla/5.0 (Linux; Android 15)', maxTouchPoints: 5},
+    {platform: 'Win32', maxTouchPoints: 10},
+    {userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15)', platform: 'MacIntel', maxTouchPoints: 0}
+  ]) {
+    const {controls, calls} = setup(navigator);
+    await controls.enter('touch');
+    controls.leave();
+    assert.deepEqual(calls, ['fullscreen','landscape','unlock','exit']);
+  }
 });
 
 test('failed or unsupported requests degrade to the rotate prompt and allow a later retry', async () => {

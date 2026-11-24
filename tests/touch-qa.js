@@ -57,6 +57,9 @@ function checkBrowserGestures(label, active, target) {
   if (active) {
     check('Touch play disables browser pan, zoom and text selection across the HUD and controls',
       hasState && [surface, target, element('game'), element('touch-stick'), element('touch-jump')].every(suppressed));
+    check('The game claims one-finger swipes on the scene and movement pad',
+      [element('game'), element('touch-stick')].every(node =>
+        gesturePrevented(node, 'touchstart', 1) && gesturePrevented(node, 'touchmove', 1)));
     check('The item legend permits vertical scrolling and ordinary buttons keep their taps',
       styleOf(doc.querySelector('.legend-scroll')).touchAction === 'pan-y' &&
       !gesturePrevented(element('map-button'), 'touchstart', 1));
@@ -237,9 +240,59 @@ async function resize(width, height) {
   await until(() => win().innerWidth === width && win().innerHeight === height, 'Resize preview');
   await new Promise(resolve => win().requestAnimationFrame(() => win().requestAnimationFrame(resolve)));
 }
+async function checkTabletLifecycle() {
+  const doc = game(), view = win(), jump = element('touch-jump'), at = center('touch-jump');
+  const advance = seconds => doc.dispatchEvent(new view.CustomEvent('qa-advance', {detail:seconds}));
+  const before = Number(data().dayRemaining);
+  pointer('pointerdown', 24, jump, at);
+  await until(() => !element('charge').hidden, 'Hold Jump before the simulated toolbar appears');
+  view.dispatchEvent(new view.Event('blur'));
+  pointer('pointerup', 24, jump, at);
+  await resize(844, 335);
+  advance(1);
+  await until(() => Number(data().dayRemaining) === before - 1 || !element('pause').hidden, 'Advance the game with the toolbar visible');
+  check('A visible iPad toolbar blur and landscape resize keep the round running and cancel the held jump',
+    element('pause').hidden && element('rotate-notice').hidden && element('charge').hidden &&
+    position()[1] === 0 && !jump.classList.contains('is-held') && visible('touch-stick') &&
+    Number(data().dayRemaining) === before - 1);
+  await resize(844, 390);
+
+  // These temporary properties model a backgrounded tab in the isolated test iframe.
+  Object.defineProperties(doc, {
+    hidden: {value:true, configurable:true}, visibilityState: {value:'hidden', configurable:true}
+  });
+  try {
+    doc.dispatchEvent(new view.Event('visibilitychange'));
+    check('A hidden iPad tab pauses immediately', !element('pause').hidden);
+    advance(12);
+  } finally {
+    delete doc.hidden; delete doc.visibilityState;
+    doc.dispatchEvent(new view.Event('visibilitychange'));
+  }
+  element('resume').click();
+  advance(1);
+  await until(() => Number(data().dayRemaining) < before - 1, 'Return from the hidden tab and advance one active second');
+  check('The round excludes the time spent in the background', Number(data().dayRemaining) === before - 2);
+
+  view.dispatchEvent(new view.PageTransitionEvent('pagehide', {persisted:true}));
+  check('Page navigation also pauses a touch round', !element('pause').hidden);
+  view.dispatchEvent(new view.PageTransitionEvent('pageshow', {persisted:true}));
+  element('resume').click();
+  await until(() => visible('touch-stick'), 'Resume touch play after page navigation');
+}
 async function run() {
   const html = await (await fetch('../')).text();
   const entry = `<script type="module">import {boot} from '/src/main.js';
+    // Desktop-site mode can report macOS on an iPad. Spies keep native system prompts out of the harness.
+    Object.defineProperties(navigator, {
+      userAgent:{value:'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 CriOS/130.0 Safari/605.1.15'},
+      platform:{value:'MacIntel'}, maxTouchPoints:{value:5}
+    });
+    const root=document.documentElement;
+    root.dataset.fullscreenRequests=root.dataset.orientationLocks='0';
+    Object.defineProperty(document,'fullscreenEnabled',{value:true});
+    root.requestFullscreen=async()=>{root.dataset.fullscreenRequests=String(Number(root.dataset.fullscreenRequests)+1)};
+    Object.defineProperty(screen,'orientation',{value:{lock:async()=>{root.dataset.orientationLocks=String(Number(root.dataset.orientationLocks)+1)},unlock(){}}});
     const values=new Map();let elapsed=0;document.addEventListener('qa-advance',event=>elapsed+=event.detail*1000);
     boot({scoreStorage:{getItem:key=>values.get(key)??null,setItem:(key,value)=>values.set(key,value)},clockNow:()=>elapsed});<\/script>`;
   const loaded = new Promise(resolve => frame.addEventListener('load', resolve, {once:true}));
@@ -249,8 +302,13 @@ async function run() {
   setPreference('input-preference-title', 'touch');
   checkBrowserGestures('The touch title screen', false, game().querySelector('#welcome h1'));
   element('game').requestPointerLock = () => Promise.reject(new Error('QA tests drag fallback'));
-  element('player-name').value = 'Touch QA'; setPreference('input-preference-title', 'desktop'); element('play').click();
-  await until(() => data().mode === 'play', 'Start a small-screen keyboard game');
+  element('player-name').value = 'Touch QA'; element('play').click();
+  await until(() => data().mode === 'play', 'Start a touch round with the desktop-site iPad profile');
+  await checkTabletLifecycle();
+  await changeMode('desktop');
+  win().dispatchEvent(new (win().Event)('blur'));
+  check('Keyboard play still pauses on window blur', !element('pause').hidden);
+  element('resume').click();
   checkBrowserGestures('Keyboard and mouse play', false, element('energy-value'));
   const chips = ['day-countdown', 'happiness-value', 'energy-value', 'bladder-value', 'poop-count'];
   check('Phone HUD fits with keyboard and mouse, without drawing thumb controls', !visible('touch-stick') && chips.every(fits));
@@ -340,6 +398,9 @@ async function run() {
   check('Touch actions use normal resources', Number(element('poop-count').textContent) === oldSupply-1 && element('fatal').hidden);
   game().dispatchEvent(new (win().CustomEvent)('qa-advance',{detail:601}));
   await until(() => data().mode === 'gameover', 'Reach bedtime and record the touch round');
+  const device = game().documentElement.dataset;
+  check('Simulated iPad play, resume and restart never request native fullscreen or orientation lock',
+    device.fullscreenRequests === '0' && device.orientationLocks === '0');
   checkBrowserGestures('The Game Over screen', false, game().querySelector('#game-over h2'));
   check('The local score, long jump and dropped ball reach Game Over', data().lastPlayer === 'Touch QA' && data().finalRank === '1' &&
     element('result-poop').textContent === '1' && element('result-long-jumps').textContent === '1' && !visible('touch-stick'));

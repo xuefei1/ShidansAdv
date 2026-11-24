@@ -321,6 +321,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   const touchCamera=new TouchCamera();
   function cameraView() {return touchCamera.view(yaw,pitch,controller.facing);}
   function inPlay() {return mode==='play'&&!overview&&!mapOpen&&!rotateBlocked&&!document.hidden;}
+  function focusGame() {canvas.focus({preventScroll:true});}
   function touchPlaying() {return inputMode.mode==='touch'&&inPlay();}
   function syncTouchSurface() {
     const active=touchPlaying();
@@ -378,7 +379,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
       cancelHolds();allowPortrait=false;
       if(inputMode.mode==='touch') mouse.unlock();else landscape.leave();
       syncOrientation();
-      if(inPlay()) canvas.focus();
+      if(inPlay()) focusGame();
     }
     syncTouchSurface();
     setHidden('camera-hint',inputMode.mode==='touch'||document.pointerLockElement===canvas);
@@ -395,7 +396,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     if(changed) {
       rotateBlocked=blocked;cancelHolds();
       dayClock.setActive(inPlay(),clockNow());renderDirty=true;
-      if(blocked)$('rotate-continue').focus();else if(inPlay())canvas.focus();
+      if(blocked)$('rotate-continue').focus({preventScroll:true});else if(inPlay())focusGame();
     }
     syncTouchSurface();
   }
@@ -412,7 +413,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     document.body.classList.add('playing'); document.body.classList.remove('touring');
     $('welcome').hidden = true; $('intro-caption').hidden = true; $('intro-footer').hidden = true;
     $('hud').hidden = false; $('menu-button').hidden = false; $('pause').hidden = true;$('game-over').hidden=true;
-    mode = 'play'; overview = false; mapOpen = false; $('atlas').hidden = true; cameraInitialized = false; clearInput(); if(!rotateBlocked)canvas.focus();
+    mode = 'play'; overview = false; mapOpen = false; $('atlas').hidden = true; cameraInitialized = false; clearInput(); if(!rotateBlocked)focusGame();
     $('menu-button').innerHTML = 'Pause <kbd>Esc</kbd>'; $('view').innerHTML = '<kbd>V</kbd> House view';
   }
   function pause() {
@@ -422,7 +423,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   }
   function resume() {
     if(previousMode==='play')landscape.enter(inputMode.mode);
-    mode = previousMode; $('pause').hidden = true; clearInput(); if(!rotateBlocked)canvas.focus();
+    mode = previousMode; $('pause').hidden = true; clearInput(); if(!rotateBlocked)focusGame();
     if (mode === 'play') lock();
   }
   function reset() {
@@ -435,7 +436,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     if (mode !== 'play' || water.system.peeing || mistress.playerLocked) return;
     overview = !overview; roofView=false;setText('roof-view','Show roof');mapOpen = false; $('atlas').hidden = true; surveyFloor = floorAt(controller.y); clearInput(); renderAtlas();
     if (overview) { unlock(); toast('House view · choose Follow Shidan to return', 3); }
-    else { cameraInitialized = false; canvas.focus(); }
+    else { cameraInitialized = false; focusGame(); }
     $('view').innerHTML = overview ? '<kbd>V</kbd> Follow Shidan' : '<kbd>V</kbd> House view';
   }
   function startAdventure() {
@@ -542,13 +543,13 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     setHidden('toast',true);toastUntil=0;renderGameOver(result,stats);renderLeaderboard();
     $('game-over').hidden=false;$('game-over-new').focus();updateHUD();renderDirty=true;
   }
-  $('home').addEventListener('click', () => { reset(); canvas.focus(); });
+  $('home').addEventListener('click', () => { reset(); focusGame(); });
   $('view').addEventListener('click', setOverview);
   function toggleMap() {
     if (mode !== 'play' || water.system.peeing || mistress.playerLocked) return;
     mapOpen = !mapOpen; clearInput(); $('atlas').hidden = !mapOpen;
     if (mapOpen) { surveyFloor = floorAt(controller.y); unlock(); renderAtlas(); }
-    else canvas.focus();
+    else focusGame();
   }
   function renderAtlas() {
     drawLevelMap($('atlas-canvas').getContext('2d'), 680, 740, controller, surveyFloor, discovered, true,{maze:maze.layout});
@@ -562,7 +563,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
   $('map-button').addEventListener('click', toggleMap); $('close-atlas').addEventListener('click', toggleMap);
   function fromPause(action) {
     if(mode!=='pause'||previousMode!=='play')return;
-    mode='play';$('pause').hidden=true;canvas.focus();clearInput();action();
+    mode='play';$('pause').hidden=true;focusGame();clearInput();action();
   }
   $('pause-home').addEventListener('click',()=>fromPause(reset));
   $('pause-map').addEventListener('click',()=>fromPause(toggleMap));
@@ -629,7 +630,7 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
       return;
     }
     if(event.target instanceof Element&&event.target.closest('#audio-settings')) {
-      if(event.code==='Escape') {event.preventDefault();$('audio-settings').open=false;canvas.focus();}
+      if(event.code==='Escape') {event.preventDefault();$('audio-settings').open=false;focusGame();}
       return;
     }
     if (event.code === 'Escape') { if (mapOpen) { toggleMap(); return; } if (mode === 'pause') resume(); else pause(); return; }
@@ -659,8 +660,13 @@ export async function boot({clockNow=()=>performance.now(),scoreStorage,maxNpcMo
     if (event.code === 'Space' && keys.has('Space')) jumpEdge(false);
     keys.delete(event.code);
   });
-  addEventListener('blur', () => { clearInput(); if (mode === 'play') pause(); });
-  document.addEventListener('visibilitychange', () => { if (document.hidden) { clearInput(); pause(); } });
+  addEventListener('blur', () => {
+    // Mobile browser controls can take focus while the player can still see the game.
+    if (mode === 'play' && (inputMode.mode === 'desktop' || document.hidden)) pause();
+    else clearInput();
+  });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+  addEventListener('pagehide', pause);
   canvas.addEventListener('wheel', event => {
     event.preventDefault();
     if (event.ctrlKey && touchPlaying()) return;

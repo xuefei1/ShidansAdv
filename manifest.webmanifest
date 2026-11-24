@@ -1,0 +1,13 @@
+{
+  "name": "Shidan's Adventure",
+  "short_name": "Shidan",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ecebdc",
+  "theme_color": "#ecebdc",
+  "icons": [
+    { "src": "./apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "./favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

@@ -290,7 +290,7 @@ body[data-input-mode="touch"]{
 }
 body[data-input-mode="touch"].playing #touch-controls{display:block}
 #game.touch-switchable{touch-action:none}
-html[data-touch-playing="true"],html[data-touch-playing="true"] body{overscroll-behavior:none}
+html[data-touch-playing="true"],html[data-touch-playing="true"] body{overflow:hidden;overscroll-behavior:none}
 html[data-touch-playing="true"],html[data-touch-playing="true"] *{
   touch-action:none;
   -webkit-user-select:none;

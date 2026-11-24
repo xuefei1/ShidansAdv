@@ -1,5 +1,10 @@
 export function createLandscapeSession({ window, document }) {
   const root = document.documentElement, orientation = window.screen?.orientation;
+  const navigator = window.navigator ?? {};
+  // iPadOS can advertise a desktop Mac identity even with a keyboard attached.
+  const identity = `${navigator.userAgent ?? ''} ${navigator.platform ?? ''}`;
+  const appleMobile = /\b(iPad|iPhone|iPod)\b/i.test(identity) ||
+    (navigator.maxTouchPoints > 1 && /\b(Macintosh|MacIntel)\b/i.test(identity));
   let active = false, pending = null, ownsFullscreen = false, ownsLock = false;
   function unlock() {
     if (!ownsLock) return;
@@ -42,7 +47,8 @@ export function createLandscapeSession({ window, document }) {
   function leave() { active = false; release(); }
   return {
     enter(mode) {
-      if (mode !== 'touch') { leave(); return; }
+      // These browsers warn about keyboard input in DOM fullscreen. Use the normal viewport.
+      if (mode !== 'touch' || appleMobile) { leave(); return; }
       active = true;
       if (!pending) pending = request().finally(() => { pending = null; });
       return pending;

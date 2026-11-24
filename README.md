@@ -42,7 +42,9 @@ Hold **Rear** from any camera angle to see Shidan’s face and the room behind h
 
 Tap **Sprint** to toggle running. Tap **Jump** for a hop; for a long jump, hold the stick outward with one thumb and hold, then release **Jump** with the other. Hold the interaction button near a target to eat, drink, or kiss the plush; lift to stop. Tap the poop or pee button to use it when ready. Use Pause for options instead of a keyboard shortcut.
 
-Touch play uses landscape. Starting play requests fullscreen and landscape where the browser allows it. If the rotate prompt appears, turn the device sideways; the game clock does not run while that prompt is blocking play. Keyboard and mouse play works in either orientation.
+Touch play uses landscape. On iPad and iPhone, turn the device sideways to play in the browser. Other touch devices request fullscreen and landscape when supported. The clock pauses at the rotate prompt and when you switch tabs or apps. Showing the address bar during touch play keeps the game running. Keyboard and mouse play works in either orientation.
+
+For a view without the address bar on iPad, open the game in Chrome, tap **Share → Add to Home Screen**, then launch it from its new icon. If offered, keep **Open as Web App** enabled. Home Screen scores may be stored separately from scores in the browser tab.
 
 **Keyboard and mouse:**
 

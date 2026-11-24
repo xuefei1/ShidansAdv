@@ -8,7 +8,12 @@ function fixture() {
   const detach = bindGameplayGestures(document, () => state.active);
   function send(type, fingers = 0, target = 'canvas', cancelable = true) {
     document.closest = selector => {
-      if (selector === '#touch-controls') return target === 'action' ? document : null;
+      if (selector === '#touch-controls') return ['action','stick'].includes(target) ? document : null;
+      if (selector === '.legend-scroll') {
+        if (target === 'scrollingLegend') return {scrollHeight:250,clientHeight:100};
+        if (target === 'shortLegend') return {scrollHeight:100,clientHeight:100};
+        return null;
+      }
       return ['hudButton', 'action'].includes(target) ? document : null;
     };
     const event = Object.assign(new Event(type, { cancelable }), { touches: Array(fingers) });
@@ -31,16 +36,22 @@ test('touch gameplay suppresses selection, dragging, context menus and all Safar
   for (const type of [...defaults, 'touchstart', 'touchmove']) assert.equal(send(type, 2), false, type);
 });
 
-test('two-finger zoom suppression keeps single touches, game pointers and native HUD taps available', () => {
-  const { send } = fixture();
+test('active play reserves single-finger drags and two-finger gestures for game controls', () => {
+  const { send, state } = fixture();
   for (const type of ['touchstart', 'touchmove']) {
-    for (const target of ['canvas', 'hudLabel', 'action']) {
-      assert.equal(send(type, 1, target), false, type);
+    for (const target of ['canvas', 'hudLabel', 'stick', 'action', 'shortLegend']) {
+      assert.equal(send(type, 1, target), true, type);
       assert.equal(send(type, 2, target), true, type);
     }
+    assert.equal(send(type, 1, 'scrollingLegend'), false, type);
+    assert.equal(send(type, 2, 'scrollingLegend'), true, type);
+    assert.equal(send(type, 1, 'hudButton'), false, type);
     assert.equal(send(type, 2, 'hudButton'), false, type);
+    assert.equal(send(type, 1, 'canvas', false), false, type);
   }
   for (const type of ['pointerdown', 'pointermove', 'pointerup', 'touchend', 'click', 'wheel', 'keydown']) {
     assert.equal(send(type, 2), false, type);
   }
+  state.active = false;
+  for (const type of ['touchstart', 'touchmove']) assert.equal(send(type, 1, 'canvas'), false, type);
 });
